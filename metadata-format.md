@@ -267,6 +267,39 @@ my-project/
   disk image              (flashable .img / .wic)
 ```
 
+## Label-Based References
+
+Inspired by GN's `//path/to:target` labels, Yoe-NG uses a URI-style scheme for
+referencing recipes across repositories. This enables the composability goal of
+pulling in recipes from external sources (similar to KAS config composition).
+
+```
+# Local recipe (in the current project)
+openssh                         # shorthand
+recipes/openssh                 # explicit local path
+
+# External recipe (from a GitHub repository)
+github.com/yoe/recipes-core//openssh
+github.com/vendor/bsp-recipes//kernel-custom
+
+# Pinned to a specific version/commit
+github.com/yoe/recipes-core//openssh@v1.2.0
+github.com/yoe/recipes-core//openssh@abc123f
+```
+
+External recipe references are declared in `distro.toml`:
+
+```toml
+[layers]
+# Pull in shared recipe collections (similar to Yocto layers or KAS includes)
+recipes-core = { url = "github.com/yoe/recipes-core", ref = "v1.0.0" }
+bsp-vendor   = { url = "github.com/vendor/bsp-recipes", ref = "main" }
+```
+
+When `yoe` resolves the dependency graph, it fetches and caches external recipe
+collections, then resolves all references to concrete recipe files. Name
+collisions between layers are an error — explicit overrides must be declared.
+
 ## Design Notes
 
 - **TOML over YAML/JSON** — avoids YAML's implicit typing pitfalls and JSON's

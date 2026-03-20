@@ -28,6 +28,9 @@ yoe flash           Write an image to a device/SD card
 yoe repo            Manage the local apk package repository
 yoe source          Download and manage source archives/repos
 yoe config          View and edit project configuration
+yoe desc            Describe a recipe, package, or target
+yoe refs            Show reverse dependencies
+yoe graph           Visualize the dependency DAG
 yoe tui             Launch the interactive TUI
 yoe clean           Remove build artifacts
 ```
@@ -84,8 +87,15 @@ yoe build --force openssh
 
 **What happens during a build:**
 
+Inspired by Google's GN, `yoe build` uses a **two-phase resolve-then-build**
+model. The entire dependency graph is resolved and validated *before* any build
+work starts. This catches missing dependencies, cycles, and configuration errors
+up front rather than mid-build.
+
 1. **Resolve dependencies** — read the recipe's `[depends]` table and
-   topologically sort the build order.
+   topologically sort the build order. Validate that all referenced recipes
+   exist and the graph is acyclic. **If any errors are found, stop here** —
+   no partial builds.
 2. **Check cache** — compute a content hash of the recipe + source + build
    dependencies. If a cached `.apk` with that hash exists (locally or in a
    remote cache), skip the build.
@@ -229,6 +239,77 @@ yoe config set defaults.image dev
 yoe config resolve --machine beaglebone-black --image base
 ```
 
+### `yoe desc`
+
+Describes a recipe, showing its resolved configuration, dependencies, build
+inputs hash, and package output. Inspired by GN's `gn desc`.
+
+```sh
+# Show full details of a recipe
+yoe desc openssh
+
+# Example output:
+#   Recipe:       openssh
+#   Version:      9.6p1
+#   Source:       https://cdn.openbsd.org/.../openssh-9.6p1.tar.gz
+#   Build deps:   zlib, openssl
+#   Runtime deps: zlib, openssl
+#   Input hash:   a3f8c2...
+#   Cached .apk:  yes (openssh-9.6p1-r0.apk)
+#   Config:       CFLAGS=-O2 -march=armv8-a (propagated from machine)
+
+# Show only the resolved config for a recipe
+yoe desc openssh --config
+
+# Show the build inputs that contribute to the hash
+yoe desc openssh --inputs
+```
+
+### `yoe refs`
+
+Shows reverse dependencies — what recipes or images depend on a given recipe.
+Inspired by GN's `gn refs`.
+
+```sh
+# What depends on openssl?
+yoe refs openssl
+
+# Example output:
+#   Build deps:
+#     openssh (build + runtime)
+#     curl (build + runtime)
+#     python (build)
+#   Images:
+#     base (via openssh, curl)
+#     dev (via openssh, curl, python)
+
+# Show only direct dependents
+yoe refs openssl --direct
+
+# Show the full transitive tree
+yoe refs openssl --tree
+```
+
+This is essential for answering "if I update openssl, what needs to rebuild?"
+
+### `yoe graph`
+
+Visualizes the dependency DAG.
+
+```sh
+# Print the dependency graph as text
+yoe graph
+
+# Output DOT format for graphviz
+yoe graph --format dot | dot -Tpng -o deps.png
+
+# Show graph for a single recipe and its deps
+yoe graph openssh
+
+# Show only recipes that need rebuilding
+yoe graph --stale
+```
+
 ### `yoe tui`
 
 Launches an interactive terminal UI for common workflows.
@@ -297,6 +378,33 @@ This means:
 - Build dependencies are resolved by `yoe` (it knows the recipe graph).
 - Runtime dependencies are resolved by `apk` (it knows the package graph).
 - The recipe author declares both; the tools handle the rest.
+
+### Config Propagation
+
+Inspired by GN's `public_configs`, machine-level configuration automatically
+propagates through the dependency graph. When you build for a specific machine,
+settings like architecture flags, optimization level, and kernel headers path
+flow to every recipe without each recipe declaring them:
+
+```
+machine (beaglebone-black)
+  → arch = "arm64"
+  → CFLAGS = "-O2 -march=armv8-a"
+  → KERNEL_HEADERS = "/usr/src/linux-6.6/include"
+      ↓ propagates to
+  recipe (zlib)        → builds with arm64 flags
+  recipe (openssl)     → builds with arm64 flags
+  recipe (openssh)     → builds with arm64 flags + sees kernel headers
+```
+
+Recipes can also declare `public_config` settings that propagate to their
+dependents. For example, a `zlib` recipe might export its include path so
+that `openssh` (which depends on `zlib`) automatically gets
+`-I/usr/include` without the recipe author specifying it.
+
+This is resolved during the graph resolution phase (phase 1) so the full
+resolved config for every recipe is known before any build starts. Use
+`yoe desc <recipe> --config` to inspect the resolved configuration.
 
 **Design note: recipe-level, not task-level dependencies.** Unlike BitBake,
 which models dependencies between individual tasks across recipes (e.g.,

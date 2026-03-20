@@ -215,6 +215,51 @@ reproducibility guarantees, are building for desktop/server/CI, and are willing
 to invest in learning the Nix ecosystem. NixOS is unmatched for declarative
 system management on general-purpose hardware.
 
+## vs. Google GN
+
+GN is not a Linux distribution — it's a meta-build system used by Chromium and
+Fuchsia. But several of its architectural ideas directly influenced Yoe-NG's
+tooling design.
+
+**What Yoe-NG adopts from GN:**
+
+- **Two-phase resolve-then-build** — GN fully resolves and validates the
+  dependency graph before generating any build files. `yoe build` does the
+  same: resolve the entire recipe DAG, check for errors, then build. No partial
+  builds from graph errors discovered mid-way.
+- **Config propagation** — GN's `public_configs` automatically apply compiler
+  flags to anything that depends on a target. Yoe-NG propagates machine-level
+  settings (arch flags, optimization, kernel headers) through the recipe graph.
+- **Build introspection** — GN provides `gn desc` (what does this target do?)
+  and `gn refs` (what depends on this?). Yoe-NG provides `yoe desc`,
+  `yoe refs`, and `yoe graph` for the same purpose.
+- **Label-based references** — GN uses `//path/to:target` for unambiguous
+  target identification. Yoe-NG uses a similar scheme for composable recipe
+  references across repositories.
+
+**What Yoe-NG leaves behind:**
+
+- Ninja file generation — Yoe-NG's recipe builds are coarse-grained enough
+  that `yoe` orchestrates directly.
+- GN's custom scripting language — TOML is sufficient for Yoe-NG's metadata.
+- C/C++ build model specifics — GN is deeply tied to source-file-level
+  dependency tracking, which isn't relevant for recipe-level builds.
+
+**Key differences:**
+
+| | GN | Yoe-NG |
+|---|---|---|
+| Purpose | C/C++ meta-build system | Embedded Linux distribution builder |
+| Output | Ninja build files | `.apk` packages and disk images |
+| Config language | GN (custom) | TOML |
+| Dependency granularity | Source file / target | Recipe (package) |
+| Build execution | Ninja | `yoe` directly |
+| Introspection | `gn desc`, `gn refs` | `yoe desc`, `yoe refs`, `yoe graph` |
+
+GN is not an alternative to Yoe-NG — they solve different problems. But GN's
+approach to graph resolution, config propagation, and introspection are
+well-proven patterns that Yoe-NG applies to the embedded Linux domain.
+
 ## Summary Matrix
 
 | Feature                 | Yocto    | Buildroot | Alpine   | Arch     | NixOS   | **Yoe-NG** |
