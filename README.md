@@ -4,6 +4,16 @@ Yoe-NG is a thinking exercise to explore how a Linux distribution might look
 with the following priorities:
 
 - Simplicity
+- Focused on developer (including app developer) usability
+  - First class support for application development.
+- Easy to get started
+- Build dependencies distributed through Docker, don't require building host dependencies.
+- Easy BSP support
+  - Support for a lot of boards
+  - Inclusive
+- Rebuilding from source target packages is first class, but not required
+  - Fully traceable
+  - No golden images
 - Focused on modern languages (Go, Rust, Zig, Python, JavaScript)
   - Uses native language package managers
   - Caches packages where possible
@@ -15,11 +25,26 @@ with the following priorities:
   - Simple
   - Easy to cross-compile
   - Scripting is TBD (not Python)
+- Leverage knowledge and build systems that already exist and integrate with them.
+- 64-bit only (no 32-bit)
+- x86, ARM, RISC-V only
+- Granular packaging (Like Yocto/Debian)
+- Composable
+  - Pull in recipes/packages using GitHub URLs
+  - Able to compose config files like KAS
+  - Recipes can build packages, tools, images, everything
+- Primarily Image based device management (vs package based)
+  - Full image updates, OSTree, BDiff (Android uses)
+- Good SDK story
+  - Able to distribute Binary SDKs to quickly get going with builds without
+    full rebuilds.
+  - Able distribute large pre-built packages like Chromium
 
 ## Documentation
 
 - [The `yoe` Tool](yoe-tool.md) — CLI reference for building, imaging, and flashing
 - [Metadata File Format](metadata-format.md) — TOML recipe and configuration spec
+- [Build Environment](build-environment.md) — bootstrap, host tools, and build isolation
 - [Comparisons](comparisons.md) — how Yoe-NG relates to Yocto, Buildroot, Alpine, Arch, and NixOS
 
 ## Inspirations
@@ -38,6 +63,10 @@ each while avoiding their respective pain points:
 - **Nix** — content-addressed caching, declarative configuration, hermetic
   builds, atomic rollback. Leave behind the Nix language and store-path
   complexity.
+- **Google GN** — two-phase resolve-then-build model, config propagation
+  through the dependency graph, build introspection commands, label-based
+  target references for composability. Leave behind the C++-specific build
+  model and Ninja generation.
 
 See [Comparisons](comparisons.md) for detailed analysis of how Yoe-NG relates
 to each of these systems, including when you should use them instead.
