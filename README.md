@@ -7,7 +7,8 @@ with the following priorities:
 - Focused on developer (including app developer) usability
   - First class support for application development.
 - Easy to get started
-- Build dependencies distributed through Docker, don't require building host dependencies.
+- Build dependencies distributed through Docker, don't require building host
+  dependencies.
 - Easy BSP support
   - Support for a lot of boards
   - Inclusive
@@ -25,7 +26,8 @@ with the following priorities:
   - Simple
   - Easy to cross-compile
   - Scripting is TBD (not Python)
-- Leverage knowledge and build systems that already exist and integrate with them.
+- Leverage knowledge and build systems that already exist and integrate with
+  them.
 - 64-bit only (no 32-bit)
 - x86, ARM, RISC-V only
 - Granular packaging (Like Yocto/Debian)
@@ -36,16 +38,20 @@ with the following priorities:
 - Primarily Image based device management (vs package based)
   - Full image updates, OSTree, BDiff (Android uses)
 - Good SDK story
-  - Able to distribute Binary SDKs to quickly get going with builds without
-    full rebuilds.
+  - Able to distribute Binary SDKs to quickly get going with builds without full
+    rebuilds.
   - Able distribute large pre-built packages like Chromium
 
 ## Documentation
 
-- [The `yoe` Tool](yoe-tool.md) — CLI reference for building, imaging, and flashing
-- [Metadata File Format](metadata-format.md) — TOML recipe and configuration spec
-- [Build Environment](build-environment.md) — bootstrap, host tools, and build isolation
-- [Comparisons](comparisons.md) — how Yoe-NG relates to Yocto, Buildroot, Alpine, Arch, and NixOS
+- [The `yoe` Tool](yoe-tool.md) — CLI reference for building, imaging, and
+  flashing
+- [Metadata File Format](metadata-format.md) — TOML recipe and configuration
+  spec
+- [Build Environment](build-environment.md) — bootstrap, host tools, and build
+  isolation
+- [Comparisons](comparisons.md) — how Yoe-NG relates to Yocto, Buildroot,
+  Alpine, Arch, and NixOS
 
 ## Inspirations
 
@@ -63,13 +69,13 @@ each while avoiding their respective pain points:
 - **Nix** — content-addressed caching, declarative configuration, hermetic
   builds, atomic rollback. Leave behind the Nix language and store-path
   complexity.
-- **Google GN** — two-phase resolve-then-build model, config propagation
-  through the dependency graph, build introspection commands, label-based
-  target references for composability. Leave behind the C++-specific build
-  model and Ninja generation.
+- **Google GN** — two-phase resolve-then-build model, config propagation through
+  the dependency graph, build introspection commands, label-based target
+  references for composability. Leave behind the C++-specific build model and
+  Ninja generation.
 
-See [Comparisons](comparisons.md) for detailed analysis of how Yoe-NG relates
-to each of these systems, including when you should use them instead.
+See [Comparisons](comparisons.md) for detailed analysis of how Yoe-NG relates to
+each of these systems, including when you should use them instead.
 
 ## Motivation
 
@@ -87,8 +93,8 @@ Yoe-NG asks: what if we started fresh with these assumptions?
 - **Language-native package managers work.** Go modules, Cargo, npm, and pip
   already handle dependency resolution and reproducibility. Wrapping them in
   another layer (recipes, bbappends) adds friction without proportional benefit.
-- **Simpler tooling is better tooling.** A single Go binary with a TUI is
-  easier to install, maintain, and extend than a Python-based build system with
+- **Simpler tooling is better tooling.** A single Go binary with a TUI is easier
+  to install, maintain, and extend than a Python-based build system with
   thousands of metadata files.
 
 ## Design Principles
@@ -118,8 +124,8 @@ Each language ecosystem manages its own dependencies:
 | JavaScript | npm / pnpm      | `package-lock.json` |
 | Zig        | Zig build       | `build.zig.zon`     |
 
-Yoe-NG provides caching infrastructure (a shared module proxy for Go, a
-registry mirror for Cargo/npm, etc.) so builds are fast and repeatable without
+Yoe-NG provides caching infrastructure (a shared module proxy for Go, a registry
+mirror for Cargo/npm, etc.) so builds are fast and repeatable without
 re-downloading the internet.
 
 ### Kernel and System Image Tooling
@@ -144,8 +150,8 @@ The Yoe-NG CLI tool handles:
 - **TUI** — interactive interface for common workflows (configure a build,
   select a machine, build an image, flash to SD card).
 - **Build orchestration** — invoke language-native build tools in the right
-  order, manage caching, assemble outputs. See
-  [The `yoe` Tool](yoe-tool.md) for the full CLI reference.
+  order, manage caching, assemble outputs. See [The `yoe` Tool](yoe-tool.md) for
+  the full CLI reference.
 - **Machine/distro configuration** — define target boards and distribution
   profiles in a simple, declarative format. See
   [Metadata File Format](metadata-format.md) for the full specification.
@@ -170,9 +176,9 @@ between **recipes** and **packages** — these are separate concepts:
 - **Packages** are installable artifacts (`.apk` files) that recipes produce.
   They are what gets installed into root filesystem images and onto devices.
 
-This separation means recipes are a development/CI concern, while packages are
-a deployment/device concern. You can build packages once and install them on
-many devices without needing the recipe tree.
+This separation means recipes are a development/CI concern, while packages are a
+deployment/device concern. You can build packages once and install them on many
+devices without needing the recipe tree.
 
 Why apk over pacman or opkg:
 
@@ -183,8 +189,8 @@ Why apk over pacman or opkg:
 - **Small footprint** — apk-tools is tiny, appropriate for embedded targets.
 - **Active development** — apk 3.x adds content-addressed storage and atomic
   transactions, aligning with Yoe-NG's Nix-inspired reproducibility goals.
-- **Works with glibc** — apk is not tied to musl; it works with any libc.
-  Yoe-NG runs its own package repositories, not Alpine's.
+- **Works with glibc** — apk is not tied to musl; it works with any libc. Yoe-NG
+  runs its own package repositories, not Alpine's.
 - **On-device package management** — devices can pull updates from a Yoe-NG
   package repository, enabling incremental OTA updates (install only changed
   packages) alongside full image updates.
@@ -204,8 +210,8 @@ The base userspace is **glibc + busybox + systemd**:
 - **busybox** — provides the core userspace utilities (sh, coreutils, etc.) in a
   single small binary. Keeps the base image minimal while still having a
   functional shell environment for debugging and scripting.
-- **systemd** — the init system and service manager. Despite its size, systemd is
-  the pragmatic choice:
+- **systemd** — the init system and service manager. Despite its size, systemd
+  is the pragmatic choice:
   - Well-understood by developers and ops teams.
   - Rich ecosystem of unit files for common services.
   - Built-in support for journal logging, network management, device management
@@ -219,7 +225,7 @@ real-world services without surprises.
 
 - **Scripting language for tooling:** The README notes "not Python" — candidates
   include shell (limited), Lua (embeddable in Go), or just Go templates.
-- **Reproducibility guarantees:** How strict? Bit-for-bit reproducible, or
-  "same inputs produce functionally equivalent outputs"?
+- **Reproducibility guarantees:** How strict? Bit-for-bit reproducible, or "same
+  inputs produce functionally equivalent outputs"?
 - **SDK / application development workflow:** How do developers build and test
   apps targeting a Yoe-NG image from their workstation?

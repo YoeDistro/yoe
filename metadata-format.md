@@ -2,20 +2,21 @@
 
 Yoe-NG uses a small set of declarative metadata files to describe how to build
 software and assemble system images. All metadata files use
-[TOML](https://toml.io/) — it's human-friendly, has a well-defined spec, and
-has excellent Go library support.
+[TOML](https://toml.io/) — it's human-friendly, has a well-defined spec, and has
+excellent Go library support.
 
 ## Recipes vs. Packages
 
 These are distinct concepts in Yoe-NG:
 
-- **Recipes** — TOML files in the project tree that describe *how to build*
+- **Recipes** — TOML files in the project tree that describe _how to build_
   software. They live in version control and are a development/CI concern.
-- **Packages** — `.apk` files that recipes *produce*. They are installable
+- **Packages** — `.apk` files that recipes _produce_. They are installable
   artifacts published to a repository and consumed by `apk` during image
   assembly or on-device updates.
 
-The build flow is: **recipe → build → .apk package → repository → image / device**.
+The build flow is: **recipe → build → .apk package → repository → image /
+device**.
 
 Recipes are inputs to the build system. Packages are outputs. A developer edits
 recipes; a device only ever sees packages.
@@ -307,10 +308,10 @@ collisions between layers are an error — explicit overrides must be declared.
   enough to edit by hand.
 - **One file per recipe** — each recipe is its own file. This keeps diffs clean
   and makes it easy to add/remove components.
-- **Recipes and packages are separate concerns** — recipes are version-controlled
-  build instructions; packages are binary artifacts. This separation enables
-  building once and deploying many times, sharing packages across teams, and
-  on-device incremental updates via `apk`.
+- **Recipes and packages are separate concerns** — recipes are
+  version-controlled build instructions; packages are binary artifacts. This
+  separation enables building once and deploying many times, sharing packages
+  across teams, and on-device incremental updates via `apk`.
 - **Shell commands for build steps** — recipe build steps are plain shell
   commands rather than a DSL. This is intentionally simple (like Arch's
   PKGBUILD) and avoids inventing a new abstraction. The build environment is
@@ -318,8 +319,8 @@ collisions between layers are an error — explicit overrides must be declared.
   it.
 - **Unified recipe directory** — system packages and application packages both
   live in `recipes/`. The output is always an `.apk` regardless of whether the
-  build used `make` or `cargo`. This keeps the model simple: recipe in,
-  package out.
+  build used `make` or `cargo`. This keeps the model simple: recipe in, package
+  out.
 - **apk for image assembly** — image definitions are just package lists. The
   `yoe-ng image` command creates a clean rootfs and runs `apk add` to populate
   it from the repository, exactly like Alpine's image builder. This leverages

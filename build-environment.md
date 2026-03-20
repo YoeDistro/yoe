@@ -34,8 +34,8 @@ The outermost layer provides just enough to run `yoe` and `apk`. This can be:
 - A **host Linux system** with `apk-tools` and `bubblewrap` installed — for
   developers who prefer not to use Docker.
 - **Any environment that can run a static Go binary** — since `yoe` is
-  statically linked, it runs anywhere. It only needs `apk-tools` and `bwrap`
-  as external dependencies.
+  statically linked, it runs anywhere. It only needs `apk-tools` and `bwrap` as
+  external dependencies.
 
 The libc used by Tier 0 is irrelevant. `yoe` is a static Go binary. `apk-tools`
 can be statically linked. Neither cares whether the outer environment is musl
@@ -43,8 +43,8 @@ can be statically linked. Neither cares whether the outer environment is musl
 
 ### Tier 1: Yoe-NG Build Root
 
-A glibc-based environment populated from Yoe-NG's own package repository.
-This is where the actual compilers, toolchains, and language SDKs live.
+A glibc-based environment populated from Yoe-NG's own package repository. This
+is where the actual compilers, toolchains, and language SDKs live.
 
 ```sh
 # yoe creates this automatically during build
@@ -58,16 +58,16 @@ This build root is:
 - **glibc-based** — Yoe-NG's own packages, not Alpine's.
 - **Persistent** — created once, updated as needed. Not torn down between
   builds.
-- **Architecture-native** — on an ARM64 machine, it's an ARM64 build root.
-  No cross-compilation.
+- **Architecture-native** — on an ARM64 machine, it's an ARM64 build root. No
+  cross-compilation.
 - **Managed by apk** — adding or updating a host tool is just
   `apk add --root ... <tool>`.
 
 ### Tier 2: Per-Recipe Isolation
 
 Each recipe builds in an isolated environment with only its declared
-dependencies. This ensures hermetic builds — a recipe cannot accidentally
-depend on a tool it didn't declare.
+dependencies. This ensures hermetic builds — a recipe cannot accidentally depend
+on a tool it didn't declare.
 
 ```sh
 # yoe creates a minimal environment for each recipe build
@@ -83,30 +83,31 @@ bwrap \
 Bubblewrap provides:
 
 - **Unprivileged isolation** — no root or Docker daemon required.
-- **Read-only base** — the build root is mounted read-only; recipes can't
-  modify host tools.
+- **Read-only base** — the build root is mounted read-only; recipes can't modify
+  host tools.
 - **Minimal overhead** — bubblewrap is a thin namespace wrapper, not a full
   container runtime. Build performance is near-native.
-- **Declared dependencies only** — the build environment is assembled from
-  only the packages listed in the recipe's `[depends].build`.
+- **Declared dependencies only** — the build environment is assembled from only
+  the packages listed in the recipe's `[depends].build`.
 
 ## Why Not Docker for Builds?
 
 Docker is used for Tier 0 (the bootstrap) but not for Tier 1/2 (the actual
 builds). This is deliberate:
 
-| | Docker | bubblewrap + apk |
-|---|---|---|
-| Requires root/daemon | Yes (dockerd) | No (unprivileged) |
-| Startup overhead | ~200ms per container | ~1ms per sandbox |
-| Layering granularity | Image layers (coarse) | apk packages (fine) |
-| Dependency management | Dockerfile (imperative) | apk (declarative) |
-| Nested builds | Docker-in-Docker (fragile) | Just works |
-| CI integration | Needs DinD or socket mount | Runs inside any container |
+|                       | Docker                     | bubblewrap + apk          |
+| --------------------- | -------------------------- | ------------------------- |
+| Requires root/daemon  | Yes (dockerd)              | No (unprivileged)         |
+| Startup overhead      | ~200ms per container       | ~1ms per sandbox          |
+| Layering granularity  | Image layers (coarse)      | apk packages (fine)       |
+| Dependency management | Dockerfile (imperative)    | apk (declarative)         |
+| Nested builds         | Docker-in-Docker (fragile) | Just works                |
+| CI integration        | Needs DinD or socket mount | Runs inside any container |
 
 Docker is great for the "zero setup" onboarding story: `docker run yoe/builder`
 and you have a working environment. But for the build system itself, bubblewrap
-+ apk is simpler, faster, and more granular.
+
+- apk is simpler, faster, and more granular.
 
 ## Bootstrap Process
 
@@ -135,13 +136,13 @@ yoe bootstrap stage0
 ```
 
 These packages are built with Alpine's musl-based gcc targeting glibc. The
-output is a minimal set of `.apk` files — enough to create a self-hosting
-Yoe-NG build root.
+output is a minimal set of `.apk` files — enough to create a self-hosting Yoe-NG
+build root.
 
 ### Stage 1: Self-Hosting
 
-Rebuild the base packages using the Stage 0 packages. Now the Yoe-NG build
-root is building itself.
+Rebuild the base packages using the Stage 0 packages. Now the Yoe-NG build root
+is building itself.
 
 ```sh
 yoe bootstrap stage1
@@ -175,8 +176,8 @@ base packages for each supported architecture:
 - `aarch64` — built on ARM64 CI runners
 - `riscv64` — built on RISC-V hardware or QEMU
 
-A new project pulls these from the Yoe-NG package repository and starts
-building immediately. The bootstrap process is only needed by:
+A new project pulls these from the Yoe-NG package repository and starts building
+immediately. The bootstrap process is only needed by:
 
 - Yoe-NG distribution developers maintaining the base packages.
 - Users who need to verify the full build chain for compliance/traceability.
@@ -189,11 +190,11 @@ root:root, creating device nodes, setting setuid bits. Traditionally this is
 solved with `fakeroot` or Yocto's `pseudo`, both of which use LD_PRELOAD to
 intercept libc calls. These approaches are fragile:
 
-| Approach | Mechanism | Breaks with Go/static bins | Database corruption | Parallel safety |
-|---|---|---|---|---|
-| fakeroot | LD_PRELOAD | Yes | N/A | Fragile |
-| pseudo (Yocto) | LD_PRELOAD + SQLite | Yes | Yes (known issue) | Better |
-| **User namespaces** | **Kernel** | **No** | **N/A (stateless)** | **Yes** |
+| Approach            | Mechanism           | Breaks with Go/static bins | Database corruption | Parallel safety |
+| ------------------- | ------------------- | -------------------------- | ------------------- | --------------- |
+| fakeroot            | LD_PRELOAD          | Yes                        | N/A                 | Fragile         |
+| pseudo (Yocto)      | LD_PRELOAD + SQLite | Yes                        | Yes (known issue)   | Better          |
+| **User namespaces** | **Kernel**          | **No**                     | **N/A (stateless)** | **Yes**         |
 
 Yoe-NG uses **user namespaces** (via bubblewrap, already in the stack for build
 isolation) for all operations that need pseudo-root access. Inside a user
@@ -237,9 +238,9 @@ Because this is kernel-native:
 
 ### Disk Image Partitioning
 
-For the final step of creating a partitioned disk image (GPT/MBR with boot
-and rootfs partitions), `yoe` can use **systemd-repart** as a complementary
-tool. Since Yoe-NG already uses systemd, `systemd-repart` is a natural fit:
+For the final step of creating a partitioned disk image (GPT/MBR with boot and
+rootfs partitions), `yoe` can use **systemd-repart** as a complementary tool.
+Since Yoe-NG already uses systemd, `systemd-repart` is a natural fit:
 
 - Declarative partition definitions (aligns with the TOML partition layout
   files).
@@ -282,11 +283,11 @@ Since Yoe-NG uses native builds (no cross-compilation), the host architecture
 **is** the target architecture. All three supported architectures have viable
 build environments:
 
-| Architecture | Alpine Container | CI Runners | Native Hardware |
-|---|---|---|---|
-| x86_64 | `alpine:latest` | GitHub Actions, all CI | Any x86_64 machine |
-| aarch64 | `alpine:latest` (arm64) | GitHub ARM runners, Hetzner CAX | RPi 4/5, ARM servers |
-| riscv64 | `alpine:edge` (riscv64) | Limited | SiFive, StarFive boards |
+| Architecture | Alpine Container        | CI Runners                      | Native Hardware         |
+| ------------ | ----------------------- | ------------------------------- | ----------------------- |
+| x86_64       | `alpine:latest`         | GitHub Actions, all CI          | Any x86_64 machine      |
+| aarch64      | `alpine:latest` (arm64) | GitHub ARM runners, Hetzner CAX | RPi 4/5, ARM servers    |
+| riscv64      | `alpine:edge` (riscv64) | Limited                         | SiFive, StarFive boards |
 
-For riscv64, QEMU user-mode emulation on an x86_64 host is a practical
-fallback until native CI runners become widely available.
+For riscv64, QEMU user-mode emulation on an x86_64 host is a practical fallback
+until native CI runners become widely available.

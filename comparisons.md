@@ -78,8 +78,8 @@ shares Yoe-NG's preference for simplicity.
 | CI/team sharing    | Everyone rebuilds from scratch                | Push/pull from shared package repo                  |
 | Composable images  | No — single image output                      | Yes — assemble different images from same packages  |
 
-**The biggest structural difference** is the recipe/package split. Buildroot
-has no concept of installable packages — it builds everything into a monolithic
+**The biggest structural difference** is the recipe/package split. Buildroot has
+no concept of installable packages — it builds everything into a monolithic
 rootfs. This means:
 
 - You can't update a single component on a deployed device without reflashing.
@@ -89,8 +89,8 @@ rootfs. This means:
 **When to use Buildroot instead:** when you want the absolute simplest build
 system for a truly minimal, single-purpose, static embedded system (firmware for
 a sensor, a network appliance with no field updates). If the device never needs
-a partial update and the image is small enough to rebuild in minutes, Buildroot's
-simplicity is hard to beat.
+a partial update and the image is small enough to rebuild in minutes,
+Buildroot's simplicity is hard to beat.
 
 ## vs. Alpine Linux
 
@@ -109,8 +109,8 @@ looks like.
 
 **What Yoe-NG leaves behind:**
 
-- **musl** — using glibc instead for maximum compatibility with language runtimes
-  and pre-built binaries.
+- **musl** — using glibc instead for maximum compatibility with language
+  runtimes and pre-built binaries.
 - **No systemd** — Alpine uses OpenRC; Yoe-NG uses systemd.
 - **Limited BSP/hardware story** — Alpine doesn't target custom embedded boards.
 
@@ -141,8 +141,8 @@ transparency directly influences Yoe-NG's design.
 
 - **Rolling release model** — no big-bang version upgrades; packages update
   continuously against a single branch.
-- **Minimal base, user-assembled** — ship the smallest useful system and let
-  the integrator compose what they need.
+- **Minimal base, user-assembled** — ship the smallest useful system and let the
+  integrator compose what they need.
 - **PKGBUILD-style simplicity** — build definitions should be concise, readable
   shell-like scripts, not complex metadata. Yoe-NG's TOML recipes aim for
   similar auditability.
@@ -174,9 +174,9 @@ well for power users on general-purpose hardware.
 
 ## vs. NixOS / Nix
 
-Nix is the most intellectually ambitious of the systems Yoe-NG draws from.
-Its ideas about reproducibility and declarative configuration are adopted
-wholesale; its implementation complexity is not.
+Nix is the most intellectually ambitious of the systems Yoe-NG draws from. Its
+ideas about reproducibility and declarative configuration are adopted wholesale;
+its implementation complexity is not.
 
 **What Yoe-NG adopts from Nix:**
 
@@ -224,37 +224,37 @@ tooling design.
 **What Yoe-NG adopts from GN:**
 
 - **Two-phase resolve-then-build** — GN fully resolves and validates the
-  dependency graph before generating any build files. `yoe build` does the
-  same: resolve the entire recipe DAG, check for errors, then build. No partial
-  builds from graph errors discovered mid-way.
+  dependency graph before generating any build files. `yoe build` does the same:
+  resolve the entire recipe DAG, check for errors, then build. No partial builds
+  from graph errors discovered mid-way.
 - **Config propagation** — GN's `public_configs` automatically apply compiler
   flags to anything that depends on a target. Yoe-NG propagates machine-level
   settings (arch flags, optimization, kernel headers) through the recipe graph.
 - **Build introspection** — GN provides `gn desc` (what does this target do?)
-  and `gn refs` (what depends on this?). Yoe-NG provides `yoe desc`,
-  `yoe refs`, and `yoe graph` for the same purpose.
-- **Label-based references** — GN uses `//path/to:target` for unambiguous
-  target identification. Yoe-NG uses a similar scheme for composable recipe
-  references across repositories.
+  and `gn refs` (what depends on this?). Yoe-NG provides `yoe desc`, `yoe refs`,
+  and `yoe graph` for the same purpose.
+- **Label-based references** — GN uses `//path/to:target` for unambiguous target
+  identification. Yoe-NG uses a similar scheme for composable recipe references
+  across repositories.
 
 **What Yoe-NG leaves behind:**
 
-- Ninja file generation — Yoe-NG's recipe builds are coarse-grained enough
-  that `yoe` orchestrates directly.
+- Ninja file generation — Yoe-NG's recipe builds are coarse-grained enough that
+  `yoe` orchestrates directly.
 - GN's custom scripting language — TOML is sufficient for Yoe-NG's metadata.
 - C/C++ build model specifics — GN is deeply tied to source-file-level
   dependency tracking, which isn't relevant for recipe-level builds.
 
 **Key differences:**
 
-| | GN | Yoe-NG |
-|---|---|---|
-| Purpose | C/C++ meta-build system | Embedded Linux distribution builder |
-| Output | Ninja build files | `.apk` packages and disk images |
-| Config language | GN (custom) | TOML |
-| Dependency granularity | Source file / target | Recipe (package) |
-| Build execution | Ninja | `yoe` directly |
-| Introspection | `gn desc`, `gn refs` | `yoe desc`, `yoe refs`, `yoe graph` |
+|                        | GN                      | Yoe-NG                              |
+| ---------------------- | ----------------------- | ----------------------------------- |
+| Purpose                | C/C++ meta-build system | Embedded Linux distribution builder |
+| Output                 | Ninja build files       | `.apk` packages and disk images     |
+| Config language        | GN (custom)             | TOML                                |
+| Dependency granularity | Source file / target    | Recipe (package)                    |
+| Build execution        | Ninja                   | `yoe` directly                      |
+| Introspection          | `gn desc`, `gn refs`    | `yoe desc`, `yoe refs`, `yoe graph` |
 
 GN is not an alternative to Yoe-NG — they solve different problems. But GN's
 approach to graph resolution, config propagation, and introspection are

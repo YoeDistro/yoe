@@ -1,8 +1,8 @@
 # The `yoe` Tool
 
 `yoe` is the single CLI tool that drives all Yoe-NG workflows — building
-packages, assembling images, managing source downloads, and flashing devices.
-It is a statically-linked Go binary with no runtime dependencies.
+packages, assembling images, managing source downloads, and flashing devices. It
+is a statically-linked Go binary with no runtime dependencies.
 
 ## Installation
 
@@ -88,14 +88,14 @@ yoe build --force openssh
 **What happens during a build:**
 
 Inspired by Google's GN, `yoe build` uses a **two-phase resolve-then-build**
-model. The entire dependency graph is resolved and validated *before* any build
+model. The entire dependency graph is resolved and validated _before_ any build
 work starts. This catches missing dependencies, cycles, and configuration errors
 up front rather than mid-build.
 
 1. **Resolve dependencies** — read the recipe's `[depends]` table and
    topologically sort the build order. Validate that all referenced recipes
-   exist and the graph is acyclic. **If any errors are found, stop here** —
-   no partial builds.
+   exist and the graph is acyclic. **If any errors are found, stop here** — no
+   partial builds.
 2. **Check cache** — compute a content hash of the recipe + source + build
    dependencies. If a cached `.apk` with that hash exists (locally or in a
    remote cache), skip the build.
@@ -193,8 +193,8 @@ yoe repo pull
 ```
 
 The local repository lives at the path configured in `distro.toml`
-(`[repository].path`). It's a standard apk-compatible repository — you can
-point `apk` on a running device at it directly.
+(`[repository].path`). It's a standard apk-compatible repository — you can point
+`apk` on a running device at it directly.
 
 ### `yoe source`
 
@@ -218,8 +218,8 @@ yoe source verify
 yoe source clean
 ```
 
-Sources are stored in `$YOE_CACHE/sources/` with content-addressed naming.
-For git sources, bare clones are cached and updated incrementally.
+Sources are stored in `$YOE_CACHE/sources/` with content-addressed naming. For
+git sources, bare clones are cached and updated incrementally.
 
 ### `yoe config`
 
@@ -365,9 +365,9 @@ yoe clean openssh
 
 `yoe` resolves dependencies at two levels:
 
-1. **Build-time** — recipe `[depends].build` entries form a DAG. `yoe build
---with-deps` topologically sorts this graph and builds in order, parallelizing
-   where the DAG allows.
+1. **Build-time** — recipe `[depends].build` entries form a DAG.
+   `yoe build --with-deps` topologically sorts this graph and builds in order,
+   parallelizing where the DAG allows.
 
 2. **Install-time** — recipe `[depends].runtime` entries are written into the
    `.apk`'s `.PKGINFO`. When `apk add` runs during image assembly, it pulls in
@@ -398,9 +398,9 @@ machine (beaglebone-black)
 ```
 
 Recipes can also declare `public_config` settings that propagate to their
-dependents. For example, a `zlib` recipe might export its include path so
-that `openssh` (which depends on `zlib`) automatically gets
-`-I/usr/include` without the recipe author specifying it.
+dependents. For example, a `zlib` recipe might export its include path so that
+`openssh` (which depends on `zlib`) automatically gets `-I/usr/include` without
+the recipe author specifying it.
 
 This is resolved during the graph resolution phase (phase 1) so the full
 resolved config for every recipe is known before any build starts. Use
@@ -409,8 +409,8 @@ resolved config for every recipe is known before any build starts. Use
 **Design note: recipe-level, not task-level dependencies.** Unlike BitBake,
 which models dependencies between individual tasks across recipes (e.g.,
 `B:do_configure` depends on `A:do_install`), `yoe` treats each recipe as an
-atomic unit — recipe A depends on recipe B means B must be fully built before
-A starts. This is a deliberate simplicity trade-off. BitBake's task-level graph
+atomic unit — recipe A depends on recipe B means B must be fully built before A
+starts. This is a deliberate simplicity trade-off. BitBake's task-level graph
 enables fine-grained parallelism (start fetching C while B is still compiling)
 and per-task caching (sstate), but it is also the primary source of Yocto's
 debugging complexity. Recipe-level dependencies are easier to reason about, and
@@ -429,8 +429,8 @@ Builds are cached at multiple levels:
    skipped and the cached `.apk` is used.
 3. **Package repository** — built `.apk` files in the local repo. Once
    published, packages are available for image assembly and on-device updates.
-4. **Remote cache** (optional) — push/pull packages to an S3-compatible store
-   so CI and team members share build results.
+4. **Remote cache** (optional) — push/pull packages to an S3-compatible store so
+   CI and team members share build results.
 
 Cache invalidation is hash-based, not timestamp-based. Changing a recipe,
 updating a source, or rebuilding a dependency all produce a new hash and trigger
