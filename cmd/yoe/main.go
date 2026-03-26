@@ -6,6 +6,7 @@ import (
 
 	yoe "github.com/YoeDistro/yoe-ng/internal"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
+	"github.com/YoeDistro/yoe-ng/internal/source"
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
@@ -27,6 +28,8 @@ func main() {
 		cmdLayer(args)
 	case "config":
 		cmdConfig(args)
+	case "source":
+		cmdSource(args)
 	case "dev":
 		cmdDev(args)
 	case "desc":
@@ -308,6 +311,44 @@ func cmdDev(args []string) {
 		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown dev subcommand: %s\n", args[0])
+		os.Exit(1)
+	}
+}
+
+func cmdSource(args []string) {
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Usage: %s source <fetch|list|verify|clean> [recipes...]\n", os.Args[0])
+		os.Exit(1)
+	}
+
+	dir := os.Getenv("YOE_PROJECT")
+	if dir == "" {
+		dir = "."
+	}
+
+	switch args[0] {
+	case "fetch":
+		if err := source.FetchAll(dir, args[1:], os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "list":
+		if err := source.ListSources(dir, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "verify":
+		if err := source.VerifyAll(dir, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "clean":
+		if err := source.CleanSources(os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown source subcommand: %s\n", args[0])
 		os.Exit(1)
 	}
 }
