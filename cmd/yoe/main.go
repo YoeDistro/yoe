@@ -3,8 +3,11 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 
 	yoe "github.com/YoeDistro/yoe-ng/internal"
+	"github.com/YoeDistro/yoe-ng/internal/build"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
 	"github.com/YoeDistro/yoe-ng/internal/source"
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
@@ -21,9 +24,39 @@ func main() {
 	command := os.Args[1]
 	args := os.Args[2:]
 
+	// Commands that run on the host without a container
 	switch command {
+	case "version":
+		fmt.Println(version)
+		return
 	case "init":
 		cmdInit(args)
+		return
+	case "container":
+		cmdContainer(args)
+		return
+	}
+
+	// Everything else runs inside the container
+	if !yoe.InContainer() {
+		if err := yoe.EnsureImage(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		if err := yoe.ExecInContainer(os.Args[1:]); err != nil {
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				os.Exit(exitErr.ExitCode())
+			}
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Inside container — dispatch commands
+	switch command {
+	case "build":
+		cmdBuild(args)
 	case "layer":
 		cmdLayer(args)
 	case "config":
@@ -40,8 +73,6 @@ func main() {
 		cmdGraph(args)
 	case "clean":
 		cmdClean(args)
-	case "version":
-		fmt.Println(version)
 	default:
 		// Check for custom commands from commands/*.star
 		if !tryCustomCommand(command, args) {
@@ -57,6 +88,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "Yoe-NG embedded Linux distribution builder\n\n")
 	fmt.Fprintf(os.Stderr, "Commands:\n")
 	fmt.Fprintf(os.Stderr, "  init <project-dir>      Create a new Yoe-NG project\n")
+	fmt.Fprintf(os.Stderr, "  container               Manage the build container (build, status)\n")
 	fmt.Fprintf(os.Stderr, "  build [recipes...]      Build recipes (packages and images)\n")
 	fmt.Fprintf(os.Stderr, "  dev                     Manage source modifications (extract, diff, status)\n")
 	fmt.Fprintf(os.Stderr, "  flash <device>          Write an image to a device/SD card\n")
@@ -113,6 +145,80 @@ func cmdLayer(args []string) {
 		os.Exit(1)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown layer subcommand: %s\n", args[0])
+		os.Exit(1)
+	}
+}
+
+func cmdBuild(args []string) {
+	force := false
+	noCache := false
+	dryRun := false
+	var recipes []string
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--force", "-force":
+			force = true
+		case "--no-cache":
+			noCache = true
+		case "--dry-run":
+			dryRun = true
+		case "--all":
+			// build all — recipes stays empty
+		default:
+			recipes = append(recipes, args[i])
+		}
+	}
+
+	proj := loadProject()
+	opts := build.Options{
+		Force:      force,
+		NoCache:    noCache,
+		DryRun:     dryRun,
+		UseSandbox: build.HasBwrap(),
+		ProjectDir: projectDir(),
+		Arch:       build.Arch(),
+	}
+
+	if err := build.BuildRecipes(proj, recipes, opts, os.Stdout); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func projectDir() string {
+	dir := os.Getenv("YOE_PROJECT")
+	if dir == "" {
+		dir = "."
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return dir
+	}
+	return abs
+}
+
+func cmdContainer(args []string) {
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Usage: %s container <build|status>\n", os.Args[0])
+		os.Exit(1)
+	}
+
+	switch args[0] {
+	case "build":
+		if err := yoe.EnsureImage(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Container image built successfully")
+	case "status":
+		if yoe.InContainer() {
+			fmt.Println("Running inside the yoe-ng container")
+		} else {
+			fmt.Println("Running on host (commands will auto-enter container)")
+		}
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown container subcommand: %s\n", args[0])
 		os.Exit(1)
 	}
 }

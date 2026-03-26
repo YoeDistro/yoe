@@ -1,0 +1,47 @@
+# Yoe-NG build container (Tier 0)
+#
+# All yoe operations run inside this container. The host yoe binary
+# re-execs itself here with the project directory mounted.
+#
+# Build:  docker build -f containers/Dockerfile.build -t yoe-ng .
+# Run:    docker run -v $(pwd):/project -w /project yoe-ng build openssh
+
+FROM alpine:3.21 AS base
+
+RUN apk add --no-cache \
+    bubblewrap \
+    apk-tools \
+    git \
+    tar \
+    gzip \
+    bzip2 \
+    xz \
+    patch \
+    coreutils \
+    bash \
+    make \
+    gcc \
+    g++ \
+    musl-dev \
+    linux-headers
+
+# Build yoe from source
+FROM golang:alpine AS builder
+
+RUN apk add --no-cache git
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -o /yoe ./cmd/yoe
+
+# Final image
+FROM base
+
+COPY --from=builder /yoe /usr/local/bin/yoe
+
+# Mark that we're inside the container
+ENV YOE_IN_CONTAINER=1
+
+WORKDIR /project
+ENTRYPOINT ["yoe"]
