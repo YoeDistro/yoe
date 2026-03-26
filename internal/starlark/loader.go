@@ -45,11 +45,26 @@ func findProjectRoot(startDir string) (string, error) {
 // search for PROJECT.star — the caller must provide the exact root directory.
 func LoadProjectFromRoot(root string) (*Project, error) {
 	eng := NewEngine()
+	eng.SetProjectRoot(root)
 
 	// Evaluate PROJECT.star first
 	projFile := filepath.Join(root, "PROJECT.star")
 	if err := eng.ExecFile(projFile); err != nil {
 		return nil, fmt.Errorf("evaluating PROJECT.star: %w", err)
+	}
+
+	// Register local layer roots so load("@layer//...") works
+	if proj := eng.Project(); proj != nil {
+		for _, l := range proj.Layers {
+			if l.Local != "" {
+				layerPath := l.Local
+				if !filepath.IsAbs(layerPath) {
+					layerPath = filepath.Join(root, layerPath)
+				}
+				name := filepath.Base(l.URL)
+				eng.SetLayerRoot(name, layerPath)
+			}
+		}
 	}
 
 	// Evaluate all machine definitions
@@ -60,6 +75,17 @@ func LoadProjectFromRoot(root string) (*Project, error) {
 	// Evaluate all recipes
 	if err := evalDir(eng, root, "recipes"); err != nil {
 		return nil, err
+	}
+
+	// Evaluate machines, recipes, and images from local layers
+	if eng.layerRoots != nil {
+		for _, layerPath := range eng.layerRoots {
+			for _, subdir := range []string{"machines", "recipes", "images"} {
+				if err := evalDir(eng, layerPath, subdir); err != nil {
+					return nil, err
+				}
+			}
+		}
 	}
 
 	proj := eng.Project()
