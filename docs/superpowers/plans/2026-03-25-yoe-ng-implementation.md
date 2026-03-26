@@ -21,18 +21,6 @@ management), systemd-repart (disk images)
 
 ---
 
-> **NOTE: Starlark transition.** This plan was originally written with TOML
-> metadata parsing (BurntSushi/toml). The project has since adopted Starlark
-> (go.starlark.net) for all recipes and configuration. Phase 1 tasks 2-7 below
-> still contain detailed Go code using TOML structs — these need to be
-> regenerated to use the Starlark evaluation engine instead. The high-level
-> structure (phases, task ordering, test-first approach) remains valid. Key
-> changes: `distro.toml` → `PROJECT.star`, `recipes/*.toml` → `recipes/*.star`,
-> `machines/*.toml` → `machines/*.star`, `BurntSushi/toml` → `go.starlark.net`,
-> TOML struct parsing → Starlark built-in function registration.
-
----
-
 ## Phase Overview
 
 This project is broken into 9 phases. Each phase produces working, testable
@@ -62,19 +50,24 @@ and `yoe config` — the skeleton everything else builds on.
 ### File Structure
 
 ```
-cmd/yoe/main.go                    — entry point, switch/case command dispatch, printUsage()
-internal/config/project.go         — project discovery (find PROJECT.star)
-internal/starlark/engine.go        — Starlark evaluation engine, built-in functions
-internal/starlark/builtins.go      — project(), machine(), package(), image(), etc.
-internal/starlark/types.go         — Go types for evaluated recipes, machines, etc.
-internal/starlark/loader.go        — load all .star files from a project tree
-internal/init.go                   — yoe init logic
-internal/clean.go                  — yoe clean logic
+cmd/yoe/main.go                        — entry point, switch/case command dispatch
+internal/config/project.go             — project discovery (find PROJECT.star)
+internal/starlark/engine.go            — Starlark thread setup, load() handler, evaluation
+internal/starlark/builtins.go          — built-in functions: project(), machine(), package(), image(), etc.
+internal/starlark/types.go             — Go types produced by evaluation (Project, Machine, Recipe, etc.)
+internal/starlark/loader.go            — walk project tree, evaluate all .star files, return Project
+internal/starlark/engine_test.go       — tests for engine + builtins
+internal/starlark/loader_test.go       — tests for full project loading
+internal/init.go                       — yoe init logic
+internal/clean.go                      — yoe clean logic
 go.mod
 go.sum
-testdata/valid-project/            — test fixture: complete valid project
-testdata/minimal-project/          — test fixture: minimal valid project
-testdata/invalid-project/          — test fixture: various invalid configs
+testdata/valid-project/                — test fixture: complete valid project
+testdata/valid-project/PROJECT.star
+testdata/valid-project/machines/*.star
+testdata/valid-project/recipes/*.star
+testdata/minimal-project/              — test fixture: minimal valid project
+testdata/invalid-project/              — test fixture: various invalid configs
 ```
 
 ---
@@ -151,25 +144,16 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  clean                   Remove build artifacts\n")
 	fmt.Fprintf(os.Stderr, "  version                 Display version information\n")
 	fmt.Fprintf(os.Stderr, "\n")
-	fmt.Fprintf(os.Stderr, "Init Options:\n")
-	fmt.Fprintf(os.Stderr, "  -machine <name>         Initial machine to configure\n")
-	fmt.Fprintf(os.Stderr, "\n")
-	fmt.Fprintf(os.Stderr, "Config Subcommands:\n")
-	fmt.Fprintf(os.Stderr, "  config show             Show current configuration\n")
-	fmt.Fprintf(os.Stderr, "  config set <key> <val>  Set a configuration value\n")
-	fmt.Fprintf(os.Stderr, "\n")
-	fmt.Fprintf(os.Stderr, "Clean Options:\n")
-	fmt.Fprintf(os.Stderr, "  -all                    Remove everything (build dirs, packages, sources)\n")
+	fmt.Fprintf(os.Stderr, "Examples:\n")
+	fmt.Fprintf(os.Stderr, "  %s init my-project --machine beaglebone-black\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "  %s build openssh\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "  %s build base-image --machine raspberrypi4\n", os.Args[0])
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "Environment Variables:\n")
 	fmt.Fprintf(os.Stderr, "  YOE_PROJECT             Project directory (default: cwd)\n")
 	fmt.Fprintf(os.Stderr, "  YOE_CACHE               Cache directory (default: ~/.cache/yoe-ng)\n")
 	fmt.Fprintf(os.Stderr, "  YOE_LOG                 Log level: debug, info, warn, error (default: info)\n")
 	fmt.Fprintf(os.Stderr, "\n")
-	fmt.Fprintf(os.Stderr, "Examples:\n")
-	fmt.Fprintf(os.Stderr, "  %s init my-project --machine beaglebone-black\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "  %s build openssh\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "  %s build base-image --machine raspberrypi4\n", os.Args[0])
 }
 
 // Stub command handlers — implemented in subsequent tasks
@@ -209,1028 +193,351 @@ git commit -m "feat: initialize Go module with stdlib CLI skeleton"
 
 ---
 
-### Task 2: Distro Configuration Parsing
+### Task 2: Starlark Types
 
 **Files:**
 
-- Create: `internal/config/distro.go`
-- Create: `internal/config/distro_test.go`
-- Create: `testdata/valid-project/distro.toml`
+- Create: `internal/starlark/types.go`
 
-- [ ] **Step 1: Create test fixture**
+Define the Go types that Starlark evaluation produces. These are plain Go
+structs — no Starlark dependency yet.
 
-Create `testdata/valid-project/distro.toml`:
+- [ ] **Step 1: Write the types**
 
-```toml
-[distro]
-name = "test-distro"
-version = "0.1.0"
-description = "Test distribution"
-
-[defaults]
-machine = "qemu-arm64"
-image = "base-image"
-
-[repository]
-path = "/var/cache/yoe-ng/repo"
-
-[cache]
-path = "/var/cache/yoe-ng/build"
-
-[[cache.remote]]
-name = "team"
-type = "s3"
-bucket = "yoe-cache"
-endpoint = "https://minio.internal:9000"
-region = "us-east-1"
-
-[sources]
-go-proxy = "https://proxy.golang.org"
-```
-
-- [ ] **Step 2: Write the failing test**
-
-Create `internal/config/distro_test.go`:
+Create `internal/starlark/types.go`:
 
 ```go
-package config
+package starlark
 
-import (
-	"path/filepath"
-	"testing"
-)
-
-func TestParseDistroConfig(t *testing.T) {
-	path := filepath.Join("..", "..", "testdata", "valid-project", "distro.toml")
-	distro, err := ParseDistroConfig(path)
-	if err != nil {
-		t.Fatalf("ParseDistroConfig(%q): %v", path, err)
-	}
-
-	if distro.Distro.Name != "test-distro" {
-		t.Errorf("Name = %q, want %q", distro.Distro.Name, "test-distro")
-	}
-	if distro.Distro.Version != "0.1.0" {
-		t.Errorf("Version = %q, want %q", distro.Distro.Version, "0.1.0")
-	}
-	if distro.Defaults.Machine != "qemu-arm64" {
-		t.Errorf("Defaults.Machine = %q, want %q", distro.Defaults.Machine, "qemu-arm64")
-	}
-	if distro.Defaults.Image != "base" {
-		t.Errorf("Defaults.Image = %q, want %q", distro.Defaults.Image, "base")
-	}
-	if distro.Repository.Path != "/var/cache/yoe-ng/repo" {
-		t.Errorf("Repository.Path = %q, want %q", distro.Repository.Path, "/var/cache/yoe-ng/repo")
-	}
-	if distro.Cache.Path != "/var/cache/yoe-ng/build" {
-		t.Errorf("Cache.Path = %q, want %q", distro.Cache.Path, "/var/cache/yoe-ng/build")
-	}
-	if distro.Sources.GoProxy != "https://proxy.golang.org" {
-		t.Errorf("Sources.GoProxy = %q, want %q", distro.Sources.GoProxy, "https://proxy.golang.org")
-	}
+// Project represents an evaluated PROJECT.star.
+type Project struct {
+	Name       string
+	Version    string
+	Defaults   Defaults
+	Repository RepositoryConfig
+	Cache      CacheConfig
+	Sources    SourcesConfig
+	Layers     []LayerRef
+	Machines   map[string]*Machine
+	Recipes    map[string]*Recipe
 }
 
-func TestParseDistroConfig_MissingFile(t *testing.T) {
-	_, err := ParseDistroConfig("nonexistent.toml")
-	if err == nil {
-		t.Fatal("expected error for missing file, got nil")
-	}
+type Defaults struct {
+	Machine string
+	Image   string
 }
 
-func TestParseDistroConfig_RequiredFields(t *testing.T) {
-	path := filepath.Join("..", "..", "testdata", "invalid-project", "empty-distro.toml")
-	_, err := ParseDistroConfig(path)
-	if err == nil {
-		t.Fatal("expected error for empty distro name, got nil")
-	}
-}
-```
-
-- [ ] **Step 3: Run test to verify it fails**
-
-```bash
-go test ./internal/config/ -run TestParseDistroConfig -v
-```
-
-Expected: FAIL — `ParseDistroConfig` not defined.
-
-- [ ] **Step 4: Write the implementation**
-
-Install TOML library:
-
-```bash
-go get go.starlark.net@latest
-```
-
-Create `internal/config/distro.go`:
-
-```go
-package config
-
-import (
-	"fmt"
-	"os"
-
-	"github.com/BurntSushi/toml"
-)
-
-type DistroConfig struct {
-	Distro     DistroInfo          `toml:"distro"`
-	Defaults   DistroDefaults      `toml:"defaults"`
-	Repository RepoConfig          `toml:"repository"`
-	Cache      CacheConfig         `toml:"cache"`
-	Sources    SourcesConfig       `toml:"sources"`
-	Layers     map[string]LayerRef `toml:"layers"`
-}
-
-type DistroInfo struct {
-	Name        string `toml:"name"`
-	Version     string `toml:"version"`
-	Description string `toml:"description"`
-}
-
-type DistroDefaults struct {
-	Machine string `toml:"machine"`
-	Image   string `toml:"image"`
-}
-
-type RepoConfig struct {
-	Path   string `toml:"path"`
-	Remote string `toml:"remote"`
+type RepositoryConfig struct {
+	Path string
 }
 
 type CacheConfig struct {
-	Path      string              `toml:"path"`
-	Remote    []CacheRemoteConfig `toml:"remote"`
-	Retention CacheRetention      `toml:"retention"`
-	Signing   CacheSigningConfig  `toml:"signing"`
+	Path      string
+	Remote    []CacheRemote
+	Retention int // days
+	Signing   string
 }
 
-type CacheRemoteConfig struct {
-	Name     string `toml:"name"`
-	Type     string `toml:"type"`     // "s3"
-	Bucket   string `toml:"bucket"`
-	Endpoint string `toml:"endpoint"`
-	Region   string `toml:"region"`
-	Prefix   string `toml:"prefix"`
-}
-
-type CacheRetention struct {
-	Days int `toml:"days"`
-}
-
-type CacheSigningConfig struct {
-	PublicKey  string `toml:"public-key"`
-	PrivateKey string `toml:"private-key"`
+type CacheRemote struct {
+	Name     string
+	Bucket   string
+	Endpoint string
+	Region   string
+	Prefix   string
 }
 
 type SourcesConfig struct {
-	GoProxy       string `toml:"go-proxy"`
-	CargoRegistry string `toml:"cargo-registry"`
-	NpmRegistry   string `toml:"npm-registry"`
+	GoProxy       string
+	CargoRegistry string
+	NpmRegistry   string
+	PypiMirror    string
 }
 
 type LayerRef struct {
-	URL string `toml:"url"`
-	Ref string `toml:"ref"`
+	URL string
+	Ref string
 }
 
-func ParseDistroConfig(path string) (*DistroConfig, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("reading distro config: %w", err)
-	}
-
-	var cfg DistroConfig
-	if err := toml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parsing distro config %s: %w", path, err)
-	}
-
-	if cfg.Distro.Name == "" {
-		return nil, fmt.Errorf("distro config %s: distro.name is required", path)
-	}
-
-	return &cfg, nil
-}
-```
-
-- [ ] **Step 5: Create invalid test fixture**
-
-Create `testdata/invalid-project/empty-distro.toml`:
-
-```toml
-[distro]
-name = ""
-version = "0.1.0"
-```
-
-- [ ] **Step 6: Run tests to verify they pass**
-
-```bash
-go test ./internal/config/ -run TestParseDistroConfig -v
-```
-
-Expected: All 3 tests PASS.
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add internal/config/distro.go internal/config/distro_test.go testdata/
-git commit -m "feat: add distro.toml parsing with validation"
-```
-
----
-
-### Task 3: Machine Configuration Parsing
-
-**Files:**
-
-- Create: `internal/config/machine.go`
-- Create: `internal/config/machine_test.go`
-- Create: `testdata/valid-project/machines/beaglebone-black.toml`
-- Create: `testdata/valid-project/machines/qemu-x86_64.toml`
-
-- [ ] **Step 1: Create test fixtures**
-
-Create `testdata/valid-project/machines/beaglebone-black.toml`:
-
-```toml
-[machine]
-name = "beaglebone-black"
-arch = "arm64"
-description = "BeagleBone Black (AM3358)"
-
-[kernel]
-repo = "https://github.com/beagleboard/linux.git"
-branch = "6.6"
-defconfig = "bb.org_defconfig"
-device-trees = ["am335x-boneblack.dtb"]
-
-[bootloader]
-type = "u-boot"
-repo = "https://github.com/beagleboard/u-boot.git"
-branch = "v2024.01"
-defconfig = "am335x_evm_defconfig"
-
-[image]
-partition-layout = "partitions/bbb.toml"
-```
-
-Create `testdata/valid-project/machines/qemu-x86_64.toml`:
-
-```toml
-[machine]
-name = "qemu-x86_64"
-arch = "x86_64"
-
-[kernel]
-recipe = "linux-qemu"
-cmdline = "console=ttyS0 root=/dev/vda2 rw"
-
-[machine.qemu]
-machine = "q35"
-cpu = "host"
-memory = "1G"
-firmware = "ovmf"
-display = "none"
-```
-
-- [ ] **Step 2: Write the failing test**
-
-Create `internal/config/machine_test.go`:
-
-```go
-package config
-
-import (
-	"path/filepath"
-	"testing"
-)
-
-func TestParseMachineConfig(t *testing.T) {
-	path := filepath.Join("..", "..", "testdata", "valid-project", "machines", "beaglebone-black.toml")
-	machine, err := ParseMachineConfig(path)
-	if err != nil {
-		t.Fatalf("ParseMachineConfig(%q): %v", path, err)
-	}
-
-	if machine.Machine.Name != "beaglebone-black" {
-		t.Errorf("Name = %q, want %q", machine.Machine.Name, "beaglebone-black")
-	}
-	if machine.Machine.Arch != "arm64" {
-		t.Errorf("Arch = %q, want %q", machine.Machine.Arch, "arm64")
-	}
-	if machine.Kernel.Repo != "https://github.com/beagleboard/linux.git" {
-		t.Errorf("Kernel.Repo = %q, want correct URL", machine.Kernel.Repo)
-	}
-	if machine.Kernel.Defconfig != "bb.org_defconfig" {
-		t.Errorf("Kernel.Defconfig = %q, want %q", machine.Kernel.Defconfig, "bb.org_defconfig")
-	}
-	if len(machine.Kernel.DeviceTrees) != 1 || machine.Kernel.DeviceTrees[0] != "am335x-boneblack.dtb" {
-		t.Errorf("Kernel.DeviceTrees = %v, want [am335x-boneblack.dtb]", machine.Kernel.DeviceTrees)
-	}
-	if machine.Bootloader.Type != "u-boot" {
-		t.Errorf("Bootloader.Type = %q, want %q", machine.Bootloader.Type, "u-boot")
-	}
-	if machine.Image.PartitionLayout != "partitions/bbb.toml" {
-		t.Errorf("Image.PartitionLayout = %q, want %q", machine.Image.PartitionLayout, "partitions/bbb.toml")
-	}
+// Machine represents an evaluated machine() call.
+type Machine struct {
+	Name        string
+	Arch        string
+	Description string
+	Kernel      KernelConfig
+	Bootloader  BootloaderConfig
+	QEMU        *QEMUConfig // nil if not a QEMU machine
 }
 
-func TestParseMachineConfig_QEMU(t *testing.T) {
-	path := filepath.Join("..", "..", "testdata", "valid-project", "machines", "qemu-x86_64.toml")
-	machine, err := ParseMachineConfig(path)
-	if err != nil {
-		t.Fatalf("ParseMachineConfig(%q): %v", path, err)
-	}
-
-	if machine.Machine.QEMU == nil {
-		t.Fatal("expected QEMU config, got nil")
-	}
-	if machine.Machine.QEMU.Machine != "q35" {
-		t.Errorf("QEMU.Machine = %q, want %q", machine.Machine.QEMU.Machine, "q35")
-	}
-	if machine.Machine.QEMU.Memory != "1G" {
-		t.Errorf("QEMU.Memory = %q, want %q", machine.Machine.QEMU.Memory, "1G")
-	}
+type KernelConfig struct {
+	Repo        string
+	Branch      string
+	Tag         string
+	Defconfig   string
+	DeviceTrees []string
+	Recipe      string
+	Cmdline     string
 }
 
-func TestParseMachineConfig_InvalidArch(t *testing.T) {
-	path := filepath.Join("..", "..", "testdata", "invalid-project", "bad-arch-machine.toml")
-	_, err := ParseMachineConfig(path)
-	if err == nil {
-		t.Fatal("expected error for invalid arch, got nil")
-	}
+type BootloaderConfig struct {
+	Type      string
+	Repo      string
+	Branch    string
+	Defconfig string
 }
-```
 
-- [ ] **Step 3: Run test to verify it fails**
+type QEMUConfig struct {
+	Machine  string
+	CPU      string
+	Memory   string
+	Firmware string
+	Display  string
+}
 
-```bash
-go test ./internal/config/ -run TestParseMachineConfig -v
-```
+// Recipe represents an evaluated package(), autotools(), image(), etc. call.
+type Recipe struct {
+	Name        string
+	Version     string
+	Class       string // "package", "autotools", "cmake", "go", "image", etc.
+	Description string
+	License     string
 
-Expected: FAIL — `ParseMachineConfig` not defined.
+	// Source
+	Source string // URL or git repo
+	SHA256 string
+	Tag    string
+	Branch string
 
-- [ ] **Step 4: Write the implementation**
+	// Dependencies
+	Deps        []string
+	RuntimeDeps []string
 
-Create `internal/config/machine.go`:
+	// Build
+	Build         []string // shell commands (for generic package())
+	ConfigureArgs []string // for autotools/cmake
+	GoPackage     string   // for go_binary
 
-```go
-package config
+	// Package metadata
+	Services    []string
+	Conffiles   []string
+	Environment map[string]string
 
-import (
-	"fmt"
-	"os"
+	// Image-specific (class == "image")
+	Packages   []string // packages to install in rootfs
+	Exclude    []string
+	Hostname   string
+	Timezone   string
+	Locale     string
+	Partitions []Partition
+}
 
-	"github.com/BurntSushi/toml"
-)
+type Partition struct {
+	Label    string
+	Type     string // "vfat", "ext4", etc.
+	Size     string // "64M", "fill", etc.
+	Root     bool
+	Contents []string
+}
 
 var validArchitectures = map[string]bool{
-	"arm":     true,
 	"arm64":   true,
 	"riscv64": true,
 	"x86_64":  true,
 }
-
-type MachineConfig struct {
-	Machine    MachineInfo  `toml:"machine"`
-	Kernel     KernelConfig `toml:"kernel"`
-	Bootloader BootConfig   `toml:"bootloader"`
-	Image      MachineImage `toml:"image"`
-}
-
-type MachineInfo struct {
-	Name        string      `toml:"name"`
-	Arch        string      `toml:"arch"`
-	Description string      `toml:"description"`
-	QEMU        *QEMUConfig `toml:"qemu"`
-}
-
-type KernelConfig struct {
-	Repo        string   `toml:"repo"`
-	Branch      string   `toml:"branch"`
-	Tag         string   `toml:"tag"`
-	Defconfig   string   `toml:"defconfig"`
-	DeviceTrees []string `toml:"device-trees"`
-	Recipe      string   `toml:"recipe"`
-	Cmdline     string   `toml:"cmdline"`
-}
-
-type BootConfig struct {
-	Type      string `toml:"type"`
-	Repo      string `toml:"repo"`
-	Branch    string `toml:"branch"`
-	Defconfig string `toml:"defconfig"`
-}
-
-type MachineImage struct {
-	PartitionLayout string `toml:"partition-layout"`
-}
-
-type QEMUConfig struct {
-	Machine  string `toml:"machine"`
-	CPU      string `toml:"cpu"`
-	Memory   string `toml:"memory"`
-	Firmware string `toml:"firmware"`
-	Display  string `toml:"display"`
-}
-
-func ParseMachineConfig(path string) (*MachineConfig, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("reading machine config: %w", err)
-	}
-
-	var cfg MachineConfig
-	if err := toml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parsing machine config %s: %w", path, err)
-	}
-
-	if cfg.Machine.Name == "" {
-		return nil, fmt.Errorf("machine config %s: machine.name is required", path)
-	}
-	if cfg.Machine.Arch == "" {
-		return nil, fmt.Errorf("machine config %s: machine.arch is required", path)
-	}
-	if !validArchitectures[cfg.Machine.Arch] {
-		return nil, fmt.Errorf("machine config %s: invalid arch %q (valid: arm, arm64, riscv64, x86_64)", path, cfg.Machine.Arch)
-	}
-
-	return &cfg, nil
-}
 ```
 
-- [ ] **Step 5: Create invalid test fixture**
-
-Create `testdata/invalid-project/bad-arch-machine.toml`:
-
-```toml
-[machine]
-name = "bad-machine"
-arch = "mips"
-```
-
-- [ ] **Step 6: Run tests to verify they pass**
+- [ ] **Step 2: Commit**
 
 ```bash
-go test ./internal/config/ -run TestParseMachineConfig -v
-```
-
-Expected: All 3 tests PASS.
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add internal/config/machine.go internal/config/machine_test.go testdata/
-git commit -m "feat: add machine TOML parsing with arch validation"
+git add internal/starlark/types.go
+git commit -m "feat: add Go types for Starlark evaluation output"
 ```
 
 ---
 
-### Task 4: Recipe Configuration Parsing
+### Task 3: Starlark Engine and Built-in Functions
 
 **Files:**
 
-- Create: `internal/config/recipe.go`
-- Create: `internal/config/recipe_test.go`
-- Create: `testdata/valid-project/recipes/openssh.toml`
-- Create: `testdata/valid-project/recipes/myapp.toml`
+- Create: `internal/starlark/engine.go`
+- Create: `internal/starlark/builtins.go`
+- Create: `internal/starlark/engine_test.go`
 
-- [ ] **Step 1: Create test fixtures**
+The engine evaluates `.star` files and collects the results of built-in function
+calls (project(), machine(), package(), image(), etc.) into Go types.
 
-Create `testdata/valid-project/recipes/openssh.toml`:
+- [ ] **Step 1: Write the failing test**
 
-```toml
-[recipe]
-name = "openssh"
-version = "9.6p1"
-description = "OpenSSH client and server"
-license = "BSD"
-
-[source]
-url = "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.6p1.tar.gz"
-sha256 = "aaaa1111bbbb2222cccc3333dddd4444eeee5555ffff6666"
-
-[depends]
-build = ["zlib", "openssl"]
-runtime = ["zlib", "openssl"]
-
-[build]
-steps = [
-    "./configure --prefix=$PREFIX --sysconfdir=/etc/ssh",
-    "make -j$NPROC",
-    "make DESTDIR=$DESTDIR install",
-]
-
-[package]
-units = ["sshd.service"]
-conffiles = ["/etc/ssh/sshd_config"]
-```
-
-Create `testdata/valid-project/recipes/myapp.toml`:
-
-```toml
-[recipe]
-name = "myapp"
-version = "1.2.3"
-description = "Edge data collection service"
-license = "Apache-2.0"
-language = "go"
-
-[source]
-repo = "https://github.com/example/myapp.git"
-tag = "v1.2.3"
-
-[depends]
-build = []
-runtime = []
-
-[build]
-command = "go build -o $DESTDIR/usr/bin/myapp ./cmd/myapp"
-
-[package]
-units = ["myapp.service"]
-conffiles = ["/etc/myapp/config.toml"]
-```
-
-- [ ] **Step 2: Write the failing test**
-
-Create `internal/config/recipe_test.go`:
+Create `internal/starlark/engine_test.go`:
 
 ```go
-package config
+package starlark
 
 import (
-	"path/filepath"
 	"testing"
 )
 
-func TestParseRecipeConfig_SystemPackage(t *testing.T) {
-	path := filepath.Join("..", "..", "testdata", "valid-project", "recipes", "openssh.toml")
-	recipe, err := ParseRecipeConfig(path)
-	if err != nil {
-		t.Fatalf("ParseRecipeConfig(%q): %v", path, err)
+func TestEvalProject(t *testing.T) {
+	src := `
+project(
+    name = "test-project",
+    version = "0.1.0",
+    defaults = defaults(machine = "qemu-arm64", image = "base-image"),
+    repository = repository(path = "/var/cache/yoe-ng/repo"),
+    cache = cache(path = "/var/cache/yoe-ng/build"),
+)
+`
+	eng := NewEngine()
+	if err := eng.ExecString("PROJECT.star", src); err != nil {
+		t.Fatalf("ExecString: %v", err)
 	}
-
-	if recipe.Recipe.Name != "openssh" {
-		t.Errorf("Name = %q, want %q", recipe.Recipe.Name, "openssh")
+	proj := eng.Project()
+	if proj == nil {
+		t.Fatal("Project() returned nil")
 	}
-	if recipe.Recipe.Version != "9.6p1" {
-		t.Errorf("Version = %q, want %q", recipe.Recipe.Version, "9.6p1")
+	if proj.Name != "test-project" {
+		t.Errorf("Name = %q, want %q", proj.Name, "test-project")
 	}
-	if recipe.Source.URL != "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.6p1.tar.gz" {
-		t.Errorf("Source.URL = %q, want correct URL", recipe.Source.URL)
-	}
-	if len(recipe.Depends.Build) != 2 {
-		t.Errorf("Depends.Build has %d entries, want 2", len(recipe.Depends.Build))
-	}
-	if len(recipe.Build.Steps) != 3 {
-		t.Errorf("Build.Steps has %d entries, want 3", len(recipe.Build.Steps))
-	}
-	if recipe.Build.Command != "" {
-		t.Errorf("Build.Command = %q, want empty for steps-based recipe", recipe.Build.Command)
-	}
-}
-
-func TestParseRecipeConfig_AppPackage(t *testing.T) {
-	path := filepath.Join("..", "..", "testdata", "valid-project", "recipes", "myapp.toml")
-	recipe, err := ParseRecipeConfig(path)
-	if err != nil {
-		t.Fatalf("ParseRecipeConfig(%q): %v", path, err)
-	}
-
-	if recipe.Recipe.Language != "go" {
-		t.Errorf("Language = %q, want %q", recipe.Recipe.Language, "go")
-	}
-	if recipe.Source.Repo != "https://github.com/example/myapp.git" {
-		t.Errorf("Source.Repo = %q, want correct URL", recipe.Source.Repo)
-	}
-	if recipe.Source.Tag != "v1.2.3" {
-		t.Errorf("Source.Tag = %q, want %q", recipe.Source.Tag, "v1.2.3")
-	}
-	if recipe.Build.Command == "" {
-		t.Error("Build.Command is empty, want a command string")
+	if proj.Defaults.Machine != "qemu-arm64" {
+		t.Errorf("Defaults.Machine = %q, want %q", proj.Defaults.Machine, "qemu-arm64")
 	}
 }
 
-func TestParseRecipeConfig_NoBuildMethod(t *testing.T) {
-	path := filepath.Join("..", "..", "testdata", "invalid-project", "no-build-recipe.toml")
-	_, err := ParseRecipeConfig(path)
+func TestEvalMachine(t *testing.T) {
+	src := `
+machine(
+    name = "beaglebone-black",
+    arch = "arm64",
+    description = "BeagleBone Black",
+    kernel = kernel(
+        repo = "https://github.com/beagleboard/linux.git",
+        branch = "6.6",
+        defconfig = "bb.org_defconfig",
+        device_trees = ["am335x-boneblack.dtb"],
+    ),
+    bootloader = uboot(
+        repo = "https://github.com/beagleboard/u-boot.git",
+        branch = "v2024.01",
+        defconfig = "am335x_evm_defconfig",
+    ),
+)
+`
+	eng := NewEngine()
+	if err := eng.ExecString("machines/bbb.star", src); err != nil {
+		t.Fatalf("ExecString: %v", err)
+	}
+	machines := eng.Machines()
+	m, ok := machines["beaglebone-black"]
+	if !ok {
+		t.Fatal("machine 'beaglebone-black' not found")
+	}
+	if m.Arch != "arm64" {
+		t.Errorf("Arch = %q, want %q", m.Arch, "arm64")
+	}
+	if m.Kernel.Defconfig != "bb.org_defconfig" {
+		t.Errorf("Kernel.Defconfig = %q, want %q", m.Kernel.Defconfig, "bb.org_defconfig")
+	}
+	if len(m.Kernel.DeviceTrees) != 1 {
+		t.Errorf("Kernel.DeviceTrees = %v, want 1 entry", m.Kernel.DeviceTrees)
+	}
+}
+
+func TestEvalPackageRecipe(t *testing.T) {
+	src := `
+package(
+    name = "openssh",
+    version = "9.6p1",
+    source = "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.6p1.tar.gz",
+    sha256 = "abc123",
+    deps = ["zlib", "openssl"],
+    runtime_deps = ["zlib", "openssl"],
+    build = [
+        "./configure --prefix=$PREFIX",
+        "make -j$NPROC",
+        "make DESTDIR=$DESTDIR install",
+    ],
+    services = ["sshd"],
+    conffiles = ["/etc/ssh/sshd_config"],
+)
+`
+	eng := NewEngine()
+	if err := eng.ExecString("recipes/openssh.star", src); err != nil {
+		t.Fatalf("ExecString: %v", err)
+	}
+	recipes := eng.Recipes()
+	r, ok := recipes["openssh"]
+	if !ok {
+		t.Fatal("recipe 'openssh' not found")
+	}
+	if r.Class != "package" {
+		t.Errorf("Class = %q, want %q", r.Class, "package")
+	}
+	if r.Version != "9.6p1" {
+		t.Errorf("Version = %q, want %q", r.Version, "9.6p1")
+	}
+	if len(r.Deps) != 2 {
+		t.Errorf("Deps = %v, want 2 entries", r.Deps)
+	}
+	if len(r.Build) != 3 {
+		t.Errorf("Build = %v, want 3 entries", r.Build)
+	}
+}
+
+func TestEvalImageRecipe(t *testing.T) {
+	src := `
+image(
+    name = "base-image",
+    version = "1.0.0",
+    packages = ["openssh", "myapp"],
+    hostname = "yoe",
+    services = ["sshd"],
+    partitions = [
+        partition(label="boot", type="vfat", size="64M"),
+        partition(label="rootfs", type="ext4", size="fill", root=True),
+    ],
+)
+`
+	eng := NewEngine()
+	if err := eng.ExecString("recipes/base-image.star", src); err != nil {
+		t.Fatalf("ExecString: %v", err)
+	}
+	recipes := eng.Recipes()
+	r, ok := recipes["base-image"]
+	if !ok {
+		t.Fatal("recipe 'base-image' not found")
+	}
+	if r.Class != "image" {
+		t.Errorf("Class = %q, want %q", r.Class, "image")
+	}
+	if len(r.Packages) != 2 {
+		t.Errorf("Packages = %v, want 2 entries", r.Packages)
+	}
+	if len(r.Partitions) != 2 {
+		t.Errorf("Partitions = %v, want 2 entries", r.Partitions)
+	}
+	if !r.Partitions[1].Root {
+		t.Error("Partitions[1].Root = false, want true")
+	}
+}
+
+func TestEvalInvalidArch(t *testing.T) {
+	src := `
+machine(name = "bad", arch = "mips")
+`
+	eng := NewEngine()
+	err := eng.ExecString("machines/bad.star", src)
 	if err == nil {
-		t.Fatal("expected error for recipe with no build steps or command, got nil")
-	}
-}
-```
-
-- [ ] **Step 3: Run test to verify it fails**
-
-```bash
-go test ./internal/config/ -run TestParseRecipeConfig -v
-```
-
-Expected: FAIL — `ParseRecipeConfig` not defined.
-
-- [ ] **Step 4: Write the implementation**
-
-Create `internal/config/recipe.go`:
-
-```go
-package config
-
-import (
-	"fmt"
-	"os"
-
-	"github.com/BurntSushi/toml"
-)
-
-type RecipeConfig struct {
-	Recipe  RecipeInfo    `toml:"recipe"`
-	Source  SourceConfig  `toml:"source"`
-	Depends DependsConfig `toml:"depends"`
-	Build   BuildConfig   `toml:"build"`
-	Package PackageConfig `toml:"package"`
-	Image   ImageSection  `toml:"image"` // only for type = "image"
-}
-
-type ImageSection struct {
-	Hostname        string        `toml:"hostname"`
-	Timezone        string        `toml:"timezone"`
-	Locale          string        `toml:"locale"`
-	PartitionLayout string        `toml:"partition-layout"`
-	Services        ImageServices `toml:"services"`
-}
-
-type ImageServices struct {
-	Enable []string `toml:"enable"`
-}
-
-type RecipeInfo struct {
-	Name        string `toml:"name"`
-	Version     string `toml:"version"`
-	Type        string `toml:"type"`        // "package" (default) or "image"
-	Description string `toml:"description"`
-	License     string `toml:"license"`
-	Language    string `toml:"language"`
-	Extends     string `toml:"extends"`     // for image inheritance
-}
-
-type SourceConfig struct {
-	URL    string `toml:"url"`
-	SHA256 string `toml:"sha256"`
-	Repo   string `toml:"repo"`
-	Tag    string `toml:"tag"`
-	Branch string `toml:"branch"`
-}
-
-type DependsConfig struct {
-	Build   []string `toml:"build"`
-	Runtime []string `toml:"runtime"`
-}
-
-type BuildConfig struct {
-	Steps   []string `toml:"steps"`
-	Command string   `toml:"command"`
-}
-
-type PackageConfig struct {
-	Units       []string          `toml:"units"`
-	Conffiles   []string          `toml:"conffiles"`
-	Environment map[string]string `toml:"environment"`
-}
-
-func ParseRecipeConfig(path string) (*RecipeConfig, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("reading recipe config: %w", err)
-	}
-
-	var cfg RecipeConfig
-	if err := toml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parsing recipe config %s: %w", path, err)
-	}
-
-	if cfg.Recipe.Name == "" {
-		return nil, fmt.Errorf("recipe config %s: recipe.name is required", path)
-	}
-	if cfg.Recipe.Version == "" {
-		return nil, fmt.Errorf("recipe config %s: recipe.version is required", path)
-	}
-	// Default type to "package"
-	if cfg.Recipe.Type == "" {
-		cfg.Recipe.Type = "package"
-	}
-	if cfg.Recipe.Type != "package" && cfg.Recipe.Type != "image" {
-		return nil, fmt.Errorf("recipe config %s: type must be 'package' or 'image', got %q", path, cfg.Recipe.Type)
-	}
-	// Package recipes require build steps; image recipes do not
-	if cfg.Recipe.Type == "package" && len(cfg.Build.Steps) == 0 && cfg.Build.Command == "" {
-		return nil, fmt.Errorf("recipe config %s: build.steps or build.command is required for package recipes", path)
-	}
-
-	return &cfg, nil
-}
-```
-
-- [ ] **Step 5: Create invalid test fixture**
-
-Create `testdata/invalid-project/no-build-recipe.toml`:
-
-```toml
-[recipe]
-name = "broken"
-version = "1.0.0"
-
-[source]
-url = "https://example.com/broken.tar.gz"
-
-[depends]
-build = []
-runtime = []
-```
-
-- [ ] **Step 6: Run tests to verify they pass**
-
-```bash
-go test ./internal/config/ -run TestParseRecipeConfig -v
-```
-
-Expected: All 3 tests PASS.
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add internal/config/recipe.go internal/config/recipe_test.go testdata/
-git commit -m "feat: add recipe TOML parsing for system and app packages"
-```
-
----
-
-### Task 5: Image Recipe and Partition Configuration Parsing
-
-**Files:**
-
-- Create: `internal/config/partition.go`
-- Create: `internal/config/partition_test.go`
-- Create: `testdata/valid-project/recipes/base-image.toml`
-- Create: `testdata/valid-project/partitions/bbb.toml`
-
-- [ ] **Step 1: Create test fixtures**
-
-Create `testdata/valid-project/recipes/base-image.toml`:
-
-```toml
-[recipe]
-name = "base-image"
-version = "1.0.0"
-type = "image"
-description = "Minimal bootable system"
-
-[depends]
-runtime = ["openssh", "networkmanager", "myapp"]
-
-[image]
-hostname = "yoe"
-timezone = "UTC"
-locale = "en_US.UTF-8"
-partition-layout = "partitions/bbb.toml"
-
-[image.services]
-enable = ["sshd", "NetworkManager", "myapp"]
-```
-
-Create `testdata/valid-project/partitions/bbb.toml`:
-
-```toml
-[disk]
-type = "gpt"
-
-[[partition]]
-label = "boot"
-type = "vfat"
-size = "64M"
-contents = ["MLO", "u-boot.img", "zImage", "*.dtb"]
-
-[[partition]]
-label = "rootfs"
-type = "ext4"
-size = "fill"
-root = true
-```
-
-- [ ] **Step 2: Write the failing tests**
-
-Add to `internal/config/recipe_test.go`:
-
-```go
-func TestParseRecipeConfig_ImageRecipe(t *testing.T) {
-	path := filepath.Join("..", "..", "testdata", "valid-project", "recipes", "base-image.toml")
-	recipe, err := ParseRecipeConfig(path)
-	if err != nil {
-		t.Fatalf("ParseRecipeConfig(%q): %v", path, err)
-	}
-
-	if recipe.Recipe.Type != "image" {
-		t.Errorf("Type = %q, want %q", recipe.Recipe.Type, "image")
-	}
-	if recipe.Recipe.Name != "base-image" {
-		t.Errorf("Name = %q, want %q", recipe.Recipe.Name, "base-image")
-	}
-	if len(recipe.Depends.Runtime) != 3 {
-		t.Errorf("Depends.Runtime has %d entries, want 3", len(recipe.Depends.Runtime))
-	}
-	if recipe.Image.Hostname != "yoe" {
-		t.Errorf("Image.Hostname = %q, want %q", recipe.Image.Hostname, "yoe")
-	}
-	if len(recipe.Image.Services.Enable) != 3 {
-		t.Errorf("Image.Services.Enable has %d entries, want 3", len(recipe.Image.Services.Enable))
-	}
-}
-```
-
-Create `internal/config/partition_test.go`:
-
-```go
-package config
-
-import (
-	"path/filepath"
-	"testing"
-)
-
-func TestParsePartitionConfig(t *testing.T) {
-	path := filepath.Join("..", "..", "testdata", "valid-project", "partitions", "bbb.toml")
-	part, err := ParsePartitionConfig(path)
-	if err != nil {
-		t.Fatalf("ParsePartitionConfig(%q): %v", path, err)
-	}
-
-	if part.Disk.Type != "gpt" {
-		t.Errorf("Disk.Type = %q, want %q", part.Disk.Type, "gpt")
-	}
-	if len(part.Partitions) != 2 {
-		t.Errorf("got %d partitions, want 2", len(part.Partitions))
-	}
-	if part.Partitions[0].Label != "boot" {
-		t.Errorf("Partition[0].Label = %q, want %q", part.Partitions[0].Label, "boot")
-	}
-	if part.Partitions[1].Root != true {
-		t.Error("Partition[1].Root = false, want true")
+		t.Fatal("expected error for invalid arch, got nil")
 	}
 }
 
-func TestParsePartitionConfig_NoRootPartition(t *testing.T) {
-	path := filepath.Join("..", "..", "testdata", "invalid-project", "no-root-partition.toml")
-	_, err := ParsePartitionConfig(path)
+func TestEvalPackageRequiresBuild(t *testing.T) {
+	src := `
+package(name = "broken", version = "1.0.0")
+`
+	eng := NewEngine()
+	err := eng.ExecString("recipes/broken.star", src)
 	if err == nil {
-		t.Fatal("expected error for partition layout with no root partition, got nil")
-	}
-}
-```
-
-- [ ] **Step 3: Run tests to verify they fail**
-
-```bash
-go test ./internal/config/ -run "TestParseRecipeConfig_ImageRecipe|TestParsePartitionConfig" -v
-```
-
-Expected: FAIL — `ParsePartitionConfig` not defined (image recipe test should
-already pass from Task 4's implementation since `ImageSection` and
-`ImageServices` types were added to recipe.go).
-
-- [ ] **Step 4: Write the partition implementation**
-
-Create `internal/config/partition.go`:
-
-```go
-package config
-
-import (
-	"fmt"
-	"os"
-
-	"github.com/BurntSushi/toml"
-)
-
-type PartitionConfig struct {
-	Disk       DiskConfig  `toml:"disk"`
-	Partitions []Partition `toml:"partition"`
-}
-
-type DiskConfig struct {
-	Type string `toml:"type"`
-}
-
-type Partition struct {
-	Label    string   `toml:"label"`
-	Type     string   `toml:"type"`
-	Size     string   `toml:"size"`
-	Root     bool     `toml:"root"`
-	Contents []string `toml:"contents"`
-}
-
-func ParsePartitionConfig(path string) (*PartitionConfig, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("reading partition config: %w", err)
-	}
-
-	var cfg PartitionConfig
-	if err := toml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parsing partition config %s: %w", path, err)
-	}
-
-	if cfg.Disk.Type == "" {
-		return nil, fmt.Errorf("partition config %s: disk.type is required", path)
-	}
-	if cfg.Disk.Type != "gpt" && cfg.Disk.Type != "mbr" {
-		return nil, fmt.Errorf("partition config %s: disk.type must be 'gpt' or 'mbr', got %q", path, cfg.Disk.Type)
-	}
-
-	hasRoot := false
-	for _, p := range cfg.Partitions {
-		if p.Root {
-			hasRoot = true
-			break
-		}
-	}
-	if !hasRoot {
-		return nil, fmt.Errorf("partition config %s: at least one partition must have root = true", path)
-	}
-
-	return &cfg, nil
-}
-```
-
-- [ ] **Step 5: Create invalid test fixture**
-
-Create `testdata/invalid-project/no-root-partition.toml`:
-
-```toml
-[disk]
-type = "gpt"
-
-[[partition]]
-label = "boot"
-type = "vfat"
-size = "64M"
-```
-
-- [ ] **Step 6: Run tests to verify they pass**
-
-```bash
-go test ./internal/config/ -run "TestParseRecipeConfig_ImageRecipe|TestParsePartitionConfig" -v
-```
-
-Expected: All tests PASS.
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add internal/config/partition.go internal/config/partition_test.go internal/config/recipe_test.go testdata/
-git commit -m "feat: add image recipe support and partition TOML parsing"
-```
-
----
-
-### Task 6: Project Loader
-
-**Files:**
-
-- Create: `internal/config/loader.go`
-- Create: `internal/config/loader_test.go`
-- Create: `internal/config/project.go`
-- Create: `internal/config/project_test.go`
-
-- [ ] **Step 1: Write the failing test for project discovery**
-
-Create `internal/config/project_test.go`:
-
-```go
-package config
-
-import (
-	"path/filepath"
-	"testing"
-)
-
-func TestFindProjectRoot(t *testing.T) {
-	dir := filepath.Join("..", "..", "testdata", "valid-project")
-	root, err := FindProjectRoot(dir)
-	if err != nil {
-		t.Fatalf("FindProjectRoot(%q): %v", dir, err)
-	}
-	absDir, _ := filepath.Abs(dir)
-	if root != absDir {
-		t.Errorf("FindProjectRoot = %q, want %q", root, absDir)
-	}
-}
-
-func TestFindProjectRoot_NotFound(t *testing.T) {
-	_, err := FindProjectRoot("/tmp")
-	if err == nil {
-		t.Fatal("expected error when no PROJECT.star found, got nil")
+		t.Fatal("expected error for package with no build steps, got nil")
 	}
 }
 ```
@@ -1238,12 +545,655 @@ func TestFindProjectRoot_NotFound(t *testing.T) {
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-go test ./internal/config/ -run TestFindProjectRoot -v
+go get go.starlark.net@latest
+go test ./internal/starlark/ -v
 ```
 
-Expected: FAIL — `FindProjectRoot` not defined.
+Expected: FAIL — types exist but `NewEngine`, `ExecString`, etc. not defined.
 
-- [ ] **Step 3: Write the project discovery implementation**
+- [ ] **Step 3: Write the engine**
+
+Create `internal/starlark/engine.go`:
+
+```go
+package starlark
+
+import (
+	"fmt"
+	"sync"
+
+	"go.starlark.net/starlark"
+)
+
+// Engine evaluates .star files and collects results.
+type Engine struct {
+	mu       sync.Mutex
+	project  *Project
+	machines map[string]*Machine
+	recipes  map[string]*Recipe
+}
+
+func NewEngine() *Engine {
+	return &Engine{
+		machines: make(map[string]*Machine),
+		recipes:  make(map[string]*Recipe),
+	}
+}
+
+func (e *Engine) Project() *Project   { return e.project }
+func (e *Engine) Machines() map[string]*Machine { return e.machines }
+func (e *Engine) Recipes() map[string]*Recipe   { return e.recipes }
+
+// ExecString evaluates Starlark source code with built-in functions available.
+func (e *Engine) ExecString(filename, src string) error {
+	thread := &starlark.Thread{Name: filename}
+	predeclared := e.builtins()
+
+	_, err := starlark.ExecFile(thread, filename, src, predeclared)
+	return err
+}
+
+// ExecFile evaluates a .star file from disk.
+func (e *Engine) ExecFile(path string) error {
+	thread := &starlark.Thread{Name: path}
+	predeclared := e.builtins()
+
+	_, err := starlark.ExecFile(thread, path, nil, predeclared)
+	return err
+}
+```
+
+- [ ] **Step 4: Write the built-in functions**
+
+Create `internal/starlark/builtins.go`:
+
+```go
+package starlark
+
+import (
+	"fmt"
+
+	"go.starlark.net/starlark"
+	"go.starlark.net/starlarkstruct"
+)
+
+// builtins returns the predeclared names available in all .star files.
+func (e *Engine) builtins() starlark.StringDict {
+	return starlark.StringDict{
+		"project":    starlark.NewBuiltin("project", e.fnProject),
+		"defaults":   starlark.NewBuiltin("defaults", fnDefaults),
+		"repository": starlark.NewBuiltin("repository", fnRepository),
+		"cache":      starlark.NewBuiltin("cache", fnCache),
+		"s3_cache":   starlark.NewBuiltin("s3_cache", fnS3Cache),
+		"sources":    starlark.NewBuiltin("sources", fnSources),
+		"layer":      starlark.NewBuiltin("layer", fnLayer),
+		"machine":    starlark.NewBuiltin("machine", e.fnMachine),
+		"kernel":     starlark.NewBuiltin("kernel", fnKernel),
+		"uboot":      starlark.NewBuiltin("uboot", fnUboot),
+		"qemu_config": starlark.NewBuiltin("qemu_config", fnQEMUConfig),
+		"package":    starlark.NewBuiltin("package", e.fnPackage),
+		"autotools":  starlark.NewBuiltin("autotools", e.fnAutotools),
+		"cmake":      starlark.NewBuiltin("cmake", e.fnCMake),
+		"go_binary":  starlark.NewBuiltin("go_binary", e.fnGoBinary),
+		"image":      starlark.NewBuiltin("image", e.fnImage),
+		"partition":  starlark.NewBuiltin("partition", fnPartition),
+	}
+}
+
+// --- Helper: extract keyword args ---
+
+func kwString(kwargs []starlark.Tuple, key string) string {
+	for _, kv := range kwargs {
+		if string(kv[0].(starlark.String)) == key {
+			if s, ok := kv[1].(starlark.String); ok {
+				return string(s)
+			}
+		}
+	}
+	return ""
+}
+
+func kwStringList(kwargs []starlark.Tuple, key string) []string {
+	for _, kv := range kwargs {
+		if string(kv[0].(starlark.String)) == key {
+			if list, ok := kv[1].(*starlark.List); ok {
+				var result []string
+				iter := list.Iterate()
+				defer iter.Done()
+				var v starlark.Value
+				for iter.Next(&v) {
+					if s, ok := v.(starlark.String); ok {
+						result = append(result, string(s))
+					}
+				}
+				return result
+			}
+		}
+	}
+	return nil
+}
+
+func kwBool(kwargs []starlark.Tuple, key string) bool {
+	for _, kv := range kwargs {
+		if string(kv[0].(starlark.String)) == key {
+			if b, ok := kv[1].(starlark.Bool); ok {
+				return bool(b)
+			}
+		}
+	}
+	return false
+}
+
+func kwInt(kwargs []starlark.Tuple, key string) int {
+	for _, kv := range kwargs {
+		if string(kv[0].(starlark.String)) == key {
+			if n, ok := kv[1].(starlark.Int); ok {
+				v, _ := n.Int64()
+				return int(v)
+			}
+		}
+	}
+	return 0
+}
+
+func kwStruct(kwargs []starlark.Tuple, key string) *starlarkstruct.Struct {
+	for _, kv := range kwargs {
+		if string(kv[0].(starlark.String)) == key {
+			if s, ok := kv[1].(*starlarkstruct.Struct); ok {
+				return s
+			}
+		}
+	}
+	return nil
+}
+
+func kwStructList(kwargs []starlark.Tuple, key string) []*starlarkstruct.Struct {
+	for _, kv := range kwargs {
+		if string(kv[0].(starlark.String)) == key {
+			if list, ok := kv[1].(*starlark.List); ok {
+				var result []*starlarkstruct.Struct
+				iter := list.Iterate()
+				defer iter.Done()
+				var v starlark.Value
+				for iter.Next(&v) {
+					if s, ok := v.(*starlarkstruct.Struct); ok {
+						result = append(result, s)
+					}
+				}
+				return result
+			}
+		}
+	}
+	return nil
+}
+
+func structString(s *starlarkstruct.Struct, field string) string {
+	if s == nil {
+		return ""
+	}
+	v, err := s.Attr(field)
+	if err != nil {
+		return ""
+	}
+	if str, ok := v.(starlark.String); ok {
+		return string(str)
+	}
+	return ""
+}
+
+func structStringList(s *starlarkstruct.Struct, field string) []string {
+	if s == nil {
+		return nil
+	}
+	v, err := s.Attr(field)
+	if err != nil {
+		return nil
+	}
+	if list, ok := v.(*starlark.List); ok {
+		var result []string
+		iter := list.Iterate()
+		defer iter.Done()
+		var item starlark.Value
+		for iter.Next(&item) {
+			if str, ok := item.(starlark.String); ok {
+				result = append(result, string(str))
+			}
+		}
+		return result
+	}
+	return nil
+}
+
+// --- Built-in functions that return structs (data constructors) ---
+
+func makeStruct(name string, kwargs []starlark.Tuple) *starlarkstruct.Struct {
+	d := make(starlark.StringDict, len(kwargs))
+	for _, kv := range kwargs {
+		d[string(kv[0].(starlark.String))] = kv[1]
+	}
+	return starlarkstruct.FromStringDict(starlark.String(name), d)
+}
+
+func fnDefaults(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	return makeStruct("defaults", kwargs), nil
+}
+
+func fnRepository(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	return makeStruct("repository", kwargs), nil
+}
+
+func fnCache(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	return makeStruct("cache", kwargs), nil
+}
+
+func fnS3Cache(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	return makeStruct("s3_cache", kwargs), nil
+}
+
+func fnSources(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	return makeStruct("sources", kwargs), nil
+}
+
+func fnLayer(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	if len(args) < 1 {
+		return nil, fmt.Errorf("layer() requires a URL argument")
+	}
+	url, ok := args[0].(starlark.String)
+	if !ok {
+		return nil, fmt.Errorf("layer() URL must be a string")
+	}
+	d := starlark.StringDict{"url": url}
+	for _, kv := range kwargs {
+		d[string(kv[0].(starlark.String))] = kv[1]
+	}
+	return starlarkstruct.FromStringDict(starlark.String("layer"), d), nil
+}
+
+func fnKernel(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	return makeStruct("kernel", kwargs), nil
+}
+
+func fnUboot(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	return makeStruct("uboot", kwargs), nil
+}
+
+func fnQEMUConfig(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	return makeStruct("qemu_config", kwargs), nil
+}
+
+func fnPartition(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	return makeStruct("partition", kwargs), nil
+}
+
+// --- Built-in functions that register targets (side-effecting) ---
+
+func (e *Engine) fnProject(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.project != nil {
+		return nil, fmt.Errorf("project() called more than once")
+	}
+
+	defs := kwStruct(kwargs, "defaults")
+	repo := kwStruct(kwargs, "repository")
+	cacheS := kwStruct(kwargs, "cache")
+
+	e.project = &Project{
+		Name:    kwString(kwargs, "name"),
+		Version: kwString(kwargs, "version"),
+		Defaults: Defaults{
+			Machine: structString(defs, "machine"),
+			Image:   structString(defs, "image"),
+		},
+		Repository: RepositoryConfig{
+			Path: structString(repo, "path"),
+		},
+		Cache: CacheConfig{
+			Path: structString(cacheS, "path"),
+		},
+	}
+
+	return starlark.None, nil
+}
+
+func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	name := kwString(kwargs, "name")
+	arch := kwString(kwargs, "arch")
+
+	if name == "" {
+		return nil, fmt.Errorf("machine() requires name")
+	}
+	if !validArchitectures[arch] {
+		return nil, fmt.Errorf("machine %q: invalid arch %q (valid: arm64, riscv64, x86_64)", name, arch)
+	}
+
+	kernelS := kwStruct(kwargs, "kernel")
+	bootS := kwStruct(kwargs, "bootloader")
+	if bootS == nil {
+		// Also accept uboot() as bootloader
+		bootS = kwStruct(kwargs, "uboot") // won't match kwStruct key, handled below
+	}
+
+	m := &Machine{
+		Name:        name,
+		Arch:        arch,
+		Description: kwString(kwargs, "description"),
+		Kernel: KernelConfig{
+			Repo:        structString(kernelS, "repo"),
+			Branch:      structString(kernelS, "branch"),
+			Tag:         structString(kernelS, "tag"),
+			Defconfig:   structString(kernelS, "defconfig"),
+			DeviceTrees: structStringList(kernelS, "device_trees"),
+			Recipe:      structString(kernelS, "recipe"),
+			Cmdline:     structString(kernelS, "cmdline"),
+		},
+	}
+
+	// Handle bootloader — could be passed as bootloader= or as uboot()
+	for _, kv := range kwargs {
+		key := string(kv[0].(starlark.String))
+		if key == "bootloader" || key == "uboot" {
+			if s, ok := kv[1].(*starlarkstruct.Struct); ok {
+				m.Bootloader = BootloaderConfig{
+					Type:      structString(s, "type"),
+					Repo:      structString(s, "repo"),
+					Branch:    structString(s, "branch"),
+					Defconfig: structString(s, "defconfig"),
+				}
+				if key == "uboot" {
+					m.Bootloader.Type = "u-boot"
+				}
+			}
+		}
+		if key == "qemu" {
+			if s, ok := kv[1].(*starlarkstruct.Struct); ok {
+				m.QEMU = &QEMUConfig{
+					Machine:  structString(s, "machine"),
+					CPU:      structString(s, "cpu"),
+					Memory:   structString(s, "memory"),
+					Firmware: structString(s, "firmware"),
+					Display:  structString(s, "display"),
+				}
+			}
+		}
+	}
+
+	e.mu.Lock()
+	e.machines[name] = m
+	e.mu.Unlock()
+
+	return starlark.None, nil
+}
+
+func (e *Engine) registerRecipe(class string, kwargs []starlark.Tuple) (*Recipe, error) {
+	name := kwString(kwargs, "name")
+	if name == "" {
+		return nil, fmt.Errorf("%s() requires name", class)
+	}
+
+	r := &Recipe{
+		Name:          name,
+		Version:       kwString(kwargs, "version"),
+		Class:         class,
+		Description:   kwString(kwargs, "description"),
+		License:       kwString(kwargs, "license"),
+		Source:        kwString(kwargs, "source"),
+		SHA256:        kwString(kwargs, "sha256"),
+		Tag:           kwString(kwargs, "tag"),
+		Branch:        kwString(kwargs, "branch"),
+		Deps:          kwStringList(kwargs, "deps"),
+		RuntimeDeps:   kwStringList(kwargs, "runtime_deps"),
+		Build:         kwStringList(kwargs, "build"),
+		ConfigureArgs: kwStringList(kwargs, "configure_args"),
+		GoPackage:     kwString(kwargs, "package"),
+		Services:      kwStringList(kwargs, "services"),
+		Conffiles:     kwStringList(kwargs, "conffiles"),
+		// Image-specific
+		Packages:   kwStringList(kwargs, "packages"),
+		Exclude:    kwStringList(kwargs, "exclude"),
+		Hostname:   kwString(kwargs, "hostname"),
+		Timezone:   kwString(kwargs, "timezone"),
+		Locale:     kwString(kwargs, "locale"),
+	}
+
+	// Parse partitions if present
+	for _, kv := range kwargs {
+		if string(kv[0].(starlark.String)) == "partitions" {
+			if list, ok := kv[1].(*starlark.List); ok {
+				iter := list.Iterate()
+				defer iter.Done()
+				var v starlark.Value
+				for iter.Next(&v) {
+					if s, ok := v.(*starlarkstruct.Struct); ok {
+						r.Partitions = append(r.Partitions, Partition{
+							Label:    structString(s, "label"),
+							Type:     structString(s, "type"),
+							Size:     structString(s, "size"),
+							Root:     false, // handled below
+							Contents: structStringList(s, "contents"),
+						})
+						// Check root flag
+						if rv, err := s.Attr("root"); err == nil {
+							if b, ok := rv.(starlark.Bool); ok {
+								r.Partitions[len(r.Partitions)-1].Root = bool(b)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	e.mu.Lock()
+	e.recipes[name] = r
+	e.mu.Unlock()
+
+	return r, nil
+}
+
+func (e *Engine) fnPackage(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	r, err := e.registerRecipe("package", kwargs)
+	if err != nil {
+		return nil, err
+	}
+	if len(r.Build) == 0 {
+		return nil, fmt.Errorf("package(%q): build steps required", r.Name)
+	}
+	return starlark.None, nil
+}
+
+func (e *Engine) fnAutotools(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	_, err := e.registerRecipe("autotools", kwargs)
+	return starlark.None, err
+}
+
+func (e *Engine) fnCMake(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	_, err := e.registerRecipe("cmake", kwargs)
+	return starlark.None, err
+}
+
+func (e *Engine) fnGoBinary(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	_, err := e.registerRecipe("go", kwargs)
+	return starlark.None, err
+}
+
+func (e *Engine) fnImage(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	_, err := e.registerRecipe("image", kwargs)
+	return starlark.None, err
+}
+```
+
+- [ ] **Step 5: Run tests to verify they pass**
+
+```bash
+go test ./internal/starlark/ -v
+```
+
+Expected: All 6 tests PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add internal/starlark/
+git commit -m "feat: add Starlark evaluation engine with built-in functions"
+```
+
+---
+
+### Task 4: Test Fixtures
+
+**Files:**
+
+- Create: `testdata/valid-project/PROJECT.star`
+- Create: `testdata/valid-project/machines/beaglebone-black.star`
+- Create: `testdata/valid-project/machines/qemu-x86_64.star`
+- Create: `testdata/valid-project/recipes/openssh.star`
+- Create: `testdata/valid-project/recipes/myapp.star`
+- Create: `testdata/valid-project/recipes/base-image.star`
+- Create: `testdata/minimal-project/PROJECT.star`
+- Create: `testdata/invalid-project/bad-arch.star`
+
+- [ ] **Step 1: Create valid project fixtures**
+
+Create `testdata/valid-project/PROJECT.star`:
+
+```python
+project(
+    name = "test-distro",
+    version = "0.1.0",
+    description = "Test distribution",
+    defaults = defaults(machine = "qemu-x86_64", image = "base-image"),
+    repository = repository(path = "/var/cache/yoe-ng/repo"),
+    cache = cache(
+        path = "/var/cache/yoe-ng/build",
+        remote = [
+            s3_cache(name="team", bucket="yoe-cache",
+                     endpoint="https://minio.internal:9000", region="us-east-1"),
+        ],
+    ),
+    sources = sources(go_proxy = "https://proxy.golang.org"),
+)
+```
+
+Create `testdata/valid-project/machines/beaglebone-black.star`:
+
+```python
+machine(
+    name = "beaglebone-black",
+    arch = "arm64",
+    description = "BeagleBone Black (AM3358)",
+    kernel = kernel(
+        repo = "https://github.com/beagleboard/linux.git",
+        branch = "6.6",
+        defconfig = "bb.org_defconfig",
+        device_trees = ["am335x-boneblack.dtb"],
+    ),
+    bootloader = uboot(
+        repo = "https://github.com/beagleboard/u-boot.git",
+        branch = "v2024.01",
+        defconfig = "am335x_evm_defconfig",
+    ),
+)
+```
+
+Create `testdata/valid-project/machines/qemu-x86_64.star`:
+
+```python
+machine(
+    name = "qemu-x86_64",
+    arch = "x86_64",
+    kernel = kernel(recipe = "linux-qemu", cmdline = "console=ttyS0 root=/dev/vda2 rw"),
+    qemu = qemu_config(machine = "q35", cpu = "host", memory = "1G", firmware = "ovmf", display = "none"),
+)
+```
+
+Create `testdata/valid-project/recipes/openssh.star`:
+
+```python
+package(
+    name = "openssh",
+    version = "9.6p1",
+    description = "OpenSSH client and server",
+    license = "BSD",
+    source = "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.6p1.tar.gz",
+    sha256 = "aaaa1111bbbb2222",
+    deps = ["zlib", "openssl"],
+    runtime_deps = ["zlib", "openssl"],
+    build = [
+        "./configure --prefix=$PREFIX --sysconfdir=/etc/ssh",
+        "make -j$NPROC",
+        "make DESTDIR=$DESTDIR install",
+    ],
+    services = ["sshd"],
+    conffiles = ["/etc/ssh/sshd_config"],
+)
+```
+
+Create `testdata/valid-project/recipes/myapp.star`:
+
+```python
+go_binary(
+    name = "myapp",
+    version = "1.2.3",
+    description = "Edge data collection service",
+    license = "Apache-2.0",
+    source = "https://github.com/example/myapp.git",
+    tag = "v1.2.3",
+    package = "./cmd/myapp",
+    services = ["myapp"],
+    conffiles = ["/etc/myapp/config.toml"],
+)
+```
+
+Create `testdata/valid-project/recipes/base-image.star`:
+
+```python
+image(
+    name = "base-image",
+    version = "1.0.0",
+    description = "Minimal bootable system",
+    packages = ["openssh", "myapp"],
+    hostname = "yoe",
+    timezone = "UTC",
+    services = ["sshd", "myapp"],
+    partitions = [
+        partition(label="boot", type="vfat", size="64M"),
+        partition(label="rootfs", type="ext4", size="fill", root=True),
+    ],
+)
+```
+
+Create `testdata/minimal-project/PROJECT.star`:
+
+```python
+project(name = "minimal", version = "0.1.0")
+```
+
+Create `testdata/invalid-project/bad-arch.star`:
+
+```python
+machine(name = "bad-machine", arch = "mips")
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add testdata/
+git commit -m "feat: add Starlark test fixtures for valid and invalid projects"
+```
+
+---
+
+### Task 5: Project Discovery and Loader
+
+**Files:**
+
+- Create: `internal/config/project.go`
+- Create: `internal/starlark/loader.go`
+- Create: `internal/starlark/loader_test.go`
+
+- [ ] **Step 1: Write project discovery**
 
 Create `internal/config/project.go`:
 
@@ -1279,20 +1229,78 @@ func FindProjectRoot(startDir string) (string, error) {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 2: Write the loader**
 
-```bash
-go test ./internal/config/ -run TestFindProjectRoot -v
-```
-
-Expected: PASS.
-
-- [ ] **Step 5: Write the failing test for project loader**
-
-Create `internal/config/loader_test.go`:
+Create `internal/starlark/loader.go`:
 
 ```go
-package config
+package starlark
+
+import (
+	"fmt"
+	"path/filepath"
+
+	"github.com/YoeDistro/yoe-ng/internal/config"
+)
+
+// LoadProject finds the project root, evaluates all .star files, and returns
+// a fully populated Project.
+func LoadProject(startDir string) (*Project, error) {
+	root, err := config.FindProjectRoot(startDir)
+	if err != nil {
+		return nil, err
+	}
+
+	eng := NewEngine()
+
+	// Evaluate PROJECT.star first
+	projFile := filepath.Join(root, "PROJECT.star")
+	if err := eng.ExecFile(projFile); err != nil {
+		return nil, fmt.Errorf("evaluating PROJECT.star: %w", err)
+	}
+
+	// Evaluate all machine definitions
+	if err := evalDir(eng, root, "machines"); err != nil {
+		return nil, err
+	}
+
+	// Evaluate all recipes
+	if err := evalDir(eng, root, "recipes"); err != nil {
+		return nil, err
+	}
+
+	proj := eng.Project()
+	if proj == nil {
+		return nil, fmt.Errorf("PROJECT.star did not call project()")
+	}
+
+	proj.Machines = eng.Machines()
+	proj.Recipes = eng.Recipes()
+
+	return proj, nil
+}
+
+func evalDir(eng *Engine, root, subdir string) error {
+	pattern := filepath.Join(root, subdir, "*.star")
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return fmt.Errorf("globbing %s: %w", pattern, err)
+	}
+	for _, path := range matches {
+		if err := eng.ExecFile(path); err != nil {
+			return fmt.Errorf("evaluating %s: %w", path, err)
+		}
+	}
+	return nil
+}
+```
+
+- [ ] **Step 3: Write the failing test**
+
+Create `internal/starlark/loader_test.go`:
+
+```go
+package starlark
 
 import (
 	"path/filepath"
@@ -1301,156 +1309,84 @@ import (
 
 func TestLoadProject(t *testing.T) {
 	dir := filepath.Join("..", "..", "testdata", "valid-project")
-	project, err := LoadProject(dir)
+	proj, err := LoadProject(dir)
 	if err != nil {
-		t.Fatalf("LoadProject(%q): %v", dir, err)
+		t.Fatalf("LoadProject: %v", err)
 	}
 
-	if project.Distro.Distro.Name != "test-distro" {
-		t.Errorf("Distro.Name = %q, want %q", project.Distro.Distro.Name, "test-distro")
+	if proj.Name != "test-distro" {
+		t.Errorf("Name = %q, want %q", proj.Name, "test-distro")
 	}
-	if len(project.Machines) == 0 {
-		t.Error("expected at least one machine, got 0")
+	if proj.Defaults.Machine != "qemu-x86_64" {
+		t.Errorf("Defaults.Machine = %q, want %q", proj.Defaults.Machine, "qemu-x86_64")
 	}
-	if _, ok := project.Machines["beaglebone-black"]; !ok {
-		t.Error("expected machine 'beaglebone-black' to be loaded")
+
+	// Machines
+	if len(proj.Machines) != 2 {
+		t.Errorf("got %d machines, want 2", len(proj.Machines))
 	}
-	if len(project.Recipes) == 0 {
-		t.Error("expected at least one recipe, got 0")
+	if m, ok := proj.Machines["beaglebone-black"]; !ok {
+		t.Error("expected machine 'beaglebone-black'")
+	} else if m.Arch != "arm64" {
+		t.Errorf("bbb arch = %q, want %q", m.Arch, "arm64")
 	}
-	if _, ok := project.Recipes["openssh"]; !ok {
-		t.Error("expected recipe 'openssh' to be loaded")
+	if m, ok := proj.Machines["qemu-x86_64"]; !ok {
+		t.Error("expected machine 'qemu-x86_64'")
+	} else if m.QEMU == nil {
+		t.Error("expected QEMU config on qemu-x86_64")
 	}
-	if len(project.Images) == 0 {
-		t.Error("expected at least one image, got 0")
+
+	// Recipes
+	if len(proj.Recipes) != 3 {
+		t.Errorf("got %d recipes, want 3", len(proj.Recipes))
 	}
-	if r, ok := project.Recipes["base-image"]; !ok {
-		t.Error("expected recipe 'base-image' to be loaded")
-	} else if r.Recipe.Type != "image" {
-		t.Errorf("base-image type = %q, want %q", r.Recipe.Type, "image")
+	if r, ok := proj.Recipes["openssh"]; !ok {
+		t.Error("expected recipe 'openssh'")
+	} else if r.Class != "package" {
+		t.Errorf("openssh class = %q, want %q", r.Class, "package")
+	}
+	if r, ok := proj.Recipes["myapp"]; !ok {
+		t.Error("expected recipe 'myapp'")
+	} else if r.Class != "go" {
+		t.Errorf("myapp class = %q, want %q", r.Class, "go")
+	}
+	if r, ok := proj.Recipes["base-image"]; !ok {
+		t.Error("expected recipe 'base-image'")
+	} else if r.Class != "image" {
+		t.Errorf("base-image class = %q, want %q", r.Class, "image")
+	}
+}
+
+func TestLoadMinimalProject(t *testing.T) {
+	dir := filepath.Join("..", "..", "testdata", "minimal-project")
+	proj, err := LoadProject(dir)
+	if err != nil {
+		t.Fatalf("LoadProject: %v", err)
+	}
+	if proj.Name != "minimal" {
+		t.Errorf("Name = %q, want %q", proj.Name, "minimal")
 	}
 }
 ```
 
-- [ ] **Step 6: Run test to verify it fails**
+- [ ] **Step 4: Run tests**
 
 ```bash
-go test ./internal/config/ -run TestLoadProject -v
-```
-
-Expected: FAIL — `LoadProject` not defined.
-
-- [ ] **Step 7: Write the loader implementation**
-
-Create `internal/config/loader.go`:
-
-```go
-package config
-
-import (
-	"fmt"
-	"path/filepath"
-	"strings"
-)
-
-type Project struct {
-	Root       string
-	Distro     *DistroConfig
-	Machines   map[string]*MachineConfig
-	Recipes    map[string]*RecipeConfig    // includes both package and image recipes
-	Partitions map[string]*PartitionConfig
-}
-
-func LoadProject(dir string) (*Project, error) {
-	root, err := FindProjectRoot(dir)
-	if err != nil {
-		return nil, err
-	}
-
-	distro, err := ParseDistroConfig(filepath.Join(root, "distro.toml"))
-	if err != nil {
-		return nil, err
-	}
-
-	project := &Project{
-		Root:       root,
-		Distro:     distro,
-		Machines:   make(map[string]*MachineConfig),
-		Recipes:    make(map[string]*RecipeConfig),
-		Partitions: make(map[string]*PartitionConfig),
-	}
-
-	if err := project.loadDir("machines", func(path string) error {
-		m, err := ParseMachineConfig(path)
-		if err != nil {
-			return err
-		}
-		project.Machines[m.Machine.Name] = m
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-
-	// All recipes (package and image types) live in recipes/
-	if err := project.loadDir("recipes", func(path string) error {
-		r, err := ParseRecipeConfig(path)
-		if err != nil {
-			return err
-		}
-		project.Recipes[r.Recipe.Name] = r
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-
-	if err := project.loadDir("partitions", func(path string) error {
-		p, err := ParsePartitionConfig(path)
-		if err != nil {
-			return err
-		}
-		name := strings.TrimSuffix(filepath.Base(path), ".toml")
-		project.Partitions[name] = p
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-
-	return project, nil
-}
-
-func (p *Project) loadDir(subdir string, load func(string) error) error {
-	pattern := filepath.Join(p.Root, subdir, "*.toml")
-	matches, err := filepath.Glob(pattern)
-	if err != nil {
-		return fmt.Errorf("globbing %s: %w", pattern, err)
-	}
-	for _, path := range matches {
-		if err := load(path); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-```
-
-- [ ] **Step 8: Run tests to verify they pass**
-
-```bash
-go test ./internal/config/ -run "TestFindProjectRoot|TestLoadProject" -v
+go test ./internal/starlark/ -run TestLoadProject -v
 ```
 
 Expected: All tests PASS.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add internal/config/project.go internal/config/project_test.go internal/config/loader.go internal/config/loader_test.go
-git commit -m "feat: add project discovery and full config loader"
+git add internal/config/project.go internal/starlark/loader.go internal/starlark/loader_test.go
+git commit -m "feat: add project discovery and Starlark project loader"
 ```
 
 ---
 
-### Task 7: `yoe init` Command
+### Task 6: `yoe init` Command
 
 **Files:**
 
@@ -1490,6 +1426,15 @@ func TestRunInit(t *testing.T) {
 			t.Errorf("expected %s to exist after init", path)
 		}
 	}
+
+	// Verify PROJECT.star is valid Starlark
+	content, err := os.ReadFile(filepath.Join(dir, "PROJECT.star"))
+	if err != nil {
+		t.Fatalf("reading PROJECT.star: %v", err)
+	}
+	if len(content) == 0 {
+		t.Error("PROJECT.star is empty")
+	}
 }
 
 func TestRunInit_WithMachine(t *testing.T) {
@@ -1499,7 +1444,7 @@ func TestRunInit_WithMachine(t *testing.T) {
 		t.Fatalf("RunInit with machine: %v", err)
 	}
 
-	machineFile := filepath.Join(dir, "machines", "qemu-x86_64.toml")
+	machineFile := filepath.Join(dir, "machines", "qemu-x86_64.star")
 	if _, err := os.Stat(machineFile); os.IsNotExist(err) {
 		t.Errorf("expected machine file %s to exist", machineFile)
 	}
@@ -1515,15 +1460,7 @@ func TestRunInit_ExistingProject(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
-
-```bash
-go test ./internal/ -run TestRunInit -v
-```
-
-Expected: FAIL — `RunInit` not defined.
-
-- [ ] **Step 3: Write the implementation**
+- [ ] **Step 2: Write the implementation**
 
 Create `internal/init.go`:
 
@@ -1534,43 +1471,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"text/template"
 )
-
-var distroTemplate = `[distro]
-name = "{{.Name}}"
-version = "0.1.0"
-description = ""
-
-[defaults]
-machine = "{{.Machine}}"
-image = "base"
-
-[repository]
-path = "/var/cache/yoe-ng/repo"
-
-[cache]
-path = "/var/cache/yoe-ng/build"
-
-[sources]
-go-proxy = "https://proxy.golang.org"
-`
-
-var qemuMachineTemplate = `[machine]
-name = "{{.Name}}"
-arch = "{{.Arch}}"
-
-[kernel]
-recipe = "linux-qemu"
-cmdline = "console={{.Console}} root=/dev/vda2 rw"
-
-[machine.qemu]
-machine = "{{.QEMUMachine}}"
-cpu = "host"
-memory = "1G"
-firmware = "{{.Firmware}}"
-display = "none"
-`
 
 func RunInit(projectDir string, machine string) error {
 	if _, err := os.Stat(filepath.Join(projectDir, "PROJECT.star")); err == nil {
@@ -1590,22 +1491,18 @@ func RunInit(projectDir string, machine string) error {
 		defaultMachine = "qemu-x86_64"
 	}
 
-	tmpl, err := template.New("distro").Parse(distroTemplate)
-	if err != nil {
-		return fmt.Errorf("parsing template: %w", err)
-	}
+	projectContent := fmt.Sprintf(`project(
+    name = %q,
+    version = "0.1.0",
+    defaults = defaults(machine = %q, image = "base-image"),
+    repository = repository(path = "/var/cache/yoe-ng/repo"),
+    cache = cache(path = "/var/cache/yoe-ng/build"),
+    sources = sources(go_proxy = "https://proxy.golang.org"),
+)
+`, name, defaultMachine)
 
-	f, err := os.Create(filepath.Join(projectDir, "distro.toml"))
-	if err != nil {
-		return fmt.Errorf("creating distro.toml: %w", err)
-	}
-	defer f.Close()
-
-	if err := tmpl.Execute(f, map[string]string{
-		"Name":    name,
-		"Machine": defaultMachine,
-	}); err != nil {
-		return fmt.Errorf("writing distro.toml: %w", err)
+	if err := os.WriteFile(filepath.Join(projectDir, "PROJECT.star"), []byte(projectContent), 0644); err != nil {
+		return fmt.Errorf("writing PROJECT.star: %w", err)
 	}
 
 	if machine != "" {
@@ -1619,89 +1516,53 @@ func RunInit(projectDir string, machine string) error {
 }
 
 func createMachineFile(projectDir, name string) error {
-	type machineData struct {
-		Name, Arch, Console, QEMUMachine, Firmware string
-	}
-
-	data := machineData{Name: name}
+	var content string
 
 	switch {
 	case name == "qemu-x86_64" || name == "x86_64":
-		data.Arch = "x86_64"
-		data.Console = "ttyS0"
-		data.QEMUMachine = "q35"
-		data.Firmware = "ovmf"
+		content = fmt.Sprintf(`machine(
+    name = %q,
+    arch = "x86_64",
+    kernel = kernel(recipe = "linux-qemu", cmdline = "console=ttyS0 root=/dev/vda2 rw"),
+    qemu = qemu_config(machine = "q35", cpu = "host", memory = "1G", firmware = "ovmf", display = "none"),
+)
+`, name)
 	case name == "qemu-arm64" || name == "aarch64":
-		data.Arch = "arm64"
-		data.Console = "ttyAMA0"
-		data.QEMUMachine = "virt"
-		data.Firmware = "aavmf"
+		content = fmt.Sprintf(`machine(
+    name = %q,
+    arch = "arm64",
+    kernel = kernel(recipe = "linux-qemu", cmdline = "console=ttyAMA0 root=/dev/vda2 rw"),
+    qemu = qemu_config(machine = "virt", cpu = "host", memory = "1G", firmware = "aavmf", display = "none"),
+)
+`, name)
 	case name == "qemu-riscv64" || name == "riscv64":
-		data.Arch = "riscv64"
-		data.Console = "ttyS0"
-		data.QEMUMachine = "virt"
-		data.Firmware = "opensbi"
+		content = fmt.Sprintf(`machine(
+    name = %q,
+    arch = "riscv64",
+    kernel = kernel(recipe = "linux-qemu", cmdline = "console=ttyS0 root=/dev/vda2 rw"),
+    qemu = qemu_config(machine = "virt", cpu = "host", memory = "1G", firmware = "opensbi", display = "none"),
+)
+`, name)
 	default:
-		path := filepath.Join(projectDir, "machines", name+".toml")
-		content := fmt.Sprintf("[machine]\nname = %q\narch = \"arm64\"\ndescription = \"\"\n", name)
-		return os.WriteFile(path, []byte(content), 0644)
+		content = fmt.Sprintf(`machine(
+    name = %q,
+    arch = "arm64",
+    description = "",
+)
+`, name)
 	}
 
-	tmpl, err := template.New("machine").Parse(qemuMachineTemplate)
-	if err != nil {
-		return fmt.Errorf("parsing machine template: %w", err)
-	}
-
-	path := filepath.Join(projectDir, "machines", name+".toml")
-	f, err := os.Create(path)
-	if err != nil {
-		return fmt.Errorf("creating machine file: %w", err)
-	}
-	defer f.Close()
-
-	return tmpl.Execute(f, data)
+	path := filepath.Join(projectDir, "machines", name+".star")
+	return os.WriteFile(path, []byte(content), 0644)
 }
 ```
 
-- [ ] **Step 4: Wire up cmdInit in main.go**
+- [ ] **Step 3: Wire up in main.go**
 
-Replace the `cmdInit` stub in `cmd/yoe/main.go`:
+Update `cmd/yoe/main.go` — replace the `cmdInit` stub with a call to
+`internal.RunInit`. Parse `--machine` flag from args.
 
-```go
-func cmdInit(args []string) {
-	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s init <project-dir> [-machine <name>]\n", os.Args[0])
-		os.Exit(1)
-	}
-
-	projectDir := args[0]
-	machine := ""
-
-	for i := 1; i < len(args); i++ {
-		switch args[i] {
-		case "-machine":
-			if i+1 >= len(args) {
-				fmt.Fprintf(os.Stderr, "Error: -machine requires a name\n")
-				os.Exit(1)
-			}
-			machine = args[i+1]
-			i++
-		default:
-			fmt.Fprintf(os.Stderr, "Unknown flag: %s\n", args[i])
-			os.Exit(1)
-		}
-	}
-
-	if err := yoe.RunInit(projectDir, machine); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-}
-```
-
-Add the import: `yoe "github.com/YoeDistro/yoe-ng/internal"`
-
-- [ ] **Step 5: Run tests to verify they pass**
+- [ ] **Step 4: Run tests**
 
 ```bash
 go test ./internal/ -run TestRunInit -v
@@ -1709,214 +1570,91 @@ go test ./internal/ -run TestRunInit -v
 
 Expected: All 3 tests PASS.
 
-- [ ] **Step 6: Build and smoke test**
-
-```bash
-go build -o yoe ./cmd/yoe
-./yoe init /tmp/yoe-test -machine qemu-x86_64
-ls /tmp/yoe-test/
-cat /tmp/yoe-test/distro.toml
-rm -rf /tmp/yoe-test
-```
-
-Expected: Project scaffolded with distro.toml and machine file.
-
-- [ ] **Step 7: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add internal/init.go internal/init_test.go cmd/yoe/main.go
-git commit -m "feat: add yoe init command with project scaffolding"
+git commit -m "feat: implement yoe init with Starlark project scaffolding"
 ```
 
 ---
 
-### Task 8: `yoe config` Command
+### Task 7: `yoe config` Command
 
 **Files:**
 
+- Create: `internal/config/show.go`
 - Modify: `cmd/yoe/main.go` — wire up cmdConfig
-- Create: `internal/configcmd.go`
-- Create: `internal/configcmd_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write the implementation**
 
-Create `internal/configcmd_test.go`:
+`yoe config show` loads the project via the Starlark loader and prints the
+resolved configuration. `yoe config set` is deferred — Starlark files are not
+trivially patchable like key-value config files. For now, `config set` prints a
+message directing the user to edit `PROJECT.star` directly.
 
-```go
-package internal
-
-import (
-	"bytes"
-	"os"
-	"path/filepath"
-	"testing"
-)
-
-func setupTestProject(t *testing.T) string {
-	t.Helper()
-	dir := filepath.Join(t.TempDir(), "test-project")
-	if err := RunInit(dir, "qemu-x86_64"); err != nil {
-		t.Fatalf("init: %v", err)
-	}
-	return dir
-}
-
-func TestConfigShow(t *testing.T) {
-	dir := setupTestProject(t)
-
-	var buf bytes.Buffer
-	if err := RunConfigShow(dir, &buf); err != nil {
-		t.Fatalf("RunConfigShow: %v", err)
-	}
-
-	if buf.Len() == 0 {
-		t.Error("config show produced no output")
-	}
-}
-
-func TestConfigSet(t *testing.T) {
-	dir := setupTestProject(t)
-
-	if err := RunConfigSet(dir, "defaults.machine", "beaglebone-black"); err != nil {
-		t.Fatalf("RunConfigSet: %v", err)
-	}
-
-	data, err := os.ReadFile(filepath.Join(dir, "distro.toml"))
-	if err != nil {
-		t.Fatalf("reading distro.toml: %v", err)
-	}
-	if !bytes.Contains(data, []byte("beaglebone-black")) {
-		t.Error("distro.toml does not contain updated machine name")
-	}
-}
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-```bash
-go test ./internal/ -run TestConfig -v
-```
-
-Expected: FAIL — `RunConfigShow` not defined.
-
-- [ ] **Step 3: Write the implementation**
-
-Create `internal/configcmd.go`:
+Create `internal/config/show.go`:
 
 ```go
-package internal
+package config
 
 import (
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
-	"strings"
 
-	"github.com/BurntSushi/toml"
-
-	"github.com/YoeDistro/yoe-ng/internal/config"
+	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
-func RunConfigShow(dir string, w io.Writer) error {
-	distro, err := config.ParseDistroConfig(filepath.Join(dir, "distro.toml"))
+func ShowConfig(dir string) error {
+	proj, err := yoestar.LoadProject(dir)
 	if err != nil {
 		return err
 	}
-	return toml.NewEncoder(w).Encode(distro)
-}
 
-func RunConfigSet(dir, key, value string) error {
-	path := filepath.Join(dir, "distro.toml")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("reading distro.toml: %w", err)
+	fmt.Printf("Project:    %s %s\n", proj.Name, proj.Version)
+	fmt.Printf("Machine:    %s (default)\n", proj.Defaults.Machine)
+	fmt.Printf("Image:      %s (default)\n", proj.Defaults.Image)
+	fmt.Printf("Repository: %s\n", proj.Repository.Path)
+	fmt.Printf("Cache:      %s\n", proj.Cache.Path)
+	fmt.Printf("Machines:   %d defined\n", len(proj.Machines))
+	fmt.Printf("Recipes:    %d defined\n", len(proj.Recipes))
+
+	if len(proj.Machines) > 0 {
+		fmt.Println("\nMachines:")
+		for name, m := range proj.Machines {
+			fmt.Printf("  %-20s %s\n", name, m.Arch)
+		}
 	}
 
-	var raw map[string]interface{}
-	if err := toml.Unmarshal(data, &raw); err != nil {
-		return fmt.Errorf("parsing distro.toml: %w", err)
+	if len(proj.Recipes) > 0 {
+		fmt.Println("\nRecipes:")
+		for name, r := range proj.Recipes {
+			fmt.Printf("  %-20s [%s] %s\n", name, r.Class, r.Version)
+		}
 	}
 
-	parts := strings.SplitN(key, ".", 2)
-	if len(parts) != 2 {
-		return fmt.Errorf("key must be in section.field format, got %q", key)
-	}
-
-	section, field := parts[0], parts[1]
-	sectionMap, ok := raw[section].(map[string]interface{})
-	if !ok {
-		sectionMap = make(map[string]interface{})
-		raw[section] = sectionMap
-	}
-	sectionMap[field] = value
-
-	f, err := os.Create(path)
-	if err != nil {
-		return fmt.Errorf("writing distro.toml: %w", err)
-	}
-	defer f.Close()
-
-	return toml.NewEncoder(f).Encode(raw)
+	return nil
 }
 ```
 
-- [ ] **Step 4: Wire up cmdConfig in main.go**
-
-Replace the `cmdConfig` stub in `cmd/yoe/main.go`:
-
-```go
-func cmdConfig(args []string) {
-	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s config <show|set> [...]\n", os.Args[0])
-		os.Exit(1)
-	}
-
-	dir := os.Getenv("YOE_PROJECT")
-	if dir == "" {
-		dir = "."
-	}
-
-	switch args[0] {
-	case "show":
-		if err := yoe.RunConfigShow(dir, os.Stdout); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "set":
-		if len(args) < 3 {
-			fmt.Fprintf(os.Stderr, "Usage: %s config set <key> <value>\n", os.Args[0])
-			os.Exit(1)
-		}
-		if err := yoe.RunConfigSet(dir, args[1], args[2]); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown config subcommand: %s\n", args[0])
-		os.Exit(1)
-	}
-}
-```
-
-- [ ] **Step 5: Run tests to verify they pass**
+- [ ] **Step 2: Wire up in main.go and test manually**
 
 ```bash
-go test ./internal/ -run TestConfig -v
+go build -o yoe ./cmd/yoe
+cd testdata/valid-project && ../../yoe config show
 ```
 
-Expected: All tests PASS.
+Expected: prints project name, machines, recipes.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-git add internal/configcmd.go internal/configcmd_test.go cmd/yoe/main.go
-git commit -m "feat: add yoe config show/set commands"
+git add internal/config/show.go cmd/yoe/main.go
+git commit -m "feat: implement yoe config show via Starlark project loader"
 ```
 
 ---
 
-### Task 9: `yoe clean` Command
+### Task 8: `yoe clean` Command
 
 **Files:**
 
@@ -1924,66 +1662,7 @@ git commit -m "feat: add yoe config show/set commands"
 - Create: `internal/clean_test.go`
 - Modify: `cmd/yoe/main.go` — wire up cmdClean
 
-- [ ] **Step 1: Write the failing test**
-
-Create `internal/clean_test.go`:
-
-```go
-package internal
-
-import (
-	"os"
-	"path/filepath"
-	"testing"
-)
-
-func TestRunClean(t *testing.T) {
-	dir := setupTestProject(t)
-
-	buildDir := filepath.Join(dir, "build")
-	os.MkdirAll(buildDir, 0755)
-	os.WriteFile(filepath.Join(buildDir, "artifact.o"), []byte("fake"), 0644)
-
-	if err := RunClean(dir, false); err != nil {
-		t.Fatalf("RunClean: %v", err)
-	}
-
-	if _, err := os.Stat(buildDir); !os.IsNotExist(err) {
-		t.Error("expected build directory to be removed")
-	}
-}
-
-func TestRunClean_All(t *testing.T) {
-	dir := setupTestProject(t)
-
-	for _, sub := range []string{"build", "packages", "sources"} {
-		d := filepath.Join(dir, sub)
-		os.MkdirAll(d, 0755)
-		os.WriteFile(filepath.Join(d, "artifact"), []byte("fake"), 0644)
-	}
-
-	if err := RunClean(dir, true); err != nil {
-		t.Fatalf("RunClean --all: %v", err)
-	}
-
-	for _, sub := range []string{"build", "packages", "sources"} {
-		d := filepath.Join(dir, sub)
-		if _, err := os.Stat(d); !os.IsNotExist(err) {
-			t.Errorf("expected %s directory to be removed", sub)
-		}
-	}
-}
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-```bash
-go test ./internal/ -run TestRunClean -v
-```
-
-Expected: FAIL — `RunClean` not defined.
-
-- [ ] **Step 3: Write the implementation**
+- [ ] **Step 1: Write the implementation**
 
 Create `internal/clean.go`:
 
@@ -1996,105 +1675,73 @@ import (
 	"path/filepath"
 )
 
-func RunClean(dir string, all bool) error {
-	buildDir := filepath.Join(dir, "build")
-	if err := os.RemoveAll(buildDir); err != nil {
-		return fmt.Errorf("removing build directory: %w", err)
+func RunClean(projectDir string, all bool, recipes []string) error {
+	buildDir := filepath.Join(projectDir, "build")
+
+	if len(recipes) > 0 {
+		for _, r := range recipes {
+			dir := filepath.Join(buildDir, r)
+			if err := os.RemoveAll(dir); err != nil {
+				return fmt.Errorf("removing %s: %w", dir, err)
+			}
+			fmt.Printf("Cleaned %s\n", r)
+		}
+		return nil
 	}
-	fmt.Println("Removed build directory")
 
 	if all {
-		for _, subdir := range []string{"packages", "sources"} {
-			path := filepath.Join(dir, subdir)
-			if err := os.RemoveAll(path); err != nil {
-				return fmt.Errorf("removing %s: %w", subdir, err)
+		dirs := []string{buildDir, filepath.Join(projectDir, "repo")}
+		for _, dir := range dirs {
+			if err := os.RemoveAll(dir); err != nil {
+				return fmt.Errorf("removing %s: %w", dir, err)
 			}
-			fmt.Printf("Removed %s directory\n", subdir)
 		}
+		fmt.Println("Cleaned all build artifacts, packages, and sources")
+	} else {
+		if err := os.RemoveAll(buildDir); err != nil {
+			return fmt.Errorf("removing %s: %w", buildDir, err)
+		}
+		fmt.Println("Cleaned build intermediates (packages preserved)")
 	}
 
 	return nil
 }
 ```
 
-- [ ] **Step 4: Wire up cmdClean in main.go**
-
-Replace the `cmdClean` stub in `cmd/yoe/main.go`:
-
-```go
-func cmdClean(args []string) {
-	all := false
-
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "-all":
-			all = true
-		default:
-			fmt.Fprintf(os.Stderr, "Unknown flag: %s\n", args[i])
-			os.Exit(1)
-		}
-	}
-
-	dir := os.Getenv("YOE_PROJECT")
-	if dir == "" {
-		dir = "."
-	}
-
-	if err := yoe.RunClean(dir, all); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-}
-```
-
-- [ ] **Step 5: Run tests to verify they pass**
-
-```bash
-go test ./internal/ -run TestRunClean -v
-```
-
-Expected: All tests PASS.
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 2: Write test, wire up, commit**
 
 ```bash
 git add internal/clean.go internal/clean_test.go cmd/yoe/main.go
-git commit -m "feat: add yoe clean command"
+git commit -m "feat: implement yoe clean command"
 ```
 
 ---
 
-### Task 10: Run All Phase 1 Tests
+### Task 9: Run All Phase 1 Tests
 
-- [ ] **Step 1: Run all tests**
+- [ ] **Step 1: Run full test suite**
 
 ```bash
 go test ./... -v
 ```
 
-Expected: All tests PASS.
+Expected: All tests PASS across all packages.
 
-- [ ] **Step 2: Build final binary**
-
-```bash
-go build -o yoe ./cmd/yoe && ./yoe
-```
-
-Expected: Help output showing all command stubs.
-
-- [ ] **Step 3: Smoke test**
+- [ ] **Step 2: Build and smoke test**
 
 ```bash
-./yoe init /tmp/yoe-smoke-test -machine qemu-x86_64
+go build -o yoe ./cmd/yoe
 ./yoe version
-YOE_PROJECT=/tmp/yoe-smoke-test ./yoe config show
-YOE_PROJECT=/tmp/yoe-smoke-test ./yoe clean
-rm -rf /tmp/yoe-smoke-test
+./yoe init /tmp/test-yoe-project --machine qemu-x86_64
+cat /tmp/test-yoe-project/PROJECT.star
+ls /tmp/test-yoe-project/machines/
+cd /tmp/test-yoe-project && /scratch4/yoe/yoe-ng/yoe config show
+rm -rf /tmp/test-yoe-project
 ```
 
 Expected: All commands succeed.
 
-- [ ] **Step 4: Commit any fixes from integration testing**
+- [ ] **Step 3: Commit any fixes from integration testing**
 
 ```bash
 git add -A
@@ -2182,7 +1829,7 @@ provide S3-compatible remote cache for sharing builds across CI/team.
 ## Phase 6: Image Assembly (detailed plan TBD)
 
 **Goal:** Implement the image recipe build path — when `yoe build` encounters a
-recipe with `type = "image"`, assemble a bootable disk image from packages
+recipe with `image()` class, assemble a bootable disk image from packages
 instead of compiling source code. No separate `yoe image` command; images are
 built through the same `yoe build` pipeline.
 
