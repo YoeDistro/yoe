@@ -37,7 +37,14 @@ yoe refs            Show reverse dependencies
 yoe graph           Visualize the dependency DAG
 yoe tui             Launch the interactive TUI
 yoe clean           Remove build artifacts
+yoe container       Manage the build container (build, status)
 ```
+
+All commands except `init`, `version`, and `container` run inside an Alpine
+build container automatically. The container is built on first use from
+`containers/Dockerfile.build`. See
+[Build Environment](build-environment.md#tier-0-bootstrap-layer-automatic-container)
+for details.
 
 ## Commands
 

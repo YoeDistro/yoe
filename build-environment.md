@@ -24,22 +24,64 @@ Yoe-NG uses a layered build environment with three tiers:
 └─────────────────────────────────────────────────────┘
 ```
 
-### Tier 0: Bootstrap Layer
+### Tier 0: Bootstrap Layer (Automatic Container)
 
-The outermost layer provides just enough to run `yoe` and `apk`. This can be:
+The outermost layer provides `yoe`, `apk`, `bubblewrap`, `gcc`, and other build
+tools. **This is handled automatically** — the `yoe` binary on the host detects
+that it's not inside the build container and re-executes itself inside one.
 
-- An **Alpine container** — the recommended starting point. Alpine is ~5MB,
-  includes `apk`, and has official multi-arch images for x86_64, aarch64, and
-  riscv64 (community). Pull and go.
-- A **host Linux system** with `apk-tools` and `bubblewrap` installed — for
-  developers who prefer not to use Docker.
-- **Any environment that can run a static Go binary** — since `yoe` is
-  statically linked, it runs anywhere. It only needs `apk-tools` and `bwrap` as
-  external dependencies.
+The only host requirements are:
 
-The libc used by Tier 0 is irrelevant. `yoe` is a static Go binary. `apk-tools`
-can be statically linked. Neither cares whether the outer environment is musl
-(Alpine) or glibc. All real build work happens in Tier 1/2.
+- The `yoe` Go binary (statically linked, runs anywhere)
+- Docker or Podman
+
+On first use, `yoe` builds the container image from
+`containers/Dockerfile.build` (Alpine + bubblewrap + apk-tools + gcc + build
+essentials). Subsequent invocations reuse the cached image.
+
+**How it works:**
+
+```
+Host                              Container (Alpine)
+┌─────────────┐                   ┌──────────────────────────┐
+│ yoe build   │ ──docker run──▶   │ yoe build openssh        │
+│ openssh     │   -v $PWD:/project│ (has bwrap, apk, gcc...) │
+│             │   -v cache:/cache │                          │
+│ (no bwrap,  │                   │ Tier 1: build root       │
+│  no apk)    │                   │ Tier 2: per-recipe bwrap │
+└─────────────┘                   └──────────────────────────┘
+```
+
+Commands that don't need build tools (`yoe init`, `yoe version`) run directly on
+the host. Everything else (`build`, `config`, `source`, `desc`, `graph`, etc.)
+runs inside the container with the project directory and cache mounted.
+
+```sh
+# These run on the host:
+yoe init my-project
+yoe version
+
+# These auto-enter the container:
+yoe build openssh          # [yoe] running in container: docker build openssh
+yoe config show            # [yoe] running in container: docker config show
+yoe source list            # [yoe] running in container: docker source list
+
+# Manage the container image:
+yoe container build        # rebuild the container image
+yoe container status       # show if running on host or in container
+```
+
+The container mounts:
+
+- **Project directory** → `/project` (read-write)
+- **Cache directory** (`~/.cache/yoe-ng`) → `/cache` (read-write, persists
+  across builds)
+- **User/group ID** passed through so files created in the container are owned
+  by the host user
+
+The `YOE_IN_CONTAINER=1` environment variable is set inside the container so
+`yoe` knows not to re-enter. This is transparent — developers don't need to
+think about containers. They run `yoe build` and it works.
 
 ### Tier 1: Yoe-NG Build Root
 
@@ -255,11 +297,10 @@ assembly (partitioning, filesystem creation, writing the final `.img`).
 ## Build Environment Lifecycle
 
 ```
-First time setup:
-  docker pull alpine → install yoe, apk-tools, bwrap
-  yoe init my-project
-  yoe repo pull              ← fetch pre-built base packages
-  yoe build --all            ← build all recipes (packages + images)
+First time setup (only requires yoe binary + docker/podman):
+  yoe init my-project        ← runs on host, no container needed
+  cd my-project
+  yoe build --all            ← auto-builds container on first run, then builds
 
 Day-to-day development:
   $EDITOR recipes/myapp.star
