@@ -24,6 +24,7 @@ workstation, run on an ARM build server.
 ```
 yoe init            Create a new Yoe-NG project
 yoe build           Build recipes (packages and images)
+yoe dev             Manage source modifications (extract, diff, status)
 yoe flash           Write an image to a device/SD card
 yoe run             Run an image in QEMU
 yoe layer           Manage external layers (fetch, sync, list)
@@ -533,6 +534,68 @@ Launches an interactive terminal UI for common workflows.
 The TUI is built with [Bubble Tea](https://github.com/charmbracelet/bubbletea)
 and provides real-time build progress, log streaming, and interactive selection
 of machines/images/recipes.
+
+### `yoe dev`
+
+Work with recipe source code directly. Every recipe's build directory is a git
+repo — upstream source is committed with an `upstream` tag, and existing patches
+are applied as commits on top. Local edits are just git commits.
+
+There is no "dev mode" to enter or exit. If the build directory has commits
+beyond `upstream`, `yoe build` uses them directly instead of re-fetching source.
+
+```sh
+# After building, edit source in place
+yoe build openssh
+cd build/openssh/src
+vim auth.c
+git commit -am "fix auth timeout handling"
+
+# Rebuild uses your local commits
+yoe build openssh
+
+# See what you've changed
+yoe dev diff openssh
+
+# Extract commits as patch files
+yoe dev extract openssh
+# Writes patches/openssh/0001-fix-auth-timeout-handling.patch
+# Prints updated patches list for your recipe
+
+# Check which recipes have local modifications
+yoe dev status
+```
+
+**Subcommands:**
+
+| Subcommand                 | Description                                                                                     |
+| -------------------------- | ----------------------------------------------------------------------------------------------- |
+| `yoe dev extract <recipe>` | Run `git format-patch upstream..HEAD`, write to `patches/<recipe>/`, print updated patches list |
+| `yoe dev diff <recipe>`    | Show `git log upstream..HEAD` — your local commits                                              |
+| `yoe dev status`           | List all recipes with commits beyond upstream                                                   |
+
+**Rebasing on upstream updates:**
+
+```sh
+# Update recipe version
+$EDITOR recipes/openssh.star   # bump version to 9.7p1
+
+# Rebuild fetches new source, applies patches via rebase
+yoe build openssh
+
+# If patches conflict, resolve in the git repo
+cd build/openssh/src
+git rebase --continue
+yoe dev extract openssh         # re-extract clean patches
+```
+
+**Why this is simpler than Yocto's devtool:**
+
+- No separate workspace — the build directory is the workspace
+- No mode to enter/exit — local commits are automatically detected
+- No state files — git is the only state
+- Extracting patches is `git format-patch` — a command developers already know
+- Each patch = one git commit, so the patch series is the git log
 
 ### `yoe clean`
 

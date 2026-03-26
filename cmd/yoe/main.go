@@ -27,6 +27,8 @@ func main() {
 		cmdLayer(args)
 	case "config":
 		cmdConfig(args)
+	case "dev":
+		cmdDev(args)
 	case "desc":
 		cmdDesc(args)
 	case "refs":
@@ -50,6 +52,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "Commands:\n")
 	fmt.Fprintf(os.Stderr, "  init <project-dir>      Create a new Yoe-NG project\n")
 	fmt.Fprintf(os.Stderr, "  build [recipes...]      Build recipes (packages and images)\n")
+	fmt.Fprintf(os.Stderr, "  dev                     Manage source modifications (extract, diff, status)\n")
 	fmt.Fprintf(os.Stderr, "  flash <device>          Write an image to a device/SD card\n")
 	fmt.Fprintf(os.Stderr, "  run                     Run an image in QEMU\n")
 	fmt.Fprintf(os.Stderr, "  layer                   Manage external layers (fetch, sync, list)\n")
@@ -261,6 +264,47 @@ func cmdGraph(args []string) {
 	proj := loadProject()
 	if err := resolve.Graph(os.Stdout, proj, format, filter); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func cmdDev(args []string) {
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Usage: %s dev <extract|diff|status> [recipe]\n", os.Args[0])
+		os.Exit(1)
+	}
+
+	dir := os.Getenv("YOE_PROJECT")
+	if dir == "" {
+		dir = "."
+	}
+
+	switch args[0] {
+	case "extract":
+		if len(args) < 2 {
+			fmt.Fprintf(os.Stderr, "Usage: %s dev extract <recipe>\n", os.Args[0])
+			os.Exit(1)
+		}
+		if err := yoe.DevExtract(dir, args[1], os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "diff":
+		if len(args) < 2 {
+			fmt.Fprintf(os.Stderr, "Usage: %s dev diff <recipe>\n", os.Args[0])
+			os.Exit(1)
+		}
+		if err := yoe.DevDiff(dir, args[1], os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "status":
+		if err := yoe.DevStatus(dir, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown dev subcommand: %s\n", args[0])
 		os.Exit(1)
 	}
 }

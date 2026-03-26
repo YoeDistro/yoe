@@ -1,56 +1,80 @@
 # Yoe Next Generation
 
-Yoe-NG is a thinking exercise to explore how a Linux distribution might look
-with the following priorities:
+Yoe-NG is an **AI-native embedded Linux distribution builder** — a simpler
+alternative to Yocto, designed from the ground up to be driven by AI assistants.
 
-- Simplicity
-- Focused on developer (including app developer) usability
-  - First class support for application development.
-- Easy to get started
-- Build dependencies distributed through apk packages, isolated with bubblewrap
-  — no Docker daemon required, no host dependency pollution.
-- Easy BSP support
-  - Support for a lot of boards
-  - Inclusive
-- Global cache of pre-build assets
-  - Minimize time building from source
-- Support for multiple images/targets in a single build tree (like Yocto)
-- Rebuilding from source target packages is first class, but not required
-  - Fully traceable
-  - No golden images
-- Focused on modern languages (Go, Rust, Zig, Python, JavaScript)
-  - Uses native language package managers
-  - Caches packages where possible
-- No cross compilation
-- Good tooling for kernel and applications (similar to Yocto)
-- Tooling is written in Go
-  - TUI for common operations
-  - Fast enough
-  - Simple
-  - Easy to cross-compile
-  - Starlark for recipes and build rules (see
-    [Build Languages](build-languages.md))
-- Leverage knowledge and build systems that already exist and integrate with
-  them.
-- 64-bit only (no 32-bit)
-- x86, ARM, RISC-V only
-- Granular packaging (like Yocto/Debian) — one recipe can produce multiple
-  sub-packages (`-dev`, `-doc`, `-dbg`, custom splits), keeping production
-  images small while development images stay fully featured
-- Composable
-  - Pull in recipes/packages using GitHub URLs
-  - Layer composition via Starlark `load()` — vendor BSP, product, and core
-    layers compose through function calls, not config file merging
-  - Recipes can build packages, tools, images, everything
-- Primarily Image based device management (vs package based)
-  - Full image updates, OSTree, BDiff (Android uses)
-- Good SDK story
-  - Able to distribute Binary SDKs to quickly get going with builds without full
-    rebuilds.
-  - Able distribute large pre-built packages like Chromium
+Every operation has a CLI equivalent, but the primary workflow is
+conversational: describe what you need, and the AI generates recipes, configures
+machines, traces dependencies, diagnoses build failures, and audits security —
+all with full understanding of your project's dependency graph and build state.
+
+## Why AI-Native
+
+Embedded Linux is hard not because the concepts are complex, but because there
+are _many_ concepts that interact in non-obvious ways: toolchain flags,
+dependency ordering, kernel configuration, package splitting, layer composition,
+image assembly, device trees, bootloaders. Traditional build systems manage this
+complexity through documentation that developers must read and internalize.
+
+Yoe-NG takes a different approach: **the build system is the documentation.**
+Starlark recipes are readable by both humans and AI. The dependency graph is
+queryable. Build logs are structured. An AI assistant that understands all of
+this can:
+
+- **Create recipes from a URL or description** —
+  `/new-recipe https://github.com/example/myapp`
+- **Diagnose build failures** by reading logs and the dependency graph —
+  `/diagnose openssh`
+- **Trace why a package is in your image** — `/why libssl`
+- **Simulate changes before building** — `/what-if remove networkmanager`
+- **Audit for CVEs and license compliance** — `/cve-check`, `/license-audit`
+- **Generate machine definitions from board names** —
+  `/new-machine "Raspberry Pi 5"`
+
+See [AI Skills](ai-skills.md) for the full catalog of AI-driven workflows.
+
+## Design Priorities
+
+- **AI-native** — structured metadata (Starlark), queryable dependency graphs,
+  and AI skills as first-class interfaces. See [AI Skills](ai-skills.md).
+- **Three interfaces** — AI conversation, interactive TUI, and traditional CLI.
+  All three do the same things; use whichever fits the moment.
+- **Developer-focused** — first-class support for application development, not
+  just system integration. Good tooling for kernel, applications, and BSPs
+  (similar to Yocto's scope, but simpler).
+- **Simple** — one Go binary, one language (Starlark), one package format (apk)
+- **Easy to get started** — AI guides you through project setup, recipe
+  creation, and image configuration
+- **Tooling written in Go** — single static binary, no runtime dependencies, TUI
+  built with [Bubble Tea](https://github.com/charmbracelet/bubbletea), fast
+  enough, trivial to distribute
+- **Build dependencies isolated with bubblewrap** — no Docker daemon required,
+  no host dependency pollution
+- **Easy BSP support** — support for many boards, inclusive of hardware
+  ecosystem
+- **Global cache of pre-built assets** — minimize time building from source
+- **Multiple images/targets in a single build tree** (like Yocto)
+- **Rebuilding from source is first class, but not required** — fully traceable,
+  no golden images
+- **Modern languages** (Go, Rust, Zig, Python, JavaScript) — uses native
+  language package managers, caches packages where possible
+- **No cross compilation** — native builds on modern ARM/RISC-V hardware
+- **Starlark for recipes and build rules** — Python-like, deterministic,
+  sandboxed (see [Build Languages](build-languages.md))
+- **Leverage existing ecosystems** — integrate with language-native build
+  systems rather than reimplementing them
+- **64-bit only** — x86, ARM, RISC-V
+- **Granular packaging** (like Yocto/Debian) — one recipe can produce multiple
+  sub-packages (`-dev`, `-doc`, `-dbg`, custom splits)
+- **Composable layers** — pull in recipes/packages using GitHub URLs; vendor
+  BSP, product, and core layers compose through Starlark `load()` function calls
+- **Image-based device management** — full image updates, OSTree, BDiff
+- **Good SDK story** — binary SDKs, pre-built packages like Chromium
 
 ## Documentation
 
+- [AI Skills](ai-skills.md) — AI-driven workflows for recipe creation, build
+  debugging, security auditing, and more
 - [The `yoe` Tool](yoe-tool.md) — CLI reference for building, imaging, and
   flashing
 - [Recipe & Configuration Format](metadata-format.md) — Starlark recipe and
@@ -98,6 +122,10 @@ management, reproducible builds, and caching.
 
 Yoe-NG asks: what if we started fresh with these assumptions?
 
+- **AI changes the interface.** The hardest part of embedded Linux is knowing
+  what to configure and how. An AI assistant that understands the build system
+  can guide developers through recipe creation, debug build failures, and audit
+  security — without requiring them to memorize a build system's quirks.
 - **Native compilation is fast enough.** With modern hardware (including
   powerful ARM/RISC-V boards and cloud CI), cross-compilation is no longer a
   hard requirement for most workloads.
@@ -107,6 +135,11 @@ Yoe-NG asks: what if we started fresh with these assumptions?
 - **Simpler tooling is better tooling.** A single Go binary with a TUI is easier
   to install, maintain, and extend than a Python-based build system with
   thousands of metadata files.
+- **Structured metadata enables AI.** Starlark is deterministic, sandboxed, and
+  readable by both humans and AI. Combined with a queryable dependency graph
+  (`yoe desc`, `yoe refs`, `yoe graph`), the entire build state is accessible to
+  AI assistants — unlike shell-based build systems where critical state is
+  hidden in environment variables and implicit ordering.
 
 ## Design Principles
 
