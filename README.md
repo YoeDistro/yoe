@@ -57,6 +57,8 @@ with the following priorities:
   configuration spec
 - [Build Environment](build-environment.md) — bootstrap, host tools, and build
   isolation
+- [SDK Management](sdk.md) — development environments, container-based SDK,
+  pre-built binary packages
 - [Comparisons](comparisons.md) — how Yoe-NG relates to Yocto, Buildroot,
   Alpine, Arch, and NixOS
 - [Build Languages](build-languages.md) — analysis of Starlark, CUE, Nix, and
@@ -234,5 +236,3 @@ real-world services without surprises.
 
 - **Reproducibility guarantees:** How strict? Bit-for-bit reproducible, or "same
   inputs produce functionally equivalent outputs"?
-- **SDK / application development workflow:** How do developers build and test
-  apps targeting a Yoe-NG image from their workstation?
