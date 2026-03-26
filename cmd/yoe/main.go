@@ -210,12 +210,13 @@ func cmdContainer(args []string) {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Println("Container image built successfully")
+		fmt.Printf("Container image yoe-ng:%s built successfully\n", yoe.ContainerVersion())
 	case "status":
+		fmt.Printf("Container version: %s (image: yoe-ng:%s)\n", yoe.ContainerVersion(), yoe.ContainerVersion())
 		if yoe.InContainer() {
-			fmt.Println("Running inside the yoe-ng container")
+			fmt.Println("Currently running inside the yoe-ng container")
 		} else {
-			fmt.Println("Running on host (commands will auto-enter container)")
+			fmt.Println("Running on host — commands will auto-enter container")
 		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown container subcommand: %s\n", args[0])

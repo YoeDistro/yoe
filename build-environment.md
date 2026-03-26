@@ -35,10 +35,12 @@ The only host requirements are:
 - The `yoe` Go binary (statically linked, runs anywhere)
 - Docker or Podman
 
-On first use, `yoe` builds the container image `yoe-ng` from
-`containers/Dockerfile.build` (Alpine + bubblewrap + apk-tools + gcc + build
-essentials). Subsequent invocations reuse the cached image. To rebuild it
-manually: `docker build -f containers/Dockerfile.build -t yoe-ng .`
+On first use, `yoe` builds the versioned container image `yoe-ng:<version>` from
+a Dockerfile embedded in the binary itself. The `yoe` binary copies itself into
+the container — no source checkout or Go toolchain is needed on the host.
+Subsequent invocations reuse the cached image. When the container version
+changes (i.e., a new `yoe` binary with updated container dependencies), the
+image is rebuilt automatically.
 
 **How it works:**
 
