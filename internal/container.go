@@ -85,6 +85,13 @@ func ExecInContainer(args []string) error {
 		"--entrypoint", "yoe",
 	}
 
+	// Attach TTY for interactive commands (yoe run needs QEMU serial console)
+	if fileInfo, err := os.Stdin.Stat(); err == nil {
+		if (fileInfo.Mode() & os.ModeCharDevice) != 0 {
+			runArgs = append(runArgs, "-it")
+		}
+	}
+
 	// Pass through YOE_PROJECT if set
 	if yp := os.Getenv("YOE_PROJECT"); yp != "" {
 		runArgs = append(runArgs, "-e", "YOE_PROJECT="+yp)
