@@ -300,6 +300,57 @@ package(
 )
 ```
 
+### Patches
+
+Recipes can apply patches to upstream source after fetching and before building.
+Patches are listed in order and applied with `git apply` or `patch -p1`:
+
+```python
+package(
+    name = "busybox",
+    version = "1.36.1",
+    source = "https://busybox.net/downloads/busybox-1.36.1.tar.bz2",
+    patches = [
+        "patches/busybox/fix-ash-segfault.patch",
+        "patches/busybox/add-custom-applet.patch",
+    ],
+    build = ["make -j$NPROC", "make DESTDIR=$DESTDIR install"],
+)
+```
+
+Patch file paths are relative to the project root. Patch contents are included
+in the recipe's cache hash — changing a patch triggers a rebuild.
+
+**Layer overrides for patches** work through the standard function composition
+pattern:
+
+```python
+# upstream: @recipes-core/busybox.star
+def busybox(extra_patches=[], **overrides):
+    package(
+        name = "busybox",
+        version = "1.36.1",
+        source = "https://busybox.net/downloads/busybox-1.36.1.tar.bz2",
+        patches = [
+            "patches/busybox/fix-ash-segfault.patch",
+        ] + extra_patches,
+        build = ["make -j$NPROC", "make DESTDIR=$DESTDIR install"],
+        **overrides,
+    )
+
+# vendor layer: adds a patch without modifying upstream
+load("@recipes-core//busybox.star", "busybox")
+busybox(extra_patches=["patches/vendor-busybox-audit.patch"])
+```
+
+**Alternatives to patches:**
+
+- **Git-based sources** — fork the repo, apply changes as commits, point the
+  recipe at your branch/tag. Cleaner history, easier to rebase on upstream
+  updates.
+- **Overlay files** — for config file changes on the target, the `overlays/`
+  directory is simpler than patching source.
+
 ### Application Recipe (`recipes/<name>.star`)
 
 Applications built with language-native build systems use language-specific

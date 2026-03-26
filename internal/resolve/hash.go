@@ -31,6 +31,7 @@ func RecipeHash(recipe *yoestar.Recipe, arch string, depHashes map[string]string
 	fmt.Fprintf(h, "sha256:%s\n", recipe.SHA256)
 	fmt.Fprintf(h, "tag:%s\n", recipe.Tag)
 	fmt.Fprintf(h, "branch:%s\n", recipe.Branch)
+	fmt.Fprintf(h, "patches:%s\n", strings.Join(recipe.Patches, "|"))
 
 	// Build configuration
 	fmt.Fprintf(h, "build:%s\n", strings.Join(recipe.Build, "|"))

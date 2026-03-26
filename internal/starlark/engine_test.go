@@ -247,6 +247,32 @@ func TestEvalInvalidArch(t *testing.T) {
 	}
 }
 
+func TestEvalRecipeWithPatches(t *testing.T) {
+	src := `
+package(
+    name = "busybox",
+    version = "1.36.1",
+    source = "https://busybox.net/downloads/busybox-1.36.1.tar.bz2",
+    patches = [
+        "patches/busybox/fix-ash-segfault.patch",
+        "patches/busybox/add-custom-applet.patch",
+    ],
+    build = ["make -j$NPROC", "make DESTDIR=$DESTDIR install"],
+)
+`
+	eng := NewEngine()
+	if err := eng.ExecString("recipes/busybox.star", src); err != nil {
+		t.Fatalf("ExecString: %v", err)
+	}
+	r := eng.Recipes()["busybox"]
+	if len(r.Patches) != 2 {
+		t.Errorf("Patches = %v, want 2 entries", r.Patches)
+	}
+	if r.Patches[0] != "patches/busybox/fix-ash-segfault.patch" {
+		t.Errorf("Patches[0] = %q, want fix-ash-segfault.patch", r.Patches[0])
+	}
+}
+
 func TestEvalPackageRequiresBuild(t *testing.T) {
 	src := `package(name = "broken", version = "1.0.0")`
 	eng := NewEngine()
