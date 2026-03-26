@@ -232,7 +232,30 @@ The base userspace is **glibc + busybox + systemd**:
 This combination gives a small but fully functional base system that can run
 real-world services without surprises.
 
-## Open Questions
+### Reproducibility
 
-- **Reproducibility guarantees:** How strict? Bit-for-bit reproducible, or "same
-  inputs produce functionally equivalent outputs"?
+Yoe-NG targets **functional equivalence**, not bit-for-bit reproducibility. Same
+inputs produce functionally identical outputs — same behavior, same files, same
+permissions — but the bytes may differ due to embedded timestamps, archive
+member ordering, or compiler non-determinism.
+
+This is a deliberate trade-off:
+
+- **Bit-for-bit reproducibility** (what Nix aspires to) requires patching
+  upstream build systems to eliminate timestamps (`__DATE__`, `.pyc` mtime),
+  enforce file ordering in archives, and strip or fix build IDs. This is
+  enormous effort — Nix still hasn't fully achieved it after 20 years — and the
+  primary benefit (verifying a binary matches its source by rebuilding) is
+  relevant mainly for high-assurance supply-chain contexts.
+- **Functional equivalence** gets the practical benefits — reliable caching,
+  hermetic builds, provenance tracking — without the patching burden. Bubblewrap
+  isolation prevents host contamination. Content-addressed input hashing (recipe
+  - source + dependency hashes) ensures cache hits are reliable. Starlark
+    evaluation is deterministic by design. The remaining non-determinism
+    (timestamps, ordering within packages) doesn't affect functionality or
+    caching.
+
+The caching model does not depend on output determinism. Cache keys are computed
+from _inputs_ (recipe content, source hash, dependency `.apk` hashes, build
+flags), not _outputs_. If inputs haven't changed, the cached output is used
+regardless of whether a fresh build would produce identical bytes.
