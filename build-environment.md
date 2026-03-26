@@ -83,6 +83,40 @@ The `YOE_IN_CONTAINER=1` environment variable is set inside the container so
 `yoe` knows not to re-enter. This is transparent — developers don't need to
 think about containers. They run `yoe build` and it works.
 
+### External Dependencies
+
+**Host requirements** (the developer's machine):
+
+| Dependency        | Purpose                     |
+| ----------------- | --------------------------- |
+| `yoe` binary      | Statically linked Go binary |
+| `docker`/`podman` | Run the build container     |
+
+That's it. Everything else is inside the container.
+
+**Container-provided tools** (installed by `containers/Dockerfile.build`):
+
+| Tool    | Package    | Used by                        | Purpose                                                            |
+| ------- | ---------- | ------------------------------ | ------------------------------------------------------------------ |
+| `bwrap` | bubblewrap | `internal/build/sandbox.go`    | Per-recipe build isolation (namespace sandbox)                     |
+| `sh`    | busybox    | `internal/build/sandbox.go`    | Execute recipe build step shell commands                           |
+| `git`   | git        | `internal/source/`, `dev.go`   | Clone/fetch repos, manage workspaces, apply/extract patches        |
+| `tar`   | tar        | `internal/source/workspace.go` | Extract `.tar.xz` archives (`.tar.gz`/`.bz2` handled by Go stdlib) |
+| `nproc` | coreutils  | `internal/build/sandbox.go`    | Detect CPU count for `$NPROC` build variable                       |
+| `uname` | coreutils  | `internal/build/sandbox.go`    | Detect host architecture for `$ARCH` variable                      |
+| `make`  | make       | Recipe build steps             | C/C++ builds                                                       |
+| `gcc`   | gcc        | Recipe build steps             | C compilation                                                      |
+| `g++`   | g++        | Recipe build steps             | C++ compilation                                                    |
+| `patch` | patch      | Fallback for patch application | When `git apply` is not suitable                                   |
+
+**Called indirectly** (by user-defined build steps, not by `yoe` itself):
+
+- Language toolchains (`go`, `cargo`, `cmake`, `meson`, `python3`, `npm`) —
+  installed into the Tier 1 build root as needed
+- Any command available in the build sandbox — recipe build steps are arbitrary
+  shell commands
+- `ctx.shell()` in custom commands can invoke any host tool
+
 ### Tier 1: Yoe-NG Build Root
 
 A glibc-based environment populated from Yoe-NG's own package repository. This
