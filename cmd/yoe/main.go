@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	yoe "github.com/YoeDistro/yoe-ng/internal"
+	"github.com/YoeDistro/yoe-ng/internal/bootstrap"
 	"github.com/YoeDistro/yoe-ng/internal/build"
 	"github.com/YoeDistro/yoe-ng/internal/device"
 	"github.com/YoeDistro/yoe-ng/internal/repo"
@@ -63,6 +64,8 @@ func main() {
 	switch command {
 	case "build":
 		cmdBuild(args)
+	case "bootstrap":
+		cmdBootstrap(args)
 	case "flash":
 		cmdFlash(args)
 	case "run":
@@ -430,6 +433,37 @@ func cmdDev(args []string) {
 		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown dev subcommand: %s\n", args[0])
+		os.Exit(1)
+	}
+}
+
+func cmdBootstrap(args []string) {
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Usage: %s bootstrap <stage0|stage1|status>\n", os.Args[0])
+		os.Exit(1)
+	}
+
+	proj := loadProject()
+	dir := projectDir()
+
+	switch args[0] {
+	case "stage0":
+		if err := bootstrap.Stage0(proj, dir, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "stage1":
+		if err := bootstrap.Stage1(proj, dir, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "status":
+		if err := bootstrap.Status(proj, dir, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown bootstrap subcommand: %s\n", args[0])
 		os.Exit(1)
 	}
 }
