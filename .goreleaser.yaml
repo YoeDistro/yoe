@@ -3,6 +3,8 @@
 
 version: 2
 
+project_name: yoe
+
 before:
   hooks:
     - go mod tidy
@@ -41,4 +43,6 @@ release:
 
     ---
 
-    To install, download the binary for your architecture and place it in your PATH.
+    To update, run: `yoe update`
+
+    Or download the binary for your architecture and place it in your PATH.

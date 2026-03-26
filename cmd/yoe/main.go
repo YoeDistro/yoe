@@ -13,8 +13,8 @@ import (
 	"github.com/YoeDistro/yoe-ng/internal/repo"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
 	"github.com/YoeDistro/yoe-ng/internal/source"
-	"github.com/YoeDistro/yoe-ng/internal/tui"
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
+	"github.com/YoeDistro/yoe-ng/internal/tui"
 )
 
 var version = "dev"
@@ -32,6 +32,9 @@ func main() {
 	switch command {
 	case "version":
 		fmt.Println(version)
+		return
+	case "update":
+		cmdUpdate()
 		return
 	case "init":
 		cmdInit(args)
@@ -118,6 +121,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  graph                   Visualize the dependency DAG\n")
 	fmt.Fprintf(os.Stderr, "  tui                     Launch the interactive TUI\n")
 	fmt.Fprintf(os.Stderr, "  clean                   Remove build artifacts\n")
+	fmt.Fprintf(os.Stderr, "  update                  Update yoe to the latest release\n")
 	fmt.Fprintf(os.Stderr, "  version                 Display version information\n")
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "Examples:\n")
@@ -464,6 +468,13 @@ func cmdBootstrap(args []string) {
 		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown bootstrap subcommand: %s\n", args[0])
+		os.Exit(1)
+	}
+}
+
+func cmdUpdate() {
+	if err := yoe.Update(version); err != nil {
+		fmt.Fprintf(os.Stderr, "Update failed: %v\n", err)
 		os.Exit(1)
 	}
 }
