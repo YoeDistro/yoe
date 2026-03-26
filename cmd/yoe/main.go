@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+
+	yoe "github.com/YoeDistro/yoe-ng/internal"
 )
 
 var version = "dev"
@@ -75,8 +77,33 @@ func printUsage() {
 // Stub command handlers — implemented in subsequent tasks
 
 func cmdInit(args []string) {
-	fmt.Fprintf(os.Stderr, "init: not yet implemented\n")
-	os.Exit(1)
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Usage: %s init <project-dir> [-machine <name>]\n", os.Args[0])
+		os.Exit(1)
+	}
+
+	projectDir := args[0]
+	machine := ""
+
+	for i := 1; i < len(args); i++ {
+		switch args[i] {
+		case "-machine":
+			if i+1 >= len(args) {
+				fmt.Fprintf(os.Stderr, "Error: -machine requires a name\n")
+				os.Exit(1)
+			}
+			machine = args[i+1]
+			i++
+		default:
+			fmt.Fprintf(os.Stderr, "Unknown flag: %s\n", args[i])
+			os.Exit(1)
+		}
+	}
+
+	if err := yoe.RunInit(projectDir, machine); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 func cmdConfig(args []string) {
