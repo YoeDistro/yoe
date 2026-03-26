@@ -12,6 +12,7 @@ import (
 	"github.com/YoeDistro/yoe-ng/internal/repo"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
 	"github.com/YoeDistro/yoe-ng/internal/source"
+	"github.com/YoeDistro/yoe-ng/internal/tui"
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
@@ -79,6 +80,8 @@ func main() {
 		cmdRefs(args)
 	case "graph":
 		cmdGraph(args)
+	case "tui":
+		cmdTUI(args)
 	case "clean":
 		cmdClean(args)
 	default:
@@ -426,6 +429,14 @@ func cmdDev(args []string) {
 		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown dev subcommand: %s\n", args[0])
+		os.Exit(1)
+	}
+}
+
+func cmdTUI(_ []string) {
+	proj := loadProject()
+	if err := tui.Run(proj, projectDir()); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
