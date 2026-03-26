@@ -25,6 +25,7 @@ yoe init            Create a new Yoe-NG project
 yoe build           Build packages from recipes
 yoe image           Assemble a root filesystem image
 yoe flash           Write an image to a device/SD card
+yoe run             Run an image in QEMU
 yoe repo            Manage the local apk package repository
 yoe source          Download and manage source archives/repos
 yoe config          View and edit project configuration
@@ -170,6 +171,77 @@ yoe flash --dry-run /dev/sdX
 
 Safety: `yoe flash` requires explicit confirmation before writing and refuses to
 write to mounted devices or devices that look like system disks.
+
+### `yoe run`
+
+Launches a built image in QEMU for development and testing. QEMU runs with KVM
+hardware virtualization, so the host and guest architecture must match (e.g.,
+x86_64 host runs x86_64 images). For testing other architectures, use native
+hardware or native CI runners.
+
+```sh
+# Run the most recently built image (auto-detects machine/image)
+yoe run
+
+# Run a specific image/machine combination
+yoe run --image dev --machine qemu-x86_64
+
+# Forward host port 2222 to guest SSH (port 22)
+yoe run --port 2222:22
+
+# Allocate more memory
+yoe run --memory 2G
+
+# Run with graphical output (default is serial console)
+yoe run --display
+
+# Run headless in the background, SSH only
+yoe run --daemon --port 2222:22
+```
+
+**What happens:**
+
+1. **Detect architecture** — read the machine definition to determine the target
+   architecture (x86_64, aarch64, riscv64).
+2. **Select QEMU binary** — map to the correct `qemu-system-*` binary.
+3. **Configure machine** — for x86_64, use the `q35` machine type with UEFI
+   firmware (OVMF). For aarch64, use `virt` with UEFI (AAVMF). For riscv64, use
+   `virt` with OpenSBI.
+4. **Enable KVM** — hardware virtualization is always used since host and guest
+   architectures match.
+5. **Attach image** — use the built disk image as a virtio block device.
+6. **Route console** — by default, connect the serial console to the terminal
+   (`-nographic`). The guest kernel must have `console=ttyS0` (x86) or
+   `console=ttyAMA0` (aarch64) in its command line.
+7. **Set up networking** — use QEMU user-mode networking with port forwarding.
+   Host-to-guest SSH is available when `--port` is specified.
+
+**QEMU machine definitions:**
+
+Projects can define QEMU-specific machines alongside hardware ones:
+
+```toml
+# machines/qemu-x86_64.toml
+[machine]
+name = "qemu-x86_64"
+arch = "x86_64"
+
+[machine.kernel]
+recipe = "linux-qemu"
+cmdline = "console=ttyS0 root=/dev/vda2 rw"
+
+[machine.qemu]
+machine = "q35"
+cpu = "host"
+memory = "1G"
+firmware = "ovmf"
+display = "none"
+```
+
+When `yoe run` is given a machine with a `[machine.qemu]` section, it uses those
+settings directly. When given a hardware machine without a `[machine.qemu]`
+section, it falls back to a reasonable default QEMU configuration for the
+machine's architecture.
 
 ### `yoe repo`
 
