@@ -430,6 +430,56 @@ all `.star` files. The Go `yoe` binary provides the built-in functions
 (`package()`, `image()`, `machine()`, `project()`, etc.) that Starlark code
 calls.
 
+## Starlark Ecosystem & Adoption
+
+Understanding the breadth of Starlark adoption helps validate the choice and
+provides reference implementations to learn from.
+
+### Projects Using Starlark (the language)
+
+These projects implement their own Starlark interpreter (typically in Java or
+C++):
+
+- **Bazel** (Google) — the build system Starlark was originally designed for.
+  Java-based Starlark interpreter. The largest and most mature Starlark
+  deployment.
+- **Buck2** (Meta) — Meta's next-generation build system, uses Starlark for
+  `BUCK` files. Rust-based interpreter.
+- **Pants** — a Python-ecosystem build system that uses Starlark for `BUILD`
+  files. Rust-based interpreter.
+- **Copybara** (Google) — a tool for transforming and moving code between
+  repositories. Java-based.
+
+### Projects Using starlark-go (the Go library)
+
+These projects embed the
+[go.starlark.net](https://github.com/google/starlark-go) Go library — the same
+library Yoe-NG would use:
+
+- **Tilt** — microservice dev environment; uses Starlark for `Tiltfile`
+  configuration
+- **Delve** — the standard Go debugger; uses Starlark as a scripting language
+  for automation
+- **Drone** — CI/CD platform; supports Starlark as an alternative to YAML
+  pipelines
+- **Isopod** (Cruise Automation) — DSL framework for Kubernetes configuration
+- **Kurtosis** — developer tool for packaging and running containerized service
+  environments
+- **envd** — CLI for building Docker images for ML development and production
+- **Bramble** — a purely functional build system and package manager
+- **Gazelle** (Bazel) — BUILD file generator for Go/Protobuf projects; uses
+  starlark-go for evaluating directives
+- **AsCode** — infrastructure-as-code using Starlark on top of Terraform
+- **AutoKitteh** — developer platform for workflow automation and orchestration
+- **FizzBee** — system design language for verifying distributed systems
+
+### Why This Matters for Yoe-NG
+
+The starlark-go library is actively maintained by Google and used in production
+by a diverse set of Go projects. The pattern of embedding starlark-go to provide
+a sandboxed, deterministic configuration language in a Go CLI is well-established
+— Yoe-NG would be following a proven approach, not blazing a new trail.
+
 ## Open Questions
 
 - **Class composition:** Should multiple classes be applied via multiple
