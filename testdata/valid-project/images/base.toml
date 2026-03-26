@@ -1,0 +1,14 @@
+[image]
+name = "base"
+description = "Minimal bootable system"
+
+[packages]
+include = ["openssh", "networkmanager", "myapp"]
+
+[config]
+hostname = "yoe"
+timezone = "UTC"
+locale = "en_US.UTF-8"
+
+[services]
+enable = ["sshd", "NetworkManager", "myapp"]

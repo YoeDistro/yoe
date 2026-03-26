@@ -1,0 +1,21 @@
+[recipe]
+name = "myapp"
+version = "1.2.3"
+description = "Edge data collection service"
+license = "Apache-2.0"
+language = "go"
+
+[source]
+repo = "https://github.com/example/myapp.git"
+tag = "v1.2.3"
+
+[depends]
+build = []
+runtime = []
+
+[build]
+command = "go build -o $DESTDIR/usr/bin/myapp ./cmd/myapp"
+
+[package]
+units = ["myapp.service"]
+conffiles = ["/etc/myapp/config.toml"]
