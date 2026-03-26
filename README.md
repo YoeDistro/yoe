@@ -12,6 +12,9 @@ with the following priorities:
 - Easy BSP support
   - Support for a lot of boards
   - Inclusive
+- Global cache of pre-build assets
+  - Minimize time building from source
+- Support for multiple images/targets in a single build tree (like Yocto)
 - Rebuilding from source target packages is first class, but not required
   - Fully traceable
   - No golden images

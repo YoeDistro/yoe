@@ -27,6 +27,7 @@ yoe image           Assemble a root filesystem image
 yoe flash           Write an image to a device/SD card
 yoe run             Run an image in QEMU
 yoe repo            Manage the local apk package repository
+yoe cache           Manage the build cache (local and remote)
 yoe source          Download and manage source archives/repos
 yoe config          View and edit project configuration
 yoe desc            Describe a recipe, package, or target
@@ -84,6 +85,15 @@ yoe build --with-deps myapp
 
 # Rebuild even if the cache is fresh
 yoe build --force openssh
+
+# Skip remote cache — only check local cache
+yoe build --no-remote-cache openssh
+
+# Skip all caches — force build from source
+yoe build --no-cache openssh
+
+# Dry run — show what would be built and why
+yoe build --dry-run --all
 ```
 
 **What happens during a build:**
@@ -126,6 +136,18 @@ yoe image
 
 # Specify image and machine
 yoe image --image dev --machine raspberrypi4
+
+# Build all images for a specific machine
+yoe image --all-images --machine raspberrypi4
+
+# Build a specific image for all machines
+yoe image --image base --all-machines
+
+# Build all images for all machines (full matrix)
+yoe image --all
+
+# List available image/machine combinations
+yoe image --list
 
 # Output a specific format
 yoe image --format sdcard    # raw disk image with partitions
@@ -267,6 +289,50 @@ yoe repo pull
 The local repository lives at the path configured in `distro.toml`
 (`[repository].path`). It's a standard apk-compatible repository — you can point
 `apk` on a running device at it directly.
+
+### `yoe cache`
+
+Manages the local and remote build caches.
+
+```sh
+# Show cache status — local size, remote config, hit rate
+yoe cache status
+
+# List cached packages (local)
+yoe cache list
+
+# Show what's cached for a specific recipe
+yoe cache list openssh
+
+# Push locally-built packages to the remote cache
+yoe cache push
+
+# Push specific packages
+yoe cache push openssh zlib
+
+# Pull packages from the remote cache into local
+yoe cache pull
+
+# Remove local cache entries older than retention period
+yoe cache gc
+
+# Remove all local cache entries
+yoe cache gc --all
+
+# Verify integrity of cached packages (check hashes and signatures)
+yoe cache verify
+
+# Show cache hit/miss statistics for the last build
+yoe cache stats
+```
+
+**Cache push/pull vs. repo push/pull:** `yoe repo` manages the **apk package
+repository** (the repo index that `apk` consumes during image assembly).
+`yoe cache` manages the **build cache** (content-addressed build outputs keyed
+by input hash). In practice, both store `.apk` files, but the cache is keyed by
+build inputs while the repo is indexed by package name/version. Pushing to the
+cache shares _build avoidance_ with CI/team. Pushing to the repo shares
+_installable packages_ with devices.
 
 ### `yoe source`
 
@@ -426,12 +492,17 @@ yoe clean openssh
 
 ## Environment Variables
 
-| Variable      | Default           | Description                                   |
-| ------------- | ----------------- | --------------------------------------------- |
-| `YOE_PROJECT` | `.` (cwd)         | Path to the Yoe-NG project root               |
-| `YOE_CACHE`   | `~/.cache/yoe-ng` | Cache directory for sources, builds, packages |
-| `YOE_JOBS`    | nproc             | Parallel build jobs                           |
-| `YOE_LOG`     | `info`            | Log level (`debug`, `info`, `warn`, `error`)  |
+| Variable                | Default           | Description                                     |
+| ----------------------- | ----------------- | ----------------------------------------------- |
+| `YOE_PROJECT`           | `.` (cwd)         | Path to the Yoe-NG project root                 |
+| `YOE_CACHE`             | `~/.cache/yoe-ng` | Cache directory for sources, builds, packages   |
+| `YOE_JOBS`              | nproc             | Parallel build jobs                             |
+| `YOE_LOG`               | `info`            | Log level (`debug`, `info`, `warn`, `error`)    |
+| `YOE_CACHE_SIGNING_KEY` | (none)            | Path to private key for signing cached packages |
+| `YOE_NO_REMOTE_CACHE`   | `false`           | Disable remote cache lookups                    |
+| `AWS_ACCESS_KEY_ID`     | (none)            | S3 credentials for remote cache                 |
+| `AWS_SECRET_ACCESS_KEY` | (none)            | S3 credentials for remote cache                 |
+| `AWS_ENDPOINT_URL`      | (none)            | S3 endpoint override (for MinIO / non-AWS)      |
 
 ## Dependency Resolution
 
@@ -502,11 +573,15 @@ Builds are cached at multiple levels:
 3. **Package repository** — built `.apk` files in the local repo. Once
    published, packages are available for image assembly and on-device updates.
 4. **Remote cache** (optional) — push/pull packages to an S3-compatible store so
-   CI and team members share build results.
+   CI and team members share build results. See the
+   [Caching Architecture](build-environment.md#caching-architecture) section for
+   details on S3 configuration, cache signing, and the multi-level fallback
+   chain.
 
 Cache invalidation is hash-based, not timestamp-based. Changing a recipe,
 updating a source, or rebuilding a dependency all produce a new hash and trigger
-a rebuild.
+a rebuild. Use `yoe build --dry-run` to see what would be rebuilt and why, or
+`yoe cache stats` to review hit/miss rates from the last build.
 
 ## Example Workflow
 

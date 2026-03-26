@@ -24,23 +24,27 @@ capable but carries significant complexity.
 
 - BitBake and the task-level dependency graph.
 - The recipe/bbappend/bbclass metadata system.
-- sstate-cache complexity.
+- sstate-cache complexity — Yocto's sstate is per-task and requires careful
+  configuration of mirrors, hash equivalence servers, and signing. Yoe-NG's
+  cache is per-recipe, stored in S3-compatible object storage, and needs only a
+  bucket URL.
 - Cross-compilation toolchains.
 - Python as the tooling language.
 
 **Key differences:**
 
-|                     | Yocto                                        | Yoe-NG                                        |
-| ------------------- | -------------------------------------------- | --------------------------------------------- |
-| Build system        | BitBake (Python)                             | `yoe` (Go)                                    |
-| Package format      | rpm / deb / ipk                              | apk                                           |
-| Config format       | BitBake recipes (.bb/.bbappend)              | TOML                                          |
-| Cross-compilation   | Required, central design assumption          | None — native builds only                     |
-| Dependency model    | Task-level DAG (do_fetch → do_compile → ...) | Recipe-level DAG (simpler, atomic per-recipe) |
-| Language ecosystems | Wrapped in recipes                           | Native toolchains (go modules, cargo, etc.)   |
-| Learning curve      | Steep — weeks to become productive           | Shallow — TOML + shell commands               |
-| Build caching       | sstate (per-task, hash-based)                | Per-recipe content-addressed `.apk` hashes    |
-| On-device updates   | Possible but complex (smart image)           | Built-in via apk repositories                 |
+|                     | Yocto                                        | Yoe-NG                                          |
+| ------------------- | -------------------------------------------- | ----------------------------------------------- |
+| Build system        | BitBake (Python)                             | `yoe` (Go)                                      |
+| Package format      | rpm / deb / ipk                              | apk                                             |
+| Config format       | BitBake recipes (.bb/.bbappend)              | TOML                                            |
+| Cross-compilation   | Required, central design assumption          | None — native builds only                       |
+| Dependency model    | Task-level DAG (do_fetch → do_compile → ...) | Recipe-level DAG (simpler, atomic per-recipe)   |
+| Language ecosystems | Wrapped in recipes                           | Native toolchains (go modules, cargo, etc.)     |
+| Learning curve      | Steep — weeks to become productive           | Shallow — TOML + shell commands                 |
+| Build caching       | sstate (per-task, hash-based, complex setup) | Per-recipe `.apk` hashes in S3-compatible cache |
+| Multi-image support | Yes — multiple images from one project       | Yes — image inheritance + machine matrix        |
+| On-device updates   | Possible but complex (smart image)           | Built-in via apk repositories                   |
 
 **When to use Yocto instead:** when you need extremely fine-grained control over
 every component, must support exotic architectures with no native build
@@ -85,6 +89,17 @@ rootfs. This means:
 - You can't update a single component on a deployed device without reflashing.
 - You can't share build outputs between developers or CI runs.
 - You can't compose different images from the same set of built packages.
+
+**Caching gap:** Buildroot has no output caching at all — every developer and
+every CI run rebuilds from source. `ccache` can help with C/C++ compilation but
+doesn't help with configure steps, language-native builds, or package assembly.
+Yoe-NG's S3-backed cache means a typical developer build pulls pre-built
+packages for everything except the component they're actively changing.
+
+**Multi-image gap:** Buildroot produces a single image per configuration. To
+build a "dev" variant and a "production" variant, you need separate build
+directories with separate configs. With Yoe-NG, both images share the same
+package repository — only the package lists differ.
 
 **When to use Buildroot instead:** when you want the absolute simplest build
 system for a truly minimal, single-purpose, static embedded system (firmware for
@@ -210,6 +225,15 @@ its implementation complexity is not.
 | Rollback        | Via Nix generations                  | Via A/B partitions or apk                  |
 | Learning curve  | Steep (must learn Nix language)      | Shallow (TOML + shell)                     |
 
+**Caching comparison:** Nix's binary cache (Cachix, or self-hosted with
+`nix-serve`) is conceptually similar to Yoe-NG's remote cache — both store
+content-addressed build outputs in S3-compatible storage. The key differences:
+Nix caches _closures_ (a package plus all its transitive runtime dependencies),
+which can be very large. Yoe-NG caches individual `.apk` packages, which are
+smaller and more granular. Nix's content addressing is based on the full
+derivation hash (all inputs); Yoe-NG uses a similar scheme but at recipe
+granularity rather than Nix's per-output granularity.
+
 **When to use Nix instead:** when you need the strongest possible
 reproducibility guarantees, are building for desktop/server/CI, and are willing
 to invest in learning the Nix ecosystem. NixOS is unmatched for declarative
@@ -269,7 +293,11 @@ well-proven patterns that Yoe-NG applies to the embedded Linux domain.
 | Native builds           | No       | No        | Yes      | Yes      | Yes     | **Yes**    |
 | On-device packages      | Optional | No        | Yes      | Yes      | Yes     | **Yes**    |
 | Content-addressed cache | Partial  | No        | No       | No       | Yes     | **Yes**    |
+| Remote shared cache     | Complex  | No        | No       | No       | Yes     | **Yes**    |
+| Pre-built package cache | No       | No        | Yes      | Yes      | Yes     | **Yes**    |
 | Declarative images      | Yes      | Partial   | No       | No       | Yes     | **Yes**    |
+| Multi-image support     | Yes      | No        | No       | No       | Yes     | **Yes**    |
+| Image inheritance       | Partial  | No        | No       | No       | Yes     | **Yes**    |
 | Custom BSP support      | Yes      | Yes       | No       | No       | Minimal | **Yes**    |
 | Incremental updates     | Complex  | No        | Yes      | Yes      | Yes     | **Yes**    |
 | Hermetic builds         | Partial  | No        | No       | No       | Yes     | **Yes**    |
