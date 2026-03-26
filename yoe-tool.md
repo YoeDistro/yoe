@@ -535,6 +535,61 @@ The TUI is built with [Bubble Tea](https://github.com/charmbracelet/bubbletea)
 and provides real-time build progress, log streaming, and interactive selection
 of machines/images/recipes.
 
+### Custom Commands
+
+Projects can define custom commands in `commands/*.star` that become first-class
+`yoe` subcommands. This is similar to Zephyr's `west` extensions but uses
+Starlark instead of Python classes.
+
+```python
+# commands/deploy.star
+command(
+    name = "deploy",
+    description = "Deploy image to target device via SSH",
+    args = [
+        arg("target", required=True, help="Target device hostname/IP"),
+        arg("--image", default="base-image", help="Image to deploy"),
+        arg("--reboot", type="bool", help="Reboot after install"),
+    ],
+)
+
+def run(ctx):
+    img = ctx.args.image
+    target = ctx.args.target
+    ctx.log("Deploying", img, "to", target)
+    ctx.shell("scp", "build/output/" + img + ".img", "root@" + target + ":/tmp/update.img")
+    ctx.shell("ssh", "root@" + target, "rauc", "install", "/tmp/update.img")
+    if ctx.args.reboot == "true":
+        ctx.shell("ssh", "root@" + target, "reboot")
+```
+
+Usage:
+
+```sh
+yoe deploy 192.168.1.100 --image production-image --reboot
+```
+
+Custom commands show up alongside built-in commands. If `yoe` doesn't recognize
+a command, it checks `commands/*.star` before printing "unknown command".
+
+**The context object** provides:
+
+| Method                | Description                              |
+| --------------------- | ---------------------------------------- |
+| `ctx.args.<name>`     | Parsed command-line arguments            |
+| `ctx.shell(cmd, ...)` | Execute a shell command (returns output) |
+| `ctx.log(msg, ...)`   | Print a message                          |
+| `ctx.project_root`    | Path to the project root                 |
+
+**Commands from layers:**
+
+Vendor BSP layers can ship custom commands (e.g., `flash-emmc`, `enter-dfu`)
+that become available when the layer is added to the project.
+
+**Key difference from recipe evaluation:** Recipe `.star` files are sandboxed —
+no I/O, deterministic. Command `.star` files have full I/O access via
+`ctx.shell()` because they are actions, not build definitions.
+
 ### `yoe dev`
 
 Work with recipe source code directly. Every recipe's build directory is a git

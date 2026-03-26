@@ -138,6 +138,24 @@ type Partition struct {
 	Contents []string
 }
 
+// Command represents a user-defined CLI command from commands/*.star.
+type Command struct {
+	Name        string
+	Description string
+	Args        []CommandArg
+	RunFn       string // name of the run function in the .star file
+	SourceFile  string // path to the .star file
+}
+
+// CommandArg describes a command-line argument for a custom command.
+type CommandArg struct {
+	Name     string
+	Help     string
+	Default  string
+	Required bool
+	IsBool   bool
+}
+
 var validArchitectures = map[string]bool{
 	"arm64":   true,
 	"riscv64": true,

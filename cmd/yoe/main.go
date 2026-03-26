@@ -40,9 +40,12 @@ func main() {
 	case "version":
 		fmt.Println(version)
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
-		printUsage()
-		os.Exit(1)
+		// Check for custom commands from commands/*.star
+		if !tryCustomCommand(command, args) {
+			fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
+			printUsage()
+			os.Exit(1)
+		}
 	}
 }
 
@@ -307,4 +310,31 @@ func cmdDev(args []string) {
 		fmt.Fprintf(os.Stderr, "Unknown dev subcommand: %s\n", args[0])
 		os.Exit(1)
 	}
+}
+
+// tryCustomCommand checks for a custom command in commands/*.star and runs it.
+// Returns true if the command was found and executed.
+func tryCustomCommand(command string, args []string) bool {
+	dir := os.Getenv("YOE_PROJECT")
+	if dir == "" {
+		dir = "."
+	}
+
+	cmds, engines, err := yoestar.LoadCommands(dir)
+	if err != nil {
+		// No commands directory or eval error — not a custom command
+		return false
+	}
+
+	cmd, ok := cmds[command]
+	if !ok {
+		return false
+	}
+
+	eng := engines[command]
+	if err := yoestar.RunCommand(eng, cmd, args, dir); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	return true
 }
