@@ -28,8 +28,8 @@ builds.**
   the container
 - The container runs with `--security-opt seccomp=unconfined` so bubblewrap can
   create user namespaces inside Docker
-- The host `yoe` binary is bind-mounted into the container (`-v yoe:/usr/local/bin/yoe:ro`),
-  not baked into the image
+- The host `yoe` binary is bind-mounted into the container
+  (`-v yoe:/usr/local/bin/yoe:ro`), not baked into the image
 - Never assume any tool is available on the host — if it's needed, it goes in
   `containers/Dockerfile.build`
 
@@ -84,8 +84,8 @@ that corresponds to plan tasks, update the relevant checkboxes (`- [ ]` →
 
 ## Key Design Decisions
 
-- **Container-only builds** — host provides only `yoe` + Docker; all tools
-  live in the container
+- **Container-only builds** — host provides only `yoe` + Docker; all tools live
+  in the container
 - **Starlark** for all recipes and config (Python-like, deterministic,
   sandboxed)
 - **Classes as functions** — build patterns (autotools, cmake, image) are

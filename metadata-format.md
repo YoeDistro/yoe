@@ -756,9 +756,9 @@ function call to find all modifications.
   explicit while remaining readable for simple cases. See
   [Build Languages](build-languages.md) for the full analysis.
 - **Prefer git sources over tarballs** — git sources give you upstream history,
-  clean `git rebase` for patch updates, natural `yoe dev` workflow (edit, commit,
-  extract patches), and no SHA256 to maintain. Use `source = "https://...git"`
-  with a `tag` to pin the version.
+  clean `git rebase` for patch updates, natural `yoe dev` workflow (edit,
+  commit, extract patches), and no SHA256 to maintain. Use
+  `source = "https://...git"` with a `tag` to pin the version.
 - **One file per recipe** — each recipe is its own `.star` file. This keeps
   diffs clean and makes it easy to add/remove components.
 - **Recipes and packages are separate concerns** — recipes are
