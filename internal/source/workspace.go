@@ -51,15 +51,18 @@ func Prepare(projectDir string, recipe *yoestar.Recipe) (string, error) {
 		if err := checkoutGit(cachedPath, srcDir, recipe); err != nil {
 			return "", err
 		}
+		// Git source is already a repo — just tag current HEAD as upstream
+		if err := tagUpstream(srcDir); err != nil {
+			return "", err
+		}
 	} else {
 		if err := extractTarball(cachedPath, srcDir); err != nil {
 			return "", err
 		}
-	}
-
-	// Initialize git repo and tag upstream
-	if err := initGitRepo(srcDir); err != nil {
-		return "", err
+		// Tarball needs git init + commit + tag
+		if err := initGitRepo(srcDir); err != nil {
+			return "", err
+		}
 	}
 
 	// Apply patches
@@ -194,6 +197,21 @@ func extractWithTar(tarPath, destDir string) error {
 	cmd := exec.Command("tar", "xf", tarPath, "--strip-components=1", "-C", destDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("tar extract: %s\n%s", err, out)
+	}
+	return nil
+}
+
+// tagUpstream tags the current HEAD as "upstream" in an existing git repo.
+// Used for git-sourced recipes where the checkout is already a git repo.
+func tagUpstream(srcDir string) error {
+	// Ensure we're on a branch (shallow clones may be detached)
+	branchCmd := exec.Command("git", "checkout", "-b", "yoe-work")
+	branchCmd.Dir = srcDir
+	branchCmd.Run() // ignore error if branch already exists
+	cmd := exec.Command("git", "tag", "-f", "upstream")
+	cmd.Dir = srcDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git tag upstream: %s\n%s", err, out)
 	}
 	return nil
 }
