@@ -3,7 +3,9 @@ package repo
 import (
 	"archive/tar"
 	"compress/gzip"
+	"crypto/sha1"
 	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"os"
@@ -44,7 +46,7 @@ func GenerateIndex(repoDir string) error {
 			return fmt.Errorf("stat %s: %w", name, err)
 		}
 
-		hash, err := sha256sum(apkPath)
+		hash, err := sha1base64(apkPath)
 		if err != nil {
 			return fmt.Errorf("hashing %s: %w", name, err)
 		}
@@ -148,6 +150,21 @@ func parseAPKFilename(filename string) (name, version string) {
 	version = nameVer[verIdx+1:] + revision
 
 	return name, version
+}
+
+// sha1base64 returns the base64-encoded SHA1 of a file (what apk expects).
+func sha1base64(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	h := sha1.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(h.Sum(nil)), nil
 }
 
 // sha256sum returns the hex-encoded SHA256 of a file.
