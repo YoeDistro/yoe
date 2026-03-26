@@ -88,6 +88,61 @@ locale = "en_US.UTF-8"
 enable = ["sshd", "NetworkManager", "myapp"]
 ```
 
+### Image Composition and Variants
+
+Images can inherit from other images using the `extends` field, enabling a
+base + variant pattern without duplicating package lists.
+
+```toml
+# images/dev.toml — extends the base image with development tools
+[image]
+name = "dev"
+description = "Development image with debug tools"
+extends = "base"       # inherits all packages and config from base.toml
+
+[packages]
+include = [
+    "gdb",
+    "strace",
+    "tcpdump",
+    "vim",
+]
+# Packages can also be excluded from the parent
+exclude = [
+    "monitoring-agent",   # not needed in dev
+]
+
+[config]
+hostname = "yoe-dev"      # overrides parent's hostname
+
+[services]
+enable = ["sshd"]         # merged with parent's services
+```
+
+The inheritance chain is resolved at image assembly time.
+`yoe image --image dev` installs everything from `base` plus the `dev`
+additions, minus any exclusions. Deep inheritance (dev extends base, debug
+extends dev) is supported but discouraged — keep it to one level for
+readability.
+
+**Conditional packages per machine:**
+
+Images can include machine-specific packages using the `[packages.machine.*]`
+table:
+
+```toml
+[packages]
+include = ["openssh", "myapp"]
+
+[packages.machine.beaglebone-black]
+include = ["bbb-dtb-overlay"]
+
+[packages.machine.raspberrypi4]
+include = ["rpi-firmware", "rpi-dt-overlays"]
+```
+
+These are merged with the base package list when building for the named machine.
+
 ### Package Recipe (`recipes/<name>.toml`)
 
 Describes how to build a system-level package (C/C++ libraries, system daemons,
@@ -186,14 +241,47 @@ path = "/var/cache/yoe-ng/repo"
 # remote = "s3://yoe-ng-repo/packages"
 
 [cache]
-# Content-addressed build cache
+# Content-addressed build cache (local)
 path = "/var/cache/yoe-ng/build"
 
+# Remote cache — S3-compatible object storage for sharing builds across
+# CI runners and team members. Multiple remotes can be configured;
+# they are checked in order after the local cache.
+[[cache.remote]]
+name = "team"
+type = "s3"
+bucket = "yoe-cache"
+endpoint = "https://minio.internal:9000"  # self-hosted MinIO
+region = "us-east-1"
+prefix = "v1/"
+# credentials via AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY env vars
+
+# [[cache.remote]]
+# name = "ci"
+# type = "s3"
+# bucket = "yoe-ci-cache"
+# endpoint = "https://s3.amazonaws.com"
+# region = "us-east-1"
+
+# Cache retention — objects not accessed within this period are eligible
+# for deletion. Managed by S3 lifecycle policies; this value is advisory
+# for `yoe cache gc` on local disk.
+[cache.retention]
+days = 90
+
+# Package signing for remote cache integrity
+[cache.signing]
+public-key = "keys/cache.pub"
+# private-key is typically provided via YOE_CACHE_SIGNING_KEY env var
+# private-key = "keys/cache.key"
+
 [sources]
-# Upstream mirrors / proxies for language package managers
+# Upstream mirrors / proxies for language package managers.
+# These reduce external network dependency and speed up builds.
 go-proxy = "https://proxy.golang.org"
 # cargo-registry = "https://..."
 # npm-registry = "https://..."
+# pypi-mirror = "https://..."
 ```
 
 ### Partition Layout (`partitions/<name>.toml`)

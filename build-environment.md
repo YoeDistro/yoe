@@ -277,6 +277,169 @@ Updating the base toolchain:
   yoe build --all            ← rebuild everything against new gcc
 ```
 
+## Caching Architecture
+
+Yoe-NG's content-addressed build cache is designed around a multi-level fallback
+chain. Each level is checked in order; the first hit wins.
+
+### Cache Levels
+
+```
+┌──────────────────────────────────────────────────┐
+│  Level 1: Local Disk Cache                       │
+│  $YOE_CACHE/build/                               │
+│  Fastest — no network. Populated by local builds │
+├──────────────────────────────────────────────────┤
+│  Level 2: LAN / Self-Hosted Cache (optional)     │
+│  MinIO or S3-compatible on local network         │
+│  ~1ms latency. Shared across team workstations   │
+├──────────────────────────────────────────────────┤
+│  Level 3: Remote Cache (optional)                │
+│  AWS S3, GCS, R2, Backblaze B2, etc.            │
+│  Shared across CI runners and distributed teams  │
+└──────────────────────────────────────────────────┘
+```
+
+### Why S3-Compatible Storage
+
+Content-addressed packages are **immutable, write-once blobs** keyed by their
+input hash. This maps directly to S3's key-value object model:
+
+- **No coordination** — multiple CI runners push/pull concurrently without
+  locking. Two builders producing the same hash write the same content; last
+  writer wins harmlessly.
+- **Widely available** — AWS S3, MinIO (self-hosted), GCS, Cloudflare R2, and
+  Backblaze B2 all speak the same API. No vendor lock-in.
+- **Built-in lifecycle management** — S3 lifecycle policies handle cache
+  eviction (e.g., delete objects not accessed in 90 days). No custom garbage
+  collection needed.
+- **Right granularity** — S3 GET latency (~50-100ms) is negligible at
+  package-level granularity. A cache hit that avoids a 5-minute GCC build is
+  worth 100ms of network overhead.
+
+Self-hosted MinIO is the recommended starting point for teams that want shared
+caching without cloud dependency. It runs as a single binary, supports the full
+S3 API, and works in air-gapped environments.
+
+### Cache Key Computation
+
+The cache key for a recipe is a cryptographic hash of:
+
+- The recipe TOML file contents
+- The source archive/commit hash
+- The `.apk` hashes of all build dependencies (transitive)
+- The machine architecture and propagated build flags
+
+This means any change to a recipe, its source, or any of its dependencies
+produces a new cache key. Cache invalidation is automatic — there are no stale
+entries, only unused ones.
+
+### Language Package Manager Caches
+
+Language-native package managers (Go modules, Cargo crates, npm packages, pip
+wheels) have their own download caches. Yoe-NG shares these across builds:
+
+- **Go** — `GOMODCACHE` is set to a shared directory; the Go module proxy
+  (`GOPROXY`) can point to a local Athens instance or the public
+  `proxy.golang.org`.
+- **Rust** — `CARGO_HOME` is shared; a local
+  [Panamax](https://github.com/panamax-rs/panamax) mirror can serve as a
+  registry cache.
+- **Node.js** — `npm_config_cache` is shared; a local Verdaccio instance can
+  proxy the npm registry.
+- **Python** — `PIP_CACHE_DIR` is shared; a local devpi instance can proxy PyPI.
+
+These caches are **not** content-addressed by Yoe-NG — they are managed by the
+language toolchains themselves. Yoe-NG ensures the cache directories persist
+across builds and are shared across recipes that use the same language.
+
+### Cache Signing and Verification
+
+Packages pushed to a remote cache are signed with a project-level key. When
+pulling from a remote cache, `yoe` verifies the signature before using the
+cached package. This prevents cache poisoning — a compromised cache server
+cannot inject malicious packages.
+
+The signing key is configured in `distro.toml` (`[cache.signing]`). For CI, the
+private key is provided via environment variable; workstations can use a
+read-only public key for verification only.
+
+## Multi-Target Builds
+
+A single Yoe-NG project can define multiple machines and multiple images,
+building any combination from the same source tree. This is similar to Yocto's
+multi-machine/multi-image capability but with simpler mechanics.
+
+### How It Works
+
+Machines and images are independent axes. A machine defines _what hardware_ to
+build for (architecture, kernel, bootloader, partition layout). An image defines
+_what software_ to include (package list, services, configuration). Any image
+can be built for any compatible machine.
+
+```
+machines/                    images/
+├── beaglebone-black.toml    ├── base.toml
+├── raspberrypi4.toml        ├── dev.toml
+└── qemu-arm64.toml          └── production.toml
+
+Build matrix:
+  yoe image --machine beaglebone-black --image base
+  yoe image --machine beaglebone-black --image dev
+  yoe image --machine raspberrypi4 --image production
+  yoe image --all   ← builds all valid combinations
+```
+
+### Package Sharing Across Targets
+
+Because recipes produce architecture-specific `.apk` packages that live in a
+shared repository, packages built for one machine are reused by any other
+machine with the same architecture. Building `openssh` for the BeagleBone also
+satisfies the Raspberry Pi — both are `aarch64` and produce identical packages
+(same recipe, same source, same arch flags → same cache key).
+
+This means a multi-machine project does **not** rebuild the world for each
+board. Only machine-specific packages (kernel, bootloader, device trees) are
+built per-machine. Everything else comes from cache.
+
+### Build Output Organization
+
+Build outputs are organized by machine and image:
+
+```
+build/output/
+├── beaglebone-black/
+│   ├── base/
+│   │   └── base-beaglebone-black.img
+│   └── dev/
+│       └── dev-beaglebone-black.img
+├── raspberrypi4/
+│   └── production/
+│       └── production-raspberrypi4.img
+└── repo/
+    └── aarch64/           ← shared package repo for all aarch64 machines
+        ├── openssh-9.6p1-r0.apk
+        ├── myapp-1.2.3-r0.apk
+        └── ...
+```
+
+### Architecture Isolation
+
+When a project targets multiple architectures (e.g., `aarch64` and `x86_64`),
+each architecture gets its own Tier 1 build root and package repository.
+Packages from different architectures never mix. The build roots are:
+
+```
+/var/yoe/buildroot/aarch64/    ← aarch64 compilers, libraries
+/var/yoe/buildroot/x86_64/     ← x86_64 compilers, libraries
+```
+
+In practice, multi-architecture builds from a single workstation are uncommon
+since Yoe-NG uses native builds. A developer typically builds for the
+architecture of their machine. Multi-arch is more relevant in CI, where
+different runners handle different architectures and share results via the
+remote cache.
+
 ## Supported Host Architectures
 
 Since Yoe-NG uses native builds (no cross-compilation), the host architecture
