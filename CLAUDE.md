@@ -6,9 +6,10 @@ code in this repository.
 ## Project Overview
 
 Yoe-NG is a next-generation embedded Linux distribution builder — a simpler
-alternative to Yocto. Currently in the **design/documentation phase** with no
-source code yet. The repository contains architectural specifications across
-several markdown files.
+alternative to Yocto. The project has a working Go CLI (`yoe`) with Starlark
+recipe evaluation, container-based builds, DAG resolution, apk packaging,
+bubblewrap sandboxing, image generation, and a TUI. A `recipes-core` layer
+provides initial classes (autotools, cmake, go, image) and recipes.
 
 Core design: Go CLI (`yoe`) + Starlark recipes/config + apk packages +
 bubblewrap isolation. Native builds only (no cross-compilation). Base system:
@@ -38,6 +39,8 @@ the `yoe` binary. No host dependencies beyond that.
 
 ## Repository Structure
 
+### Documentation
+
 - `README.md` — project philosophy, design goals, comparisons overview
 - `yoe-tool.md` — `yoe` CLI command reference (init, build, flash, etc.)
 - `metadata-format.md` — Starlark recipe and configuration spec
@@ -45,8 +48,42 @@ the `yoe` binary. No host dependencies beyond that.
   build root, per-recipe sandbox)
 - `build-languages.md` — analysis of Starlark, CUE, Nix, and other embeddable
   languages
+- `sdk.md` — SDK documentation
+- `comparisons.md` — comparisons with other build systems
+- `CHANGELOG.md` — release changelog
+
+### Source Code
+
+- `cmd/yoe/main.go` — CLI entry point
+- `internal/` — core packages:
+  - `starlark/` — Starlark engine, loader, builtins, and recipe evaluation
+  - `resolve/` — DAG resolution, dependency graphing, content hashing
+  - `build/` — build executor and bubblewrap sandbox
+  - `bootstrap/` — bootstrap environment setup
+  - `packaging/` — apk package creation
+  - `image/` — rootfs assembly and disk image generation
+  - `source/` — source fetching and workspace management
+  - `repo/` — package repository indexing
+  - `config/` — project configuration
+  - `device/` — flash and QEMU support
+  - `tui/` — terminal UI (bubbletea)
+  - `clean.go`, `init.go`, `update.go`, `dev.go`, `layer.go`,
+    `container.go`, `configcmd.go` — top-level CLI command implementations
+
+### Layers and Recipes
+
+- `layers/recipes-core/` — core layer with `LAYER.star` manifest
+  - `classes/` — build pattern functions (autotools, cmake, go, image)
+  - `recipes/` — package recipes (base, bootloaders, libs)
+  - `machines/` — machine configs (qemu-x86_64)
+  - `images/` — image definitions (base-image)
+
+### Build Infrastructure
+
 - `envsetup.sh` — shell functions (source it, don't execute)
 - `containers/Dockerfile.build` — the build container (Tier 0)
+- `scripts/` — helper scripts
+- `testdata/` — test fixtures
 
 ## Commands
 

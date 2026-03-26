@@ -6,6 +6,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.2.0] - 2026-03-26
+
+### Added
+
+- **Bootable QEMU x86_64 image** — end-to-end flow from recipes to a partitioned
+  disk image that boots to a Linux kernel with busybox
+- **Starlark `load()` support** — class imports and `@layer//path` label-based
+  references across layers
+- **Recursive recipe discovery** — `recipes/**/*.star` directory traversal
+- **`recipes-core` layer** — initial layer with autotools/cmake/go/image
+  classes, busybox/zlib/syslinux recipes, base-image, and qemu-x86_64 machine
+- **APKINDEX generation** — `APKINDEX.tar.gz` for apk dependency resolution
+- **`yoe update`** — self-update command
+- **Bootstrap + container mount** — host `yoe` binary bind-mounted into
+  container
+
+### Fixed
+
+- Attach TTY to container when stdin is a terminal (needed for `yoe run`)
+- Build busybox as static binary (no shared lib dependency on rootfs)
+- ext4 partition size matches filesystem (add 1MB for MBR overhead)
+- APKINDEX uses SHA1 base64 as required by apk
+- apk format and image assembly for end-to-end builds
+- Use GitHub mirror for busybox (busybox.net unreachable)
+- Handle git sources in workspace (tag upstream without re-init)
+- bwrap sandbox inside Docker + container-only build policy
+- Mount git root for layer resolution
+
+### Changed
+
+- Prefer git sources with shallow clone
+- Move build commands to `envsetup.sh` (`yoe_build`, `yoe_test`)
+
 ## [0.1.0] - 2026-03-26
 
 Initial release of yoe-ng — a next-generation embedded Linux distribution
