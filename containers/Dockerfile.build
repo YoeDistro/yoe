@@ -1,5 +1,5 @@
 # Yoe-NG build container (Tier 0)
-# Version: 3
+# Version: 5
 #
 # Tools-only container. The host yoe binary is bind-mounted at runtime,
 # not baked into the image. This means the container only rebuilds when
@@ -22,7 +22,22 @@ RUN apk add --no-cache \
     gcc \
     g++ \
     musl-dev \
-    linux-headers
+    linux-headers \
+    sfdisk \
+    e2fsprogs \
+    dosfstools \
+    mtools \
+    qemu-system-x86_64 \
+    ovmf \
+    perl \
+    bc \
+    flex \
+    bison \
+    elfutils-dev \
+    openssl-dev \
+    diffutils \
+    findutils \
+    sed
 
 # Create /build for bwrap bind mounts
 RUN mkdir -p /build/src /build/destdir

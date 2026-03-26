@@ -12,31 +12,83 @@ import (
 )
 
 // GenerateDiskImage creates a partitioned disk image from a rootfs directory.
+// Uses raw file operations — no loop devices or mounting needed (works inside
+// Docker without --privileged).
 func GenerateDiskImage(rootfs, imgPath string, recipe *yoestar.Recipe, w io.Writer) error {
+	partitions := recipe.Partitions
+	if len(partitions) == 0 {
+		partitions = []yoestar.Partition{
+			{Label: "rootfs", Type: "ext4", Size: "512M", Root: true},
+		}
+	}
+
+	// Calculate sizes
 	totalMB := 0
-	for _, p := range recipe.Partitions {
+	for _, p := range partitions {
 		size := parseSizeMB(p.Size)
 		if size == 0 {
 			size = 512
 		}
 		totalMB += size
 	}
-	if totalMB == 0 {
-		totalMB = 512
-	}
 
 	fmt.Fprintf(w, "  Creating %dMB disk image...\n", totalMB)
 
+	// Create sparse image
 	if err := createSparseImage(imgPath, totalMB); err != nil {
 		return fmt.Errorf("creating image: %w", err)
 	}
 
-	if err := partitionImage(imgPath, recipe.Partitions, w); err != nil {
+	// Partition with sfdisk
+	if err := partitionImage(imgPath, partitions, w); err != nil {
 		return fmt.Errorf("partitioning: %w", err)
 	}
 
-	if err := populateImage(imgPath, rootfs, recipe, w); err != nil {
-		return fmt.Errorf("populating: %w", err)
+	// Create individual partition images and dd them into the disk image
+	offsetMB := 1 // 1MB for GPT header
+	for _, p := range partitions {
+		sizeMB := parseSizeMB(p.Size)
+		if sizeMB == 0 {
+			sizeMB = totalMB - offsetMB
+		}
+
+		fmt.Fprintf(w, "  Creating %s partition (%s, %dMB)...\n", p.Label, p.Type, sizeMB)
+
+		partImg := imgPath + "." + p.Label + ".part"
+		defer os.Remove(partImg)
+
+		switch p.Type {
+		case "vfat":
+			if err := createVfatPartition(partImg, sizeMB, rootfs, p, w); err != nil {
+				return fmt.Errorf("vfat %s: %w", p.Label, err)
+			}
+		case "ext4":
+			if err := createExt4Partition(partImg, sizeMB, rootfs, p, w); err != nil {
+				return fmt.Errorf("ext4 %s: %w", p.Label, err)
+			}
+		}
+
+		// DD the partition image into the disk image at the right offset
+		if _, err := os.Stat(partImg); err == nil {
+			cmd := exec.Command("dd",
+				"if="+partImg,
+				"of="+imgPath,
+				"bs=1M",
+				fmt.Sprintf("seek=%d", offsetMB),
+				"conv=notrunc",
+			)
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf("dd partition %s: %w", p.Label, err)
+			}
+		}
+
+		offsetMB += sizeMB
+	}
+
+	info, _ := os.Stat(imgPath)
+	if info != nil {
+		fmt.Fprintf(w, "  Disk image: %s (%dMB)\n", imgPath, info.Size()/(1024*1024))
 	}
 
 	return nil
@@ -52,10 +104,9 @@ func createSparseImage(path string, sizeMB int) error {
 }
 
 func partitionImage(imgPath string, partitions []yoestar.Partition, w io.Writer) error {
-	if len(partitions) == 0 {
-		partitions = []yoestar.Partition{
-			{Label: "rootfs", Type: "ext4", Size: "fill", Root: true},
-		}
+	if _, err := exec.LookPath("sfdisk"); err != nil {
+		fmt.Fprintln(w, "  (sfdisk not available — skipping partitioning)")
+		return nil
 	}
 
 	script := "label: gpt\n"
@@ -72,65 +123,70 @@ func partitionImage(imgPath string, partitions []yoestar.Partition, w io.Writer)
 		script += fmt.Sprintf("%stype=%s, name=%s\n", size, ptype, p.Label)
 	}
 
-	fmt.Fprintf(w, "  Partitioning (GPT)...\n")
-
-	// Check if sfdisk is available
-	if _, err := exec.LookPath("sfdisk"); err != nil {
-		fmt.Fprintf(w, "  (sfdisk not available — creating rootfs.tar.gz fallback)\n")
-		return nil // fall through to tar fallback
-	}
-
-	cmd := exec.Command("sfdisk", imgPath)
+	fmt.Fprintln(w, "  Partitioning (GPT)...")
+	cmd := exec.Command("sfdisk", "--quiet", imgPath)
 	cmd.Stdin = strings.NewReader(script)
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
 
-func populateImage(imgPath, rootfs string, recipe *yoestar.Recipe, w io.Writer) error {
-	// Try loop device approach (requires root or user namespaces)
-	out, err := exec.Command("losetup", "--find", "--show", "--partscan", imgPath).Output()
-	if err != nil {
-		// Fallback: create rootfs tar.gz alongside the image
-		fmt.Fprintf(w, "  (losetup not available — creating rootfs.tar.gz fallback)\n")
-		tarPath := imgPath + ".tar.gz"
-		cmd := exec.Command("tar", "czf", tarPath, "-C", rootfs, ".")
-		return cmd.Run()
+// createVfatPartition creates a FAT32 filesystem image and copies boot files.
+// Uses mkfs.vfat + mcopy (mtools) — no loop device or mounting needed.
+func createVfatPartition(partImg string, sizeMB int, rootfs string, p yoestar.Partition, w io.Writer) error {
+	// Create the partition image file
+	if err := createSparseImage(partImg, sizeMB); err != nil {
+		return err
 	}
-	loopDev := strings.TrimSpace(string(out))
-	defer exec.Command("losetup", "-d", loopDev).Run()
 
-	for i, p := range recipe.Partitions {
-		partDev := fmt.Sprintf("%sp%d", loopDev, i+1)
-		fmt.Fprintf(w, "  Formatting %s (%s)...\n", p.Label, p.Type)
+	// Format as FAT32
+	cmd := exec.Command("mkfs.vfat", "-n", strings.ToUpper(p.Label), partImg)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("mkfs.vfat: %s\n%s", err, out)
+	}
 
-		switch p.Type {
-		case "vfat":
-			exec.Command("mkfs.vfat", "-n", strings.ToUpper(p.Label), partDev).Run()
-			mountDir := filepath.Join(filepath.Dir(imgPath), "mnt-boot")
-			os.MkdirAll(mountDir, 0755)
-			if err := exec.Command("mount", partDev, mountDir).Run(); err != nil {
-				continue
-			}
-			for _, pattern := range p.Contents {
-				matches, _ := filepath.Glob(filepath.Join(rootfs, "boot", pattern))
-				for _, f := range matches {
-					exec.Command("cp", f, mountDir).Run()
+	// Copy boot files using mcopy if available, otherwise dd raw
+	if _, err := exec.LookPath("mcopy"); err == nil {
+		for _, pattern := range p.Contents {
+			matches, _ := filepath.Glob(filepath.Join(rootfs, "boot", pattern))
+			for _, f := range matches {
+				cmd := exec.Command("mcopy", "-i", partImg, f, "::/"+filepath.Base(f))
+				if out, err := cmd.CombinedOutput(); err != nil {
+					fmt.Fprintf(w, "    mcopy %s: %s\n", filepath.Base(f), string(out))
+				} else {
+					fmt.Fprintf(w, "    boot: %s\n", filepath.Base(f))
 				}
-			}
-			exec.Command("umount", mountDir).Run()
-
-		case "ext4":
-			exec.Command("mkfs.ext4", "-L", p.Label, "-q", partDev).Run()
-			if p.Root {
-				mountDir := filepath.Join(filepath.Dir(imgPath), "mnt-rootfs")
-				os.MkdirAll(mountDir, 0755)
-				if err := exec.Command("mount", partDev, mountDir).Run(); err != nil {
-					continue
-				}
-				exec.Command("cp", "-a", rootfs+"/.", mountDir+"/").Run()
-				exec.Command("umount", mountDir).Run()
 			}
 		}
+	} else {
+		fmt.Fprintln(w, "    (mcopy not available — boot partition empty)")
+	}
+
+	return nil
+}
+
+// createExt4Partition creates an ext4 filesystem image populated from rootfs.
+// Uses mkfs.ext4 -d (populate from directory) — no loop device or mounting.
+func createExt4Partition(partImg string, sizeMB int, rootfs string, p yoestar.Partition, w io.Writer) error {
+	if !p.Root {
+		// Non-root ext4 partition — just create empty
+		if err := createSparseImage(partImg, sizeMB); err != nil {
+			return err
+		}
+		cmd := exec.Command("mkfs.ext4", "-q", "-L", p.Label, partImg)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("mkfs.ext4: %s\n%s", err, out)
+		}
+		return nil
+	}
+
+	// Root partition — create and populate from rootfs using mkfs.ext4 -d
+	if err := createSparseImage(partImg, sizeMB); err != nil {
+		return err
+	}
+
+	cmd := exec.Command("mkfs.ext4", "-q", "-L", p.Label, "-d", rootfs, partImg)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("mkfs.ext4 -d: %s\n%s", err, out)
 	}
 
 	return nil

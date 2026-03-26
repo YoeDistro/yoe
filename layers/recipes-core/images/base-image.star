@@ -4,6 +4,7 @@ image(
     description = "Minimal bootable Yoe-NG system",
     packages = [
         "busybox",
+        "linux",
     ],
     hostname = "yoe",
     timezone = "UTC",

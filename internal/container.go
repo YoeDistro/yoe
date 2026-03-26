@@ -14,7 +14,7 @@ const (
 	// containerVersion is bumped when the Dockerfile changes (i.e., the tool
 	// set inside the container changes). The image is tagged yoe-ng:<version>
 	// so yoe automatically rebuilds when the version doesn't match.
-	containerVersion = "3"
+	containerVersion = "5"
 
 	containerImage = "yoe-ng"
 	containerEnv   = "YOE_IN_CONTAINER"
