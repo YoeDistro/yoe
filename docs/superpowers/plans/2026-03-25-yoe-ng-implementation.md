@@ -2189,16 +2189,14 @@ cycles, propagate machine config through the graph.
 **Key components:**
 
 - `internal/image/rootfs.go` — rootfs creation via apk add --root
-- `internal/image/configure.go` — hostname, timezone, locale, service
-  enablement
+- `internal/image/configure.go` — hostname, timezone, locale, service enablement
 - `internal/image/overlay.go` — overlay file copying
 - `internal/image/disk.go` — partition table creation, filesystem formatting
 - `internal/image/kernel.go` — kernel + bootloader installation
 - `cmd/yoe/main.go` — add `image` command to switch statement
 
-**Depends on:** Phase 5 (populated package repository)
-**System requirements:** user namespaces (bubblewrap), mkfs.ext4, mkfs.vfat,
-systemd-repart
+**Depends on:** Phase 5 (populated package repository) **System requirements:**
+user namespaces (bubblewrap), mkfs.ext4, mkfs.vfat, systemd-repart
 
 ---
 
@@ -2208,8 +2206,8 @@ systemd-repart
 
 **Key components:**
 
-- `internal/device/flash.go` — block device writing with safety checks
-  (mounted? system disk?)
+- `internal/device/flash.go` — block device writing with safety checks (mounted?
+  system disk?)
 - `internal/device/qemu.go` — QEMU launch configuration (KVM, port forwarding,
   serial console)
 - `cmd/yoe/main.go` — add `flash` and `run` commands to switch statement
@@ -2242,10 +2240,9 @@ an existing toolchain, then rebuild with own toolchain.
 - `internal/bootstrap/stage0.go` — cross-pollination from Alpine
 - `internal/bootstrap/stage1.go` — self-hosting rebuild
 - `cmd/yoe/main.go` — add `bootstrap` command to switch statement
-- Bootstrap recipe set: glibc, binutils, gcc, linux-headers, busybox,
-  apk-tools, bubblewrap
+- Bootstrap recipe set: glibc, binutils, gcc, linux-headers, busybox, apk-tools,
+  bubblewrap
 
-**Depends on:** Phase 5 (package creation and repository)
-**This is the most complex phase** — building a C library and compiler toolchain
-is non-trivial. Consider starting with pre-built packages and implementing
-bootstrap last.
+**Depends on:** Phase 5 (package creation and repository) **This is the most
+complex phase** — building a C library and compiler toolchain is non-trivial.
+Consider starting with pre-built packages and implementing bootstrap last.
