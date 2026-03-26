@@ -1,8 +1,9 @@
 # The `yoe` Tool
 
 `yoe` is the single CLI tool that drives all Yoe-NG workflows — building
-packages, assembling images, managing source downloads, and flashing devices. It
-is a statically-linked Go binary with no runtime dependencies.
+packages and images from recipes, managing caches and source downloads, and
+flashing devices. It is a statically-linked Go binary with no runtime
+dependencies.
 
 ## Installation
 
@@ -22,8 +23,7 @@ workstation, run on an ARM build server.
 
 ```
 yoe init            Create a new Yoe-NG project
-yoe build           Build packages from recipes
-yoe image           Assemble a root filesystem image
+yoe build           Build recipes (packages and images)
 yoe flash           Write an image to a device/SD card
 yoe run             Run an image in QEMU
 yoe repo            Manage the local apk package repository
@@ -67,18 +67,29 @@ yoe init my-project --machine beaglebone-black
 
 ### `yoe build`
 
-Builds one or more recipes into `.apk` packages and publishes them to the local
-repository.
+Builds one or more recipes. Package recipes produce `.apk` packages and publish
+them to the local repository. Image recipes assemble a root filesystem and
+produce a disk image. The recipe's `type` field determines the behavior — the
+command is the same for both.
 
 ```sh
-# Build a single recipe
+# Build a single package recipe
 yoe build openssh
 
 # Build multiple recipes
 yoe build openssh zlib openssl
 
-# Build all recipes
+# Build an image recipe (assembles rootfs, produces disk image)
+yoe build base-image
+
+# Build an image for a specific machine
+yoe build base-image --machine raspberrypi4
+
+# Build all recipes (packages and images)
 yoe build --all
+
+# Build all image recipes for all machines (full matrix)
+yoe build --all --type image
 
 # Build a recipe and all its dependencies
 yoe build --with-deps myapp
@@ -94,6 +105,9 @@ yoe build --no-cache openssh
 
 # Dry run — show what would be built and why
 yoe build --dry-run --all
+
+# List available image/machine combinations
+yoe build --list-targets
 ```
 
 **What happens during a build:**
@@ -126,66 +140,47 @@ up front rather than mid-build.
 7. **Publish** — add the `.apk` to the local repository and update the repo
    index.
 
-### `yoe image`
+**For image recipes** (type = "image"), steps 3-7 are replaced with image
+assembly:
 
-Assembles a root filesystem image from an image definition.
-
-```sh
-# Build the default image for the default machine
-yoe image
-
-# Specify image and machine
-yoe image --image dev --machine raspberrypi4
-
-# Build all images for a specific machine
-yoe image --all-images --machine raspberrypi4
-
-# Build a specific image for all machines
-yoe image --image base --all-machines
-
-# Build all images for all machines (full matrix)
-yoe image --all
-
-# List available image/machine combinations
-yoe image --list
-
-# Output a specific format
-yoe image --format sdcard    # raw disk image with partitions
-yoe image --format rootfs    # tar.gz of the rootfs only
-yoe image --format squashfs  # squashfs for read-only roots
-```
-
-**What happens during image assembly:**
-
-1. **Read image definition** — parse `images/<name>.toml` for the package list
-   and configuration.
-2. **Read machine definition** — parse `machines/<name>.toml` for architecture,
+1. **Resolve dependencies** — same as above.
+2. **Check cache** — same as above.
+3. **Read machine definition** — parse `machines/<name>.toml` for architecture,
    kernel, bootloader, and partition layout.
-3. **Create empty rootfs** — set up a temporary directory as the root
-   filesystem.
-4. **Install packages** — run `apk add --root <rootfs>` with the Yoe-NG
-   repository to install all specified packages and their dependencies. apk
-   handles dependency resolution.
-5. **Apply configuration** — set hostname, timezone, locale, enable systemd
-   services per the image definition.
-6. **Apply overlays** — copy files from `overlays/` into the rootfs (custom
-   configs, static files, etc.).
-7. **Install kernel + bootloader** — build (or fetch from cache) the kernel and
+4. **Create empty rootfs** — set up a temporary directory.
+5. **Install packages** — run `apk add --root <rootfs>` with the Yoe-NG
+   repository to install all runtime dependencies. apk handles dependency
+   resolution.
+6. **Apply configuration** — set hostname, timezone, locale, enable systemd
+   services per the image recipe's `[image]` section.
+7. **Apply overlays** — copy files from `overlays/` into the rootfs.
+8. **Install kernel + bootloader** — build (or fetch from cache) the kernel and
    bootloader per the machine definition, install into the rootfs/boot
    partition.
-8. **Generate disk image** — partition the output image per the partition layout
+9. **Generate disk image** — partition the output image per the partition layout
    and populate each partition.
+
+Output format can be specified with `--format`:
+
+```sh
+yoe build base-image --format sdcard    # raw disk image with partitions
+yoe build base-image --format rootfs    # tar.gz of the rootfs only
+yoe build base-image --format squashfs  # squashfs for read-only roots
+```
 
 ### `yoe flash`
 
 Writes a built image to a block device or SD card.
 
 ```sh
-# Flash to SD card (auto-detects the most recent image)
+# Flash to SD card (auto-detects the most recent image build)
 yoe flash /dev/sdX
 
-# Flash a specific image
-yoe flash --image dev --machine beaglebone-black /dev/sdX
+# Flash a specific image recipe's output
+yoe flash base-image /dev/sdX
+
+# Flash for a specific machine
+yoe flash base-image --machine beaglebone-black /dev/sdX
 
 # Dry run — show what would happen
 yoe flash --dry-run /dev/sdX
@@ -205,8 +200,8 @@ hardware or native CI runners.
 # Run the most recently built image (auto-detects machine/image)
 yoe run
 
-# Run a specific image/machine combination
-yoe run --image dev --machine qemu-x86_64
+# Run a specific image recipe
+yoe run dev-image --machine qemu-x86_64
 
 # Forward host port 2222 to guest SSH (port 22)
 yoe run --port 2222:22
@@ -592,19 +587,16 @@ yoe init my-product --machine beaglebone-black
 # Add a recipe for your application
 $EDITOR recipes/myapp.toml
 
-# Build everything
+# Build everything (packages and images)
 yoe build --all
 
-# Assemble the image
-yoe image
-
 # Flash to an SD card
-yoe flash /dev/sdX
+yoe flash base-image /dev/sdX
 
-# Later, update just your app
+# Later, update just your app and rebuild the image
 $EDITOR recipes/myapp.toml  # bump version
 yoe build myapp
-yoe image                    # only myapp's .apk changed, fast rebuild
+yoe build base-image         # only myapp's .apk changed, fast rebuild
 
 # Or update the device directly
 scp repo/myapp-1.3.0-r0.apk device:/tmp/

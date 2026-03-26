@@ -57,20 +57,24 @@ defconfig = "am335x_evm_defconfig"
 partition-layout = "partitions/bbb.toml"  # reference to partition layout file
 ```
 
-### Image Definition (`images/<name>.toml`)
+### Image Recipe (`recipes/<name>.toml`)
 
-Defines what packages go into a root filesystem image. Image assembly uses `apk`
-to install packages from the Yoe-NG repository into a clean rootfs.
+An image is just a recipe with `type = "image"`. Instead of compiling source
+code, it assembles a root filesystem from packages and produces a disk image.
+Image recipes live in `recipes/` alongside package recipes — they participate in
+the same DAG, use the same caching, and are built with `yoe build`.
 
 ```toml
-[image]
-name = "base"
+[recipe]
+name = "base-image"
+version = "1.0.0"
+type = "image"          # "package" (default) or "image"
 description = "Minimal bootable system"
 
-[packages]
-# Package names as they appear in the apk repository.
+[depends]
+# Runtime deps for an image recipe = the packages installed into the rootfs.
 # The base system (glibc, busybox, systemd) is implicit unless excluded.
-include = [
+runtime = [
     "openssh",
     "networkmanager",
     "myapp",
@@ -78,30 +82,33 @@ include = [
 ]
 
 # Image-level configuration
-[config]
+[image]
 hostname = "yoe"
 timezone = "UTC"
 locale = "en_US.UTF-8"
+partition-layout = "partitions/default.toml"
 
 # Systemd services to enable
-[services]
+[image.services]
 enable = ["sshd", "NetworkManager", "myapp"]
 ```
 
 ### Image Composition and Variants
 
-Images can inherit from other images using the `extends` field, enabling a
-base + variant pattern without duplicating package lists.
+Image recipes can inherit from other image recipes using the `extends` field,
+enabling a base + variant pattern without duplicating package lists.
 
 ```toml
-# images/dev.toml — extends the base image with development tools
-[image]
-name = "dev"
+# recipes/dev-image.toml — extends base-image with development tools
+[recipe]
+name = "dev-image"
+version = "1.0.0"
+type = "image"
 description = "Development image with debug tools"
-extends = "base"       # inherits all packages and config from base.toml
+extends = "base-image"   # inherits all deps and config from base-image
 
-[packages]
-include = [
+[depends]
+runtime = [
     "gdb",
     "strace",
     "tcpdump",
@@ -112,36 +119,36 @@ exclude = [
     "monitoring-agent",   # not needed in dev
 ]
 
-[config]
+[image]
 hostname = "yoe-dev"      # overrides parent's hostname
 
-[services]
+[image.services]
 enable = ["sshd"]         # merged with parent's services
 ```
 
-The inheritance chain is resolved at image assembly time.
-`yoe image --image dev` installs everything from `base` plus the `dev`
-additions, minus any exclusions. Deep inheritance (dev extends base, debug
-extends dev) is supported but discouraged — keep it to one level for
-readability.
+The inheritance chain is resolved during the DAG resolution phase.
+`yoe build dev-image` installs everything from `base-image` plus the `dev-image`
+additions, minus any exclusions. Deep inheritance is supported but discouraged —
+keep it to one level for readability.
 
 **Conditional packages per machine:**
 
-Images can include machine-specific packages using the `[packages.machine.*]`
-table:
+Image recipes can include machine-specific packages using the
+`[depends.machine.*]` table:
 
 ```toml
-[packages]
-include = ["openssh", "myapp"]
+[depends]
+runtime = ["openssh", "myapp"]
 
-[packages.machine.beaglebone-black]
-include = ["bbb-dtb-overlay"]
+[depends.machine.beaglebone-black]
+runtime = ["bbb-dtb-overlay"]
 
-[packages.machine.raspberrypi4]
-include = ["rpi-firmware", "rpi-dt-overlays"]
+[depends.machine.raspberrypi4]
+runtime = ["rpi-firmware", "rpi-dt-overlays"]
 ```
 
-These are merged with the base package list when building for the named machine.
+These are merged with the base dependency list when building for the named
+machine.
 
 ### Package Recipe (`recipes/<name>.toml`)
 
@@ -316,11 +323,10 @@ my-project/
 │   ├── beaglebone-black.toml
 │   ├── raspberrypi4.toml
 │   └── qemu-arm64.toml
-├── images/
-│   ├── base.toml
-│   └── dev.toml
 ├── recipes/
-│   ├── openssh.toml
+│   ├── base-image.toml         # type = "image"
+│   ├── dev-image.toml          # type = "image", extends base-image
+│   ├── openssh.toml            # type = "package" (default)
 │   ├── zlib.toml
 │   ├── openssl.toml
 │   ├── myapp.toml
@@ -338,22 +344,17 @@ my-project/
 ## Build Flow
 
 ```
-  recipes/*.toml          (build-time: how to build)
+  recipes/*.toml              (all recipe types: package and image)
        │
        ▼
-  yoe-ng build            (invoke build steps / language toolchains)
+  yoe build                   (resolve DAG, then build in order)
        │
-       ▼
-  *.apk packages          (installable artifacts)
+       ├─ type=package ──▶ compile source ──▶ *.apk packages ──▶ repository/
        │
-       ▼
-  repository/             (apk-compatible package repo)
-       │
-       ▼
-  yoe-ng image            (apk install into rootfs + partition layout)
-       │
-       ▼
-  disk image              (flashable .img / .wic)
+       └─ type=image   ──▶ apk install deps into rootfs
+                           ──▶ apply overlays + config
+                           ──▶ partition + format
+                           ──▶ disk image (.img / .wic)
 ```
 
 ## Label-Based References
@@ -405,11 +406,12 @@ collisions between layers are an error — explicit overrides must be declared.
   PKGBUILD) and avoids inventing a new abstraction. The build environment is
   controlled and hermetic; the shell commands just describe what to run inside
   it.
-- **Unified recipe directory** — system packages and application packages both
-  live in `recipes/`. The output is always an `.apk` regardless of whether the
-  build used `make` or `cargo`. This keeps the model simple: recipe in, package
-  out.
-- **apk for image assembly** — image definitions are just package lists. The
-  `yoe-ng image` command creates a clean rootfs and runs `apk add` to populate
-  it from the repository, exactly like Alpine's image builder. This leverages
-  apk's dependency resolution rather than reimplementing it.
+- **Unified recipe directory** — system packages, application packages, and
+  images all live in `recipes/`. The `type` field determines the output:
+  packages produce `.apk` files, images produce disk images. This keeps the
+  model simple: one concept (recipe), one directory, one DAG. Images are just
+  recipes whose "build step" is assembling a rootfs from their dependencies.
+- **apk for image assembly** — image recipes declare their packages as runtime
+  dependencies. `yoe build <image>` creates a clean rootfs and runs `apk add` to
+  populate it from the repository, exactly like Alpine's image builder. This
+  leverages apk's dependency resolution rather than reimplementing it.

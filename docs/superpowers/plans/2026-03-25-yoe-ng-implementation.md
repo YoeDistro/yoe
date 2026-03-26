@@ -33,7 +33,7 @@ on any dev machine). Phases 4+ require Linux with bubblewrap and apk-tools.
 | 3     | Source Management             | 1          | `yoe source fetch/list/verify/clean`, content-addressed cache                     |
 | 4     | Build Execution               | 2, 3       | `yoe build` with bubblewrap isolation, build step execution                       |
 | 5     | Package Creation & Repository | 4          | APK package creation, `yoe repo` commands, local repository                       |
-| 6     | Image Assembly                | 5          | `yoe image` — rootfs via apk, overlays, disk image generation                     |
+| 6     | Image Assembly                | 5          | Image recipe builds — rootfs via apk, overlays, disk image generation             |
 | 7     | Device Interaction            | 6          | `yoe flash`, `yoe run` (QEMU with KVM)                                            |
 | 8     | TUI                           | 2          | `yoe tui` — Bubble Tea interactive interface                                      |
 | 9     | Bootstrap                     | 5          | `yoe bootstrap stage0/stage1` — self-hosting toolchain                            |
@@ -53,8 +53,7 @@ cmd/yoe/main.go                    — entry point, switch/case command dispatch
 internal/config/project.go         — project discovery (find distro.toml)
 internal/config/distro.go          — distro.toml parsing + types
 internal/config/machine.go         — machine TOML parsing + types
-internal/config/image.go           — image TOML parsing + types
-internal/config/recipe.go          — recipe TOML parsing + types
+internal/config/recipe.go          — recipe TOML parsing + types (package + image)
 internal/config/partition.go       — partition layout TOML parsing + types
 internal/config/loader.go          — load all config from a project tree
 internal/init.go                   — yoe init logic
@@ -126,11 +125,11 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "Yoe-NG embedded Linux distribution builder\n\n")
 	fmt.Fprintf(os.Stderr, "Commands:\n")
 	fmt.Fprintf(os.Stderr, "  init <project-dir>      Create a new Yoe-NG project\n")
-	fmt.Fprintf(os.Stderr, "  build [recipes...]      Build packages from recipes\n")
-	fmt.Fprintf(os.Stderr, "  image                   Assemble a root filesystem image\n")
+	fmt.Fprintf(os.Stderr, "  build [recipes...]      Build recipes (packages and images)\n")
 	fmt.Fprintf(os.Stderr, "  flash <device>          Write an image to a device/SD card\n")
 	fmt.Fprintf(os.Stderr, "  run                     Run an image in QEMU\n")
 	fmt.Fprintf(os.Stderr, "  repo                    Manage the local apk package repository\n")
+	fmt.Fprintf(os.Stderr, "  cache                   Manage the build cache (local and remote)\n")
 	fmt.Fprintf(os.Stderr, "  source                  Download and manage source archives/repos\n")
 	fmt.Fprintf(os.Stderr, "  config                  View and edit project configuration\n")
 	fmt.Fprintf(os.Stderr, "  desc <recipe>           Describe a recipe or target\n")
@@ -158,7 +157,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "Examples:\n")
 	fmt.Fprintf(os.Stderr, "  %s init my-project --machine beaglebone-black\n", os.Args[0])
 	fmt.Fprintf(os.Stderr, "  %s build openssh\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "  %s image\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "  %s build base-image --machine raspberrypi4\n", os.Args[0])
 }
 
 // Stub command handlers — implemented in subsequent tasks
@@ -218,13 +217,20 @@ description = "Test distribution"
 
 [defaults]
 machine = "qemu-arm64"
-image = "base"
+image = "base-image"
 
 [repository]
 path = "/var/cache/yoe-ng/repo"
 
 [cache]
 path = "/var/cache/yoe-ng/build"
+
+[[cache.remote]]
+name = "team"
+type = "s3"
+bucket = "yoe-cache"
+endpoint = "https://minio.internal:9000"
+region = "us-east-1"
 
 [sources]
 go-proxy = "https://proxy.golang.org"
@@ -342,7 +348,28 @@ type RepoConfig struct {
 }
 
 type CacheConfig struct {
-	Path string `toml:"path"`
+	Path      string              `toml:"path"`
+	Remote    []CacheRemoteConfig `toml:"remote"`
+	Retention CacheRetention      `toml:"retention"`
+	Signing   CacheSigningConfig  `toml:"signing"`
+}
+
+type CacheRemoteConfig struct {
+	Name     string `toml:"name"`
+	Type     string `toml:"type"`     // "s3"
+	Bucket   string `toml:"bucket"`
+	Endpoint string `toml:"endpoint"`
+	Region   string `toml:"region"`
+	Prefix   string `toml:"prefix"`
+}
+
+type CacheRetention struct {
+	Days int `toml:"days"`
+}
+
+type CacheSigningConfig struct {
+	PublicKey  string `toml:"public-key"`
+	PrivateKey string `toml:"private-key"`
 }
 
 type SourcesConfig struct {
@@ -812,14 +839,29 @@ type RecipeConfig struct {
 	Depends DependsConfig `toml:"depends"`
 	Build   BuildConfig   `toml:"build"`
 	Package PackageConfig `toml:"package"`
+	Image   ImageSection  `toml:"image"` // only for type = "image"
+}
+
+type ImageSection struct {
+	Hostname        string        `toml:"hostname"`
+	Timezone        string        `toml:"timezone"`
+	Locale          string        `toml:"locale"`
+	PartitionLayout string        `toml:"partition-layout"`
+	Services        ImageServices `toml:"services"`
+}
+
+type ImageServices struct {
+	Enable []string `toml:"enable"`
 }
 
 type RecipeInfo struct {
 	Name        string `toml:"name"`
 	Version     string `toml:"version"`
+	Type        string `toml:"type"`        // "package" (default) or "image"
 	Description string `toml:"description"`
 	License     string `toml:"license"`
 	Language    string `toml:"language"`
+	Extends     string `toml:"extends"`     // for image inheritance
 }
 
 type SourceConfig struct {
@@ -863,8 +905,16 @@ func ParseRecipeConfig(path string) (*RecipeConfig, error) {
 	if cfg.Recipe.Version == "" {
 		return nil, fmt.Errorf("recipe config %s: recipe.version is required", path)
 	}
-	if len(cfg.Build.Steps) == 0 && cfg.Build.Command == "" {
-		return nil, fmt.Errorf("recipe config %s: build.steps or build.command is required", path)
+	// Default type to "package"
+	if cfg.Recipe.Type == "" {
+		cfg.Recipe.Type = "package"
+	}
+	if cfg.Recipe.Type != "package" && cfg.Recipe.Type != "image" {
+		return nil, fmt.Errorf("recipe config %s: type must be 'package' or 'image', got %q", path, cfg.Recipe.Type)
+	}
+	// Package recipes require build steps; image recipes do not
+	if cfg.Recipe.Type == "package" && len(cfg.Build.Steps) == 0 && cfg.Build.Command == "" {
+		return nil, fmt.Errorf("recipe config %s: build.steps or build.command is required for package recipes", path)
 	}
 
 	return &cfg, nil
@@ -905,35 +955,36 @@ git commit -m "feat: add recipe TOML parsing for system and app packages"
 
 ---
 
-### Task 5: Image and Partition Configuration Parsing
+### Task 5: Image Recipe and Partition Configuration Parsing
 
 **Files:**
 
-- Create: `internal/config/image.go`
 - Create: `internal/config/partition.go`
-- Create: `internal/config/image_test.go`
 - Create: `internal/config/partition_test.go`
-- Create: `testdata/valid-project/images/base.toml`
+- Create: `testdata/valid-project/recipes/base-image.toml`
 - Create: `testdata/valid-project/partitions/bbb.toml`
 
 - [ ] **Step 1: Create test fixtures**
 
-Create `testdata/valid-project/images/base.toml`:
+Create `testdata/valid-project/recipes/base-image.toml`:
 
 ```toml
-[image]
-name = "base"
+[recipe]
+name = "base-image"
+version = "1.0.0"
+type = "image"
 description = "Minimal bootable system"
 
-[packages]
-include = ["openssh", "networkmanager", "myapp"]
+[depends]
+runtime = ["openssh", "networkmanager", "myapp"]
 
-[config]
+[image]
 hostname = "yoe"
 timezone = "UTC"
 locale = "en_US.UTF-8"
+partition-layout = "partitions/bbb.toml"
 
-[services]
+[image.services]
 enable = ["sshd", "NetworkManager", "myapp"]
 ```
 
@@ -958,34 +1009,30 @@ root = true
 
 - [ ] **Step 2: Write the failing tests**
 
-Create `internal/config/image_test.go`:
+Add to `internal/config/recipe_test.go`:
 
 ```go
-package config
-
-import (
-	"path/filepath"
-	"testing"
-)
-
-func TestParseImageConfig(t *testing.T) {
-	path := filepath.Join("..", "..", "testdata", "valid-project", "images", "base.toml")
-	img, err := ParseImageConfig(path)
+func TestParseRecipeConfig_ImageRecipe(t *testing.T) {
+	path := filepath.Join("..", "..", "testdata", "valid-project", "recipes", "base-image.toml")
+	recipe, err := ParseRecipeConfig(path)
 	if err != nil {
-		t.Fatalf("ParseImageConfig(%q): %v", path, err)
+		t.Fatalf("ParseRecipeConfig(%q): %v", path, err)
 	}
 
-	if img.Image.Name != "base" {
-		t.Errorf("Name = %q, want %q", img.Image.Name, "base")
+	if recipe.Recipe.Type != "image" {
+		t.Errorf("Type = %q, want %q", recipe.Recipe.Type, "image")
 	}
-	if len(img.Packages.Include) != 3 {
-		t.Errorf("Packages.Include has %d entries, want 3", len(img.Packages.Include))
+	if recipe.Recipe.Name != "base-image" {
+		t.Errorf("Name = %q, want %q", recipe.Recipe.Name, "base-image")
 	}
-	if img.Config.Hostname != "yoe" {
-		t.Errorf("Config.Hostname = %q, want %q", img.Config.Hostname, "yoe")
+	if len(recipe.Depends.Runtime) != 3 {
+		t.Errorf("Depends.Runtime has %d entries, want 3", len(recipe.Depends.Runtime))
 	}
-	if len(img.Services.Enable) != 3 {
-		t.Errorf("Services.Enable has %d entries, want 3", len(img.Services.Enable))
+	if recipe.Image.Hostname != "yoe" {
+		t.Errorf("Image.Hostname = %q, want %q", recipe.Image.Hostname, "yoe")
+	}
+	if len(recipe.Image.Services.Enable) != 3 {
+		t.Errorf("Image.Services.Enable has %d entries, want 3", len(recipe.Image.Services.Enable))
 	}
 }
 ```
@@ -1033,69 +1080,14 @@ func TestParsePartitionConfig_NoRootPartition(t *testing.T) {
 - [ ] **Step 3: Run tests to verify they fail**
 
 ```bash
-go test ./internal/config/ -run "TestParseImageConfig|TestParsePartitionConfig" -v
+go test ./internal/config/ -run "TestParseRecipeConfig_ImageRecipe|TestParsePartitionConfig" -v
 ```
 
-Expected: FAIL — functions not defined.
+Expected: FAIL — `ParsePartitionConfig` not defined (image recipe test should
+already pass from Task 4's implementation since `ImageSection` and
+`ImageServices` types were added to recipe.go).
 
-- [ ] **Step 4: Write the implementations**
-
-Create `internal/config/image.go`:
-
-```go
-package config
-
-import (
-	"fmt"
-	"os"
-
-	"github.com/BurntSushi/toml"
-)
-
-type ImageConfig struct {
-	Image    ImageInfo     `toml:"image"`
-	Packages ImagePackages `toml:"packages"`
-	Config   ImageSettings `toml:"config"`
-	Services ImageServices `toml:"services"`
-}
-
-type ImageInfo struct {
-	Name        string `toml:"name"`
-	Description string `toml:"description"`
-}
-
-type ImagePackages struct {
-	Include []string `toml:"include"`
-}
-
-type ImageSettings struct {
-	Hostname string `toml:"hostname"`
-	Timezone string `toml:"timezone"`
-	Locale   string `toml:"locale"`
-}
-
-type ImageServices struct {
-	Enable []string `toml:"enable"`
-}
-
-func ParseImageConfig(path string) (*ImageConfig, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("reading image config: %w", err)
-	}
-
-	var cfg ImageConfig
-	if err := toml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parsing image config %s: %w", path, err)
-	}
-
-	if cfg.Image.Name == "" {
-		return nil, fmt.Errorf("image config %s: image.name is required", path)
-	}
-
-	return &cfg, nil
-}
-```
+- [ ] **Step 4: Write the partition implementation**
 
 Create `internal/config/partition.go`:
 
@@ -1176,7 +1168,7 @@ size = "64M"
 - [ ] **Step 6: Run tests to verify they pass**
 
 ```bash
-go test ./internal/config/ -run "TestParseImageConfig|TestParsePartitionConfig" -v
+go test ./internal/config/ -run "TestParseRecipeConfig_ImageRecipe|TestParsePartitionConfig" -v
 ```
 
 Expected: All tests PASS.
@@ -1184,8 +1176,8 @@ Expected: All tests PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add internal/config/image.go internal/config/partition.go internal/config/image_test.go internal/config/partition_test.go testdata/
-git commit -m "feat: add image and partition TOML parsing"
+git add internal/config/partition.go internal/config/partition_test.go internal/config/recipe_test.go testdata/
+git commit -m "feat: add image recipe support and partition TOML parsing"
 ```
 
 ---
@@ -1320,8 +1312,10 @@ func TestLoadProject(t *testing.T) {
 	if len(project.Images) == 0 {
 		t.Error("expected at least one image, got 0")
 	}
-	if _, ok := project.Images["base"]; !ok {
-		t.Error("expected image 'base' to be loaded")
+	if r, ok := project.Recipes["base-image"]; !ok {
+		t.Error("expected recipe 'base-image' to be loaded")
+	} else if r.Recipe.Type != "image" {
+		t.Errorf("base-image type = %q, want %q", r.Recipe.Type, "image")
 	}
 }
 ```
@@ -1351,8 +1345,7 @@ type Project struct {
 	Root       string
 	Distro     *DistroConfig
 	Machines   map[string]*MachineConfig
-	Images     map[string]*ImageConfig
-	Recipes    map[string]*RecipeConfig
+	Recipes    map[string]*RecipeConfig    // includes both package and image recipes
 	Partitions map[string]*PartitionConfig
 }
 
@@ -1371,7 +1364,6 @@ func LoadProject(dir string) (*Project, error) {
 		Root:       root,
 		Distro:     distro,
 		Machines:   make(map[string]*MachineConfig),
-		Images:     make(map[string]*ImageConfig),
 		Recipes:    make(map[string]*RecipeConfig),
 		Partitions: make(map[string]*PartitionConfig),
 	}
@@ -1387,17 +1379,7 @@ func LoadProject(dir string) (*Project, error) {
 		return nil, err
 	}
 
-	if err := project.loadDir("images", func(path string) error {
-		img, err := ParseImageConfig(path)
-		if err != nil {
-			return err
-		}
-		project.Images[img.Image.Name] = img
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-
+	// All recipes (package and image types) live in recipes/
 	if err := project.loadDir("recipes", func(path string) error {
 		r, err := ParseRecipeConfig(path)
 		if err != nil {
@@ -1487,7 +1469,6 @@ func TestRunInit(t *testing.T) {
 	for _, path := range []string{
 		"distro.toml",
 		"machines",
-		"images",
 		"recipes",
 		"partitions",
 		"overlays",
@@ -1584,7 +1565,7 @@ func RunInit(projectDir string, machine string) error {
 		return fmt.Errorf("project already exists at %s (distro.toml found)", projectDir)
 	}
 
-	dirs := []string{"machines", "images", "recipes", "partitions", "overlays"}
+	dirs := []string{"machines", "recipes", "partitions", "overlays"}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(filepath.Join(projectDir, dir), 0755); err != nil {
 			return fmt.Errorf("creating directory %s: %w", dir, err)
@@ -2165,9 +2146,10 @@ cycles, propagate machine config through the graph.
 
 ---
 
-## Phase 5: Package Creation & Repository (detailed plan TBD)
+## Phase 5: Package Creation, Repository & Cache (detailed plan TBD)
 
-**Goal:** Create .apk packages from build output and manage a local repository.
+**Goal:** Create .apk packages from build output, manage a local repository, and
+provide S3-compatible remote cache for sharing builds across CI/team.
 
 **Key components:**
 
@@ -2175,8 +2157,11 @@ cycles, propagate machine config through the graph.
   tar.gz packaging)
 - `internal/packaging/sign.go` — package signing
 - `internal/repo/local.go` — local repository management (index, add, remove)
-- `internal/repo/remote.go` — S3-compatible push/pull
-- `cmd/yoe/main.go` — add `repo` command to switch statement
+- `internal/repo/remote.go` — S3-compatible push/pull for repo
+- `internal/cache/local.go` — local content-addressed build cache
+- `internal/cache/remote.go` — S3-compatible remote cache (push/pull/gc)
+- `internal/cache/sign.go` — cache package signing and verification
+- `cmd/yoe/main.go` — add `repo` and `cache` commands to switch statement
 
 **Depends on:** Phase 4 (build output in $DESTDIR)
 
@@ -2184,7 +2169,10 @@ cycles, propagate machine config through the graph.
 
 ## Phase 6: Image Assembly (detailed plan TBD)
 
-**Goal:** Assemble bootable disk images from packages.
+**Goal:** Implement the image recipe build path — when `yoe build` encounters a
+recipe with `type = "image"`, assemble a bootable disk image from packages
+instead of compiling source code. No separate `yoe image` command; images are
+built through the same `yoe build` pipeline.
 
 **Key components:**
 
@@ -2193,7 +2181,8 @@ cycles, propagate machine config through the graph.
 - `internal/image/overlay.go` — overlay file copying
 - `internal/image/disk.go` — partition table creation, filesystem formatting
 - `internal/image/kernel.go` — kernel + bootloader installation
-- `cmd/yoe/main.go` — add `image` command to switch statement
+- `internal/build/executor.go` — extend to dispatch image recipes to image
+  assembly instead of sandbox build
 
 **Depends on:** Phase 5 (populated package repository) **System requirements:**
 user namespaces (bubblewrap), mkfs.ext4, mkfs.vfat, systemd-repart

@@ -163,8 +163,8 @@ architecture.
 ```sh
 # Normal development — no bootstrap needed
 yoe build myapp
-yoe image
-yoe flash /dev/sdX
+yoe build base-image
+yoe flash base-image /dev/sdX
 ```
 
 ### Pre-Built Bootstrap
@@ -201,7 +201,7 @@ isolation) for all operations that need pseudo-root access. Inside a user
 namespace, the process sees itself as uid 0 and can perform all root-like
 filesystem operations — no LD_PRELOAD, no daemon, no database.
 
-### How `yoe image` Uses This
+### How Image Recipes Use This
 
 ```sh
 # Image assembly inside a user namespace
@@ -259,13 +259,13 @@ First time setup:
   docker pull alpine → install yoe, apk-tools, bwrap
   yoe init my-project
   yoe repo pull              ← fetch pre-built base packages
-  yoe build --all            ← build project recipes in Yoe-NG chroot
+  yoe build --all            ← build all recipes (packages + images)
 
 Day-to-day development:
   $EDITOR recipes/myapp.toml
   yoe build myapp            ← builds in isolated bwrap sandbox
-  yoe image                  ← assembles rootfs with apk
-  yoe flash /dev/sdX
+  yoe build base-image       ← assembles rootfs with apk
+  yoe flash base-image /dev/sdX
 
 Adding a host tool:
   $EDITOR recipes/cmake.toml ← write a recipe for the tool
@@ -384,10 +384,10 @@ machines/                    images/
 └── qemu-arm64.toml          └── production.toml
 
 Build matrix:
-  yoe image --machine beaglebone-black --image base
-  yoe image --machine beaglebone-black --image dev
-  yoe image --machine raspberrypi4 --image production
-  yoe image --all   ← builds all valid combinations
+  yoe build base-image --machine beaglebone-black
+  yoe build dev-image --machine beaglebone-black
+  yoe build production-image --machine raspberrypi4
+  yoe build --all --type image   ← builds all image recipes for all machines
 ```
 
 ### Package Sharing Across Targets

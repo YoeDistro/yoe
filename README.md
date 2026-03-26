@@ -28,7 +28,8 @@ with the following priorities:
   - Fast enough
   - Simple
   - Easy to cross-compile
-  - Scripting is TBD (not Python)
+  - Starlark for recipes and build rules (see
+    [Build Languages](build-languages.md))
 - Leverage knowledge and build systems that already exist and integrate with
   them.
 - 64-bit only (no 32-bit)
@@ -55,6 +56,8 @@ with the following priorities:
   isolation
 - [Comparisons](comparisons.md) — how Yoe-NG relates to Yocto, Buildroot,
   Alpine, Arch, and NixOS
+- [Build Languages](build-languages.md) — analysis of Starlark, CUE, Nix, and
+  other embeddable languages for recipe definitions
 
 ## Inspirations
 
@@ -226,8 +229,6 @@ real-world services without surprises.
 
 ## Open Questions
 
-- **Scripting language for tooling:** The README notes "not Python" — candidates
-  include shell (limited), Lua (embeddable in Go), or just Go templates.
 - **Reproducibility guarantees:** How strict? Bit-for-bit reproducible, or "same
   inputs produce functionally equivalent outputs"?
 - **SDK / application development workflow:** How do developers build and test
