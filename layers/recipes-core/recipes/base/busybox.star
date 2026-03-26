@@ -1,8 +1,8 @@
 package(
     name = "busybox",
     version = "1.36.1",
-    source = "https://busybox.net/downloads/busybox-1.36.1.tar.bz2",
-    sha256 = "b8cc24c9574d809e7279c3be349795c5d5ceb6fdf19ca709f80cde50e47de314",
+    source = "https://git.busybox.net/busybox",
+    tag = "1_36_1",
     license = "GPL-2.0",
     description = "Swiss army knife of embedded Linux",
     build = [

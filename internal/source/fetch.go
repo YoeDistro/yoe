@@ -104,25 +104,40 @@ func fetchHTTP(cacheDir string, recipe *yoestar.Recipe) (string, error) {
 }
 
 // fetchGit clones or updates a bare git repo in the cache.
+// Uses shallow clone by default (only the pinned tag/branch) to avoid
+// downloading full history. For the Linux kernel this is ~4GB vs ~200MB.
 func fetchGit(cacheDir string, recipe *yoestar.Recipe) (string, error) {
-	// Cache key: sha256 of repo URL
-	urlHash := fmt.Sprintf("%x", sha256.Sum256([]byte(recipe.Source)))
+	// Cache key: sha256 of repo URL + ref (different tags get different clones)
+	ref := recipe.Tag
+	if ref == "" {
+		ref = recipe.Branch
+	}
+	if ref == "" {
+		ref = "HEAD"
+	}
+	cacheKey := recipe.Source + "#" + ref
+	urlHash := fmt.Sprintf("%x", sha256.Sum256([]byte(cacheKey)))
 	barePath := filepath.Join(cacheDir, urlHash+".git")
 
 	if _, err := os.Stat(barePath); os.IsNotExist(err) {
-		// Clone bare
-		fmt.Printf("Cloning %s...\n", recipe.Source)
-		cmd := exec.Command("git", "clone", "--bare", recipe.Source, barePath)
+		fmt.Printf("Cloning %s (ref: %s)...\n", recipe.Source, ref)
+
+		// Shallow clone of just the ref we need
+		args := []string{"clone", "--bare", "--depth", "1"}
+		if recipe.Tag != "" {
+			args = append(args, "--branch", recipe.Tag)
+		} else if recipe.Branch != "" {
+			args = append(args, "--branch", recipe.Branch)
+		}
+		args = append(args, recipe.Source, barePath)
+
+		cmd := exec.Command("git", args...)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return "", fmt.Errorf("git clone %s: %s\n%s", recipe.Source, err, out)
 		}
 	} else {
-		// Fetch updates
-		fmt.Printf("Fetching updates for %s...\n", recipe.Source)
-		cmd := exec.Command("git", "--git-dir", barePath, "fetch", "--all", "--prune")
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return "", fmt.Errorf("git fetch %s: %s\n%s", recipe.Source, err, out)
-		}
+		// Repo already cached — fetch the specific ref if needed
+		fmt.Printf("Using cached %s (ref: %s)\n", recipe.Source, ref)
 	}
 
 	return barePath, nil
