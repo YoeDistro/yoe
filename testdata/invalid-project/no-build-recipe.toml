@@ -1,0 +1,10 @@
+[recipe]
+name = "broken"
+version = "1.0.0"
+
+[source]
+url = "https://example.com/broken.tar.gz"
+
+[depends]
+build = []
+runtime = []
