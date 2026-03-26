@@ -15,11 +15,101 @@ These are distinct concepts in Yoe-NG:
   artifacts published to a repository and consumed by `apk` during image
   assembly or on-device updates.
 
-The build flow is: **recipe → build → .apk package → repository → image /
+The build flow is: **recipe → build → .apk package(s) → repository → image /
 device**.
 
 Recipes are inputs to the build system. Packages are outputs. A developer edits
 recipes; a device only ever sees packages.
+
+### Sub-packages
+
+A single recipe can produce multiple `.apk` packages. This is the same concept
+as Yocto's `PACKAGES` splitting and Debian's binary packages — one source build
+produces granular installable units:
+
+| Sub-package | Contents                               | Typical consumer        |
+| ----------- | -------------------------------------- | ----------------------- |
+| `openssh`   | Binaries, default config               | Production images       |
+| `-dev`      | Headers, pkg-config files, static libs | Build-time dependencies |
+| `-doc`      | Man pages, info pages                  | Development images      |
+| `-dbg`      | Debug symbols (DWARF)                  | Debug/development       |
+
+**In a recipe:**
+
+```python
+load("//classes/autotools.star", "autotools")
+
+autotools(
+    name = "openssh",
+    version = "9.6p1",
+    source = "https://cdn.openbsd.org/.../openssh-9.6p1.tar.gz",
+    deps = ["zlib", "openssl"],
+    # Sub-package splitting — default splits are automatic, but can be
+    # customized or disabled per recipe.
+    subpackages = {
+        "dev": auto(),          # headers + pkg-config (automatic)
+        "doc": auto(),          # man pages (automatic)
+        "dbg": auto(),          # debug symbols (automatic)
+        "server": subpackage(   # custom split
+            description = "OpenSSH server",
+            files = ["/usr/sbin/sshd", "/etc/ssh/sshd_config"],
+            services = ["sshd"],
+        ),
+        "client": subpackage(
+            description = "OpenSSH client utilities",
+            files = ["/usr/bin/ssh", "/usr/bin/scp", "/usr/bin/sftp"],
+        ),
+    },
+)
+```
+
+**How it works:**
+
+1. The recipe builds once, installing everything into `$DESTDIR`.
+2. After the build, the `yoe` engine splits `$DESTDIR` into sub-packages based
+   on the `subpackages` declaration.
+3. `auto()` splits use file-path conventions (same as Alpine's apk and Yocto's
+   `PACKAGES_DYNAMIC`):
+   - `-dev`: `/usr/include/**`, `/usr/lib/*.a`, `/usr/lib/pkgconfig/**`
+   - `-doc`: `/usr/share/man/**`, `/usr/share/doc/**`, `/usr/share/info/**`
+   - `-dbg`: `/usr/lib/debug/**` (debug symbols separated by `strip`)
+4. Custom splits use explicit file lists.
+5. Each sub-package becomes a separate `.apk` in the repository.
+
+**Default behavior:** If `subpackages` is omitted, automatic `-dev`, `-doc`, and
+`-dbg` splits are applied. To produce a single unsplit package, set
+`subpackages = {}`.
+
+**In image recipes:**
+
+```python
+image(
+    name = "production-image",
+    packages = [
+        "openssh-server",       # just the server, not the full openssh
+        "networkmanager",
+    ],
+)
+
+image(
+    name = "dev-image",
+    packages = [
+        "openssh",              # full package
+        "openssh-dev",          # headers for on-device compilation
+        "openssh-doc",          # man pages
+        "gdb",
+    ],
+)
+```
+
+Sub-packages keep production images small (no headers, no man pages, no debug
+symbols) while making development images fully featured. This is the same
+tradeoff Yocto and Debian make — granular packaging trades a small amount of
+recipe complexity for significant control over image contents.
+
+Alpine's apk already supports sub-packages natively (Alpine's `openssh` APKBUILD
+produces `openssh`, `openssh-doc`, `openssh-dev`, etc.), so Yoe-NG follows a
+proven pattern.
 
 ## Why Starlark
 

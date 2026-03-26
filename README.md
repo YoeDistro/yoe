@@ -34,7 +34,9 @@ with the following priorities:
   them.
 - 64-bit only (no 32-bit)
 - x86, ARM, RISC-V only
-- Granular packaging (Like Yocto/Debian)
+- Granular packaging (like Yocto/Debian) — one recipe can produce multiple
+  sub-packages (`-dev`, `-doc`, `-dbg`, custom splits), keeping production
+  images small while development images stay fully featured
 - Composable
   - Pull in recipes/packages using GitHub URLs
   - Able to compose config files like KAS
