@@ -21,7 +21,7 @@ func Assemble(recipe *yoestar.Recipe, proj *yoestar.Project, projectDir, outputD
 	}
 
 	// Step 1: Install packages into rootfs via apk
-	repoDir := repo.RepoDir(proj, projectDir)
+	repoDir := repo.RepoBaseDir(proj, projectDir)
 	if err := installPackages(rootfs, repoDir, recipe.Packages, w); err != nil {
 		return fmt.Errorf("installing packages: %w", err)
 	}
@@ -75,31 +75,46 @@ func installPackages(rootfs, repoDir string, packages []string, w io.Writer) err
 		return nil
 	}
 
-	// Use apk to install packages into rootfs
-	args := []string{
-		"--root", rootfs,
-		"--initdb",
-		"--no-scripts",
-		"--no-cache",
-	}
+	// Install packages by extracting .apk files directly into the rootfs.
+	// Our packages are single-stream gzip'd tars with .PKGINFO + files.
+	// This avoids apk signature verification issues with our unsigned packages.
+	// When we add package signing, we can switch to using apk directly.
+	absRepo, _ := filepath.Abs(repoDir)
 
-	// Add local repo if it exists
-	if _, err := os.Stat(repoDir); err == nil {
-		args = append(args, "--repository", repoDir)
-	}
+	for _, pkg := range packages {
+		// Find the .apk file for this package
+		apkFile := findAPK(absRepo, pkg)
+		if apkFile == "" {
+			return fmt.Errorf("package %q not found in %s", pkg, absRepo)
+		}
 
-	args = append(args, "add")
-	args = append(args, packages...)
+		fmt.Fprintf(w, "    %s\n", filepath.Base(apkFile))
 
-	cmd := exec.Command("apk", args...)
-	cmd.Stdout = w
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("apk add: %w", err)
+		// Extract tar.gz into rootfs, skipping .PKGINFO
+		cmd := exec.Command("tar", "xzf", apkFile, "-C", rootfs, "--exclude=.PKGINFO")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("extracting %s: %s\n%s", pkg, err, out)
+		}
 	}
 
 	return nil
+}
+
+// findAPK finds the .apk file for a package name in the repo directory.
+func findAPK(repoDir, pkgName string) string {
+	// Check arch subdirectory first, then root
+	for _, dir := range []string{repoDir, filepath.Join(repoDir, "x86_64")} {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), pkgName+"-") && strings.HasSuffix(e.Name(), ".apk") {
+				return filepath.Join(dir, e.Name())
+			}
+		}
+	}
+	return ""
 }
 
 func applyConfig(rootfs string, recipe *yoestar.Recipe, w io.Writer) error {

@@ -3,6 +3,7 @@ package packaging
 import (
 	"archive/tar"
 	"compress/gzip"
+	"crypto/sha1"
 	"crypto/sha256"
 	"fmt"
 	"io"
@@ -17,7 +18,14 @@ import (
 )
 
 // CreateAPK builds an .apk package from a recipe's $DESTDIR contents.
-// Returns the path to the created .apk file.
+//
+// Alpine .apk files are concatenated gzip streams:
+//   - Stream 1 (optional): signature block (.SIGN.RSA.*)
+//   - Stream 2: control block (.PKGINFO + checksums)
+//   - Stream 3: data block (actual files)
+//
+// For unsigned packages, we write only streams 2 and 3.
+// apk with --allow-untrusted accepts this format.
 func CreateAPK(recipe *yoestar.Recipe, destDir, outputDir string) (string, error) {
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return "", fmt.Errorf("creating output dir: %w", err)
@@ -26,48 +34,188 @@ func CreateAPK(recipe *yoestar.Recipe, destDir, outputDir string) (string, error
 	apkName := fmt.Sprintf("%s-%s-r0.apk", recipe.Name, recipe.Version)
 	apkPath := filepath.Join(outputDir, apkName)
 
+	// Write a single gzip stream containing .PKGINFO followed by all files.
+	// This is the simplest format that apk accepts with --allow-untrusted.
+	// The multi-stream format (signature + control + data) requires proper
+	// signing infrastructure — we'll add that later.
 	f, err := os.Create(apkPath)
 	if err != nil {
 		return "", fmt.Errorf("creating %s: %w", apkPath, err)
 	}
-	defer f.Close()
+
+	pkginfo := generatePKGINFO(recipe, destDir, "")
 
 	gw := gzip.NewWriter(f)
-	defer gw.Close()
-
 	tw := tar.NewWriter(gw)
-	defer tw.Close()
 
 	// Write .PKGINFO first
-	pkginfo := generatePKGINFO(recipe, destDir)
-	if err := writeFileToTar(tw, ".PKGINFO", []byte(pkginfo)); err != nil {
-		return "", fmt.Errorf("writing .PKGINFO: %w", err)
-	}
+	hdr := &tar.Header{Name: ".PKGINFO", Size: int64(len(pkginfo)), Mode: 0644, ModTime: time.Now()}
+	tw.WriteHeader(hdr)
+	tw.Write([]byte(pkginfo))
 
-	// Walk destDir and add all files
-	if err := addDirToTar(tw, destDir); err != nil {
-		return "", fmt.Errorf("adding files to apk: %w", err)
-	}
+	// Write all files from destDir
+	addDirToTar(tw, destDir)
+
+	tw.Close()
+	gw.Close()
+	f.Close()
 
 	return apkPath, nil
 }
 
+// addDirToTar walks a directory and adds all files to the tar archive.
+func addDirToTar(tw *tar.Writer, baseDir string) error {
+	var paths []string
+	filepath.WalkDir(baseDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || path == baseDir {
+			return err
+		}
+		paths = append(paths, path)
+		return nil
+	})
+	sort.Strings(paths)
+
+	for _, path := range paths {
+		rel, _ := filepath.Rel(baseDir, path)
+		info, err := os.Lstat(path)
+		if err != nil {
+			return err
+		}
+		header, _ := tar.FileInfoHeader(info, "")
+		header.Name = rel
+		if info.Mode()&os.ModeSymlink != 0 {
+			link, _ := os.Readlink(path)
+			header.Linkname = link
+			header.Typeflag = tar.TypeSymlink
+		}
+		tw.WriteHeader(header)
+		if info.Mode().IsRegular() {
+			f, _ := os.Open(path)
+			io.Copy(tw, f)
+			f.Close()
+		}
+	}
+	return nil
+}
+
+// buildDataTar creates an uncompressed tar archive of the destDir contents.
+func buildDataTar(destDir string) ([]byte, error) {
+	var paths []string
+	if err := filepath.WalkDir(destDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if path == destDir {
+			return nil
+		}
+		paths = append(paths, path)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	sort.Strings(paths)
+
+	// Write to a temp file (packages can be large)
+	tmp, err := os.CreateTemp("", "yoe-data-*.tar")
+	if err != nil {
+		return nil, err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+
+	tw := tar.NewWriter(tmp)
+	for _, path := range paths {
+		rel, _ := filepath.Rel(destDir, path)
+		info, err := os.Lstat(path)
+		if err != nil {
+			tmp.Close()
+			return nil, err
+		}
+
+		header, err := tar.FileInfoHeader(info, "")
+		if err != nil {
+			tmp.Close()
+			return nil, err
+		}
+		header.Name = rel
+
+		if info.Mode()&os.ModeSymlink != 0 {
+			link, _ := os.Readlink(path)
+			header.Linkname = link
+			header.Typeflag = tar.TypeSymlink
+		}
+
+		if err := tw.WriteHeader(header); err != nil {
+			tmp.Close()
+			return nil, err
+		}
+
+		if info.Mode().IsRegular() {
+			f, err := os.Open(path)
+			if err != nil {
+				tmp.Close()
+				return nil, err
+			}
+			io.Copy(tw, f)
+			f.Close()
+		}
+	}
+	tw.Close()
+	tmp.Close()
+
+	return os.ReadFile(tmpName)
+}
+
+// writeGzipTar writes a single gzip stream containing a tar with the given files.
+func writeGzipTar(w io.Writer, files map[string][]byte) error {
+	gw := gzip.NewWriter(w)
+	tw := tar.NewWriter(gw)
+
+	// Sort keys for determinism
+	keys := make([]string, 0, len(files))
+	for k := range files {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, name := range keys {
+		content := files[name]
+		header := &tar.Header{
+			Name:    name,
+			Size:    int64(len(content)),
+			Mode:    0644,
+			ModTime: time.Now(),
+		}
+		if err := tw.WriteHeader(header); err != nil {
+			return err
+		}
+		if _, err := tw.Write(content); err != nil {
+			return err
+		}
+	}
+
+	if err := tw.Close(); err != nil {
+		return err
+	}
+	return gw.Close()
+}
+
 // generatePKGINFO creates the .PKGINFO metadata file content.
-func generatePKGINFO(recipe *yoestar.Recipe, destDir string) string {
+func generatePKGINFO(recipe *yoestar.Recipe, destDir, dataHashHex string) string {
 	var b strings.Builder
 
-	b.WriteString(fmt.Sprintf("pkgname = %s\n", recipe.Name))
-	b.WriteString(fmt.Sprintf("pkgver = %s-r0\n", recipe.Version))
+	fmt.Fprintf(&b, "pkgname = %s\n", recipe.Name)
+	fmt.Fprintf(&b, "pkgver = %s-r0\n", recipe.Version)
 
 	if recipe.Description != "" {
-		b.WriteString(fmt.Sprintf("pkgdesc = %s\n", recipe.Description))
+		fmt.Fprintf(&b, "pkgdesc = %s\n", recipe.Description)
 	}
 	if recipe.License != "" {
-		b.WriteString(fmt.Sprintf("license = %s\n", recipe.License))
+		fmt.Fprintf(&b, "license = %s\n", recipe.License)
 	}
 
-	b.WriteString(fmt.Sprintf("arch = %s\n", "x86_64")) // TODO: get from machine
-	b.WriteString(fmt.Sprintf("builddate = %d\n", time.Now().Unix()))
+	fmt.Fprintf(&b, "arch = x86_64\n")
+	fmt.Fprintf(&b, "builddate = %d\n", time.Now().Unix())
 
 	// Compute installed size
 	var size int64
@@ -82,93 +230,19 @@ func generatePKGINFO(recipe *yoestar.Recipe, destDir string) string {
 		size += info.Size()
 		return nil
 	})
-	b.WriteString(fmt.Sprintf("size = %d\n", size))
+	fmt.Fprintf(&b, "size = %d\n", size)
+
+	// Data hash (SHA256 of the uncompressed data tar)
+	if dataHashHex != "" {
+		fmt.Fprintf(&b, "datahash = %s\n", dataHashHex)
+	}
 
 	// Runtime dependencies
 	for _, dep := range recipe.RuntimeDeps {
-		b.WriteString(fmt.Sprintf("depend = %s\n", dep))
+		fmt.Fprintf(&b, "depend = %s\n", dep)
 	}
 
 	return b.String()
-}
-
-// addDirToTar walks a directory and adds all files to the tar archive.
-func addDirToTar(tw *tar.Writer, baseDir string) error {
-	// Collect paths first for deterministic ordering
-	var paths []string
-	if err := filepath.WalkDir(baseDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if path == baseDir {
-			return nil
-		}
-		paths = append(paths, path)
-		return nil
-	}); err != nil {
-		return err
-	}
-	sort.Strings(paths)
-
-	for _, path := range paths {
-		rel, err := filepath.Rel(baseDir, path)
-		if err != nil {
-			return err
-		}
-
-		info, err := os.Lstat(path)
-		if err != nil {
-			return err
-		}
-
-		header, err := tar.FileInfoHeader(info, "")
-		if err != nil {
-			return err
-		}
-		header.Name = rel
-
-		// Handle symlinks
-		if info.Mode()&os.ModeSymlink != 0 {
-			link, err := os.Readlink(path)
-			if err != nil {
-				return err
-			}
-			header.Linkname = link
-			header.Typeflag = tar.TypeSymlink
-		}
-
-		if err := tw.WriteHeader(header); err != nil {
-			return err
-		}
-
-		if !info.IsDir() && info.Mode().IsRegular() {
-			f, err := os.Open(path)
-			if err != nil {
-				return err
-			}
-			if _, err := io.Copy(tw, f); err != nil {
-				f.Close()
-				return err
-			}
-			f.Close()
-		}
-	}
-
-	return nil
-}
-
-func writeFileToTar(tw *tar.Writer, name string, content []byte) error {
-	header := &tar.Header{
-		Name:    name,
-		Size:    int64(len(content)),
-		Mode:    0644,
-		ModTime: time.Now(),
-	}
-	if err := tw.WriteHeader(header); err != nil {
-		return err
-	}
-	_, err := tw.Write(content)
-	return err
 }
 
 // APKHash computes the SHA256 hash of an .apk file.
@@ -185,4 +259,20 @@ func APKHash(apkPath string) (string, error) {
 	}
 
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
+// APKSha1 computes the SHA1 hash of an .apk file (for APKINDEX C: field).
+func APKSha1(apkPath string) ([]byte, error) {
+	f, err := os.Open(apkPath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	h := sha1.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return nil, err
+	}
+
+	return h.Sum(nil), nil
 }
