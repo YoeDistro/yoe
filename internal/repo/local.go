@@ -45,7 +45,7 @@ func Publish(apkPath, repoDir string) error {
 		return err
 	}
 
-	return nil
+	return GenerateIndex(repoDir)
 }
 
 // List prints all packages in the local repository.
