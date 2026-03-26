@@ -570,6 +570,7 @@ my-project/
 │   ├── myapp.star              # go_binary() class
 │   └── monitoring-agent.star
 ├── classes/                    # reusable build rule functions
+├── commands/                  # custom yoe subcommands
 │   ├── my_go_service.star
 │   └── ...
 └── overlays/
