@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // LoadProject finds the project root, evaluates all .star files, and returns
@@ -100,15 +101,20 @@ func LoadProjectFromRoot(root string) (*Project, error) {
 }
 
 func evalDir(eng *Engine, root, subdir string) error {
-	pattern := filepath.Join(root, subdir, "*.star")
-	matches, err := filepath.Glob(pattern)
-	if err != nil {
-		return fmt.Errorf("globbing %s: %w", pattern, err)
-	}
-	for _, path := range matches {
+	base := filepath.Join(root, subdir)
+	return filepath.WalkDir(base, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(d.Name(), ".star") {
+			return nil
+		}
 		if err := eng.ExecFile(path); err != nil {
 			return fmt.Errorf("evaluating %s: %w", path, err)
 		}
-	}
-	return nil
+		return nil
+	})
 }
