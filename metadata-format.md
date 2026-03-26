@@ -1,315 +1,453 @@
-# Metadata File Format
+# Recipe & Configuration Format
 
-Yoe-NG uses a small set of declarative metadata files to describe how to build
-software and assemble system images. All metadata files use
-[TOML](https://toml.io/) — it's human-friendly, has a well-defined spec, and has
-excellent Go library support.
+Yoe-NG uses [Starlark](https://github.com/google/starlark-go) — a deterministic,
+sandboxed dialect of Python — for all build definitions. Recipes, classes,
+machine definitions, and project configuration are all `.star` files. See
+[Build Languages](build-languages.md) for the rationale behind this choice.
 
 ## Recipes vs. Packages
 
 These are distinct concepts in Yoe-NG:
 
-- **Recipes** — TOML files in the project tree that describe _how to build_
+- **Recipes** — `.star` files in the project tree that describe _how to build_
   software. They live in version control and are a development/CI concern.
 - **Packages** — `.apk` files that recipes _produce_. They are installable
   artifacts published to a repository and consumed by `apk` during image
   assembly or on-device updates.
 
-The build flow is: **recipe → build → .apk package → repository → image /
+The build flow is: **recipe → build → .apk package(s) → repository → image /
 device**.
 
 Recipes are inputs to the build system. Packages are outputs. A developer edits
 recipes; a device only ever sees packages.
 
-## Why TOML
+### Sub-packages
 
-- Readable and writable by humans without tooling.
-- Strict spec — no YAML-style gotchas (Norway problem, implicit type coercion).
-- Comments are first-class — metadata files are self-documenting.
-- Native Go support via `BurntSushi/toml` or `pelletier/go-toml`.
-- Simpler than JSON5/JSONC for configuration use cases.
+A single recipe can produce multiple `.apk` packages. This is the same concept
+as Yocto's `PACKAGES` splitting and Debian's binary packages — one source build
+produces granular installable units:
+
+| Sub-package | Contents                               | Typical consumer        |
+| ----------- | -------------------------------------- | ----------------------- |
+| `openssh`   | Binaries, default config               | Production images       |
+| `-dev`      | Headers, pkg-config files, static libs | Build-time dependencies |
+| `-doc`      | Man pages, info pages                  | Development images      |
+| `-dbg`      | Debug symbols (DWARF)                  | Debug/development       |
+
+**In a recipe:**
+
+```python
+load("//classes/autotools.star", "autotools")
+
+autotools(
+    name = "openssh",
+    version = "9.6p1",
+    source = "https://cdn.openbsd.org/.../openssh-9.6p1.tar.gz",
+    deps = ["zlib", "openssl"],
+    # Sub-package splitting — default splits are automatic, but can be
+    # customized or disabled per recipe.
+    subpackages = {
+        "dev": auto(),          # headers + pkg-config (automatic)
+        "doc": auto(),          # man pages (automatic)
+        "dbg": auto(),          # debug symbols (automatic)
+        "server": subpackage(   # custom split
+            description = "OpenSSH server",
+            files = ["/usr/sbin/sshd", "/etc/ssh/sshd_config"],
+            services = ["sshd"],
+        ),
+        "client": subpackage(
+            description = "OpenSSH client utilities",
+            files = ["/usr/bin/ssh", "/usr/bin/scp", "/usr/bin/sftp"],
+        ),
+    },
+)
+```
+
+**How it works:**
+
+1. The recipe builds once, installing everything into `$DESTDIR`.
+2. After the build, the `yoe` engine splits `$DESTDIR` into sub-packages based
+   on the `subpackages` declaration.
+3. `auto()` splits use file-path conventions (same as Alpine's apk and Yocto's
+   `PACKAGES_DYNAMIC`):
+   - `-dev`: `/usr/include/**`, `/usr/lib/*.a`, `/usr/lib/pkgconfig/**`
+   - `-doc`: `/usr/share/man/**`, `/usr/share/doc/**`, `/usr/share/info/**`
+   - `-dbg`: `/usr/lib/debug/**` (debug symbols separated by `strip`)
+4. Custom splits use explicit file lists.
+5. Each sub-package becomes a separate `.apk` in the repository.
+
+**Default behavior:** If `subpackages` is omitted, automatic `-dev`, `-doc`, and
+`-dbg` splits are applied. To produce a single unsplit package, set
+`subpackages = {}`.
+
+**In image recipes:**
+
+```python
+image(
+    name = "production-image",
+    packages = [
+        "openssh-server",       # just the server, not the full openssh
+        "networkmanager",
+    ],
+)
+
+image(
+    name = "dev-image",
+    packages = [
+        "openssh",              # full package
+        "openssh-dev",          # headers for on-device compilation
+        "openssh-doc",          # man pages
+        "gdb",
+    ],
+)
+```
+
+Sub-packages keep production images small (no headers, no man pages, no debug
+symbols) while making development images fully featured. This is the same
+tradeoff Yocto and Debian make — granular packaging trades a small amount of
+recipe complexity for significant control over image contents.
+
+Alpine's apk already supports sub-packages natively (Alpine's `openssh` APKBUILD
+produces `openssh`, `openssh-doc`, `openssh-dev`, etc.), so Yoe-NG follows a
+proven pattern.
+
+## Why Starlark
+
+- **One language** — recipes, classes, machines, and project config are all
+  `.star` files. No TOML + shell + something-else stack.
+- **Python-like syntax** — most developers can read it immediately.
+- **Deterministic** — no side effects, no mutable global state. Critical for
+  content-addressed caching.
+- **Sandboxed** — recipes cannot perform arbitrary I/O or network access.
+- **Go-native** — the `go.starlark.net` library embeds directly in the `yoe`
+  binary.
+- **Composable** — functions, `load()`, and `**kwargs` provide natural
+  composition for layers and overrides.
+- **Battle-tested** — used by Bazel (Google), Buck2 (Meta), and Pants.
 
 ## Recipe Types
 
-### Machine Definition (`machines/<name>.toml`)
+### Machine Definition (`machines/<name>.star`)
 
 Describes a target board or platform.
 
-```toml
-[machine]
-name = "beaglebone-black"
-arch = "arm"            # arm, arm64, riscv64, x86_64
-description = "BeagleBone Black (AM3358)"
-
-[kernel]
-repo = "https://github.com/beagleboard/linux.git"
-branch = "6.6"
-defconfig = "bb.org_defconfig"
-device-trees = ["am335x-boneblack.dtb"]
-
-[bootloader]
-type = "u-boot"
-repo = "https://github.com/beagleboard/u-boot.git"
-branch = "v2024.01"
-defconfig = "am335x_evm_defconfig"
-
-[image]
-partition-layout = "partitions/bbb.toml"  # reference to partition layout file
+```python
+machine(
+    name = "beaglebone-black",
+    arch = "arm64",
+    description = "BeagleBone Black (AM3358)",
+    kernel = kernel(
+        repo = "https://github.com/beagleboard/linux.git",
+        branch = "6.6",
+        defconfig = "bb.org_defconfig",
+        device_trees = ["am335x-boneblack.dtb"],
+    ),
+    bootloader = uboot(
+        repo = "https://github.com/beagleboard/u-boot.git",
+        branch = "v2024.01",
+        defconfig = "am335x_evm_defconfig",
+    ),
+)
 ```
 
-### Image Recipe (`recipes/<name>.toml`)
+QEMU machines include emulation configuration:
 
-An image is just a recipe with `type = "image"`. Instead of compiling source
-code, it assembles a root filesystem from packages and produces a disk image.
-Image recipes live in `recipes/` alongside package recipes — they participate in
-the same DAG, use the same caching, and are built with `yoe build`.
+```python
+machine(
+    name = "qemu-x86_64",
+    arch = "x86_64",
+    kernel = kernel(
+        recipe = "linux-qemu",
+        cmdline = "console=ttyS0 root=/dev/vda2 rw",
+    ),
+    qemu = qemu_config(
+        machine = "q35",
+        cpu = "host",
+        memory = "1G",
+        firmware = "ovmf",
+        display = "none",
+    ),
+)
+```
 
-```toml
-[recipe]
-name = "base-image"
-version = "1.0.0"
-type = "image"          # "package" (default) or "image"
-description = "Minimal bootable system"
+### Image Recipe (`recipes/<name>.star`)
 
-[depends]
-# Runtime deps for an image recipe = the packages installed into the rootfs.
-# The base system (glibc, busybox, systemd) is implicit unless excluded.
-runtime = [
+An image is a recipe that assembles a root filesystem from packages and produces
+a disk image. Image recipes use the `image()` class function instead of
+`package()`. They participate in the same DAG, use the same caching, and are
+built with `yoe build`.
+
+```python
+load("//classes/image.star", "image")
+
+image(
+    name = "base-image",
+    version = "1.0.0",
+    description = "Minimal bootable system",
+    # Packages installed into the rootfs.
+    # The base system (glibc, busybox, systemd) is implicit unless excluded.
+    packages = [
+        "openssh",
+        "networkmanager",
+        "myapp",
+        "monitoring-agent",
+    ],
+    hostname = "yoe",
+    timezone = "UTC",
+    locale = "en_US.UTF-8",
+    services = ["sshd", "NetworkManager", "myapp"],
+    partitions = [
+        partition(label="boot", type="vfat", size="64M",
+                  contents=["MLO", "u-boot.img", "zImage", "*.dtb"]),
+        partition(label="rootfs", type="ext4", size="fill", root=True),
+    ],
+)
+```
+
+### Image Composition and Variants
+
+Image variants use plain Starlark variables and list concatenation — no special
+inheritance mechanism:
+
+```python
+load("//classes/image.star", "image")
+
+BASE_PACKAGES = [
     "openssh",
     "networkmanager",
     "myapp",
     "monitoring-agent",
 ]
 
-# Image-level configuration
-[image]
-hostname = "yoe"
-timezone = "UTC"
-locale = "en_US.UTF-8"
-partition-layout = "partitions/default.toml"
+BASE_SERVICES = ["sshd", "NetworkManager", "myapp"]
 
-# Systemd services to enable
-[image.services]
-enable = ["sshd", "NetworkManager", "myapp"]
-```
-
-### Image Composition and Variants
-
-Image recipes can inherit from other image recipes using the `extends` field,
-enabling a base + variant pattern without duplicating package lists.
-
-```toml
-# recipes/dev-image.toml — extends base-image with development tools
-[recipe]
-name = "dev-image"
-version = "1.0.0"
-type = "image"
-description = "Development image with debug tools"
-extends = "base-image"   # inherits all deps and config from base-image
-
-[depends]
-runtime = [
-    "gdb",
-    "strace",
-    "tcpdump",
-    "vim",
-]
-# Packages can also be excluded from the parent
-exclude = [
-    "monitoring-agent",   # not needed in dev
+BBB_PARTITIONS = [
+    partition(label="boot", type="vfat", size="64M",
+              contents=["MLO", "u-boot.img", "zImage", "*.dtb"]),
+    partition(label="rootfs", type="ext4", size="fill", root=True),
 ]
 
-[image]
-hostname = "yoe-dev"      # overrides parent's hostname
+image(
+    name = "base-image",
+    version = "1.0.0",
+    packages = BASE_PACKAGES,
+    services = BASE_SERVICES,
+    partitions = BBB_PARTITIONS,
+    hostname = "yoe",
+)
 
-[image.services]
-enable = ["sshd"]         # merged with parent's services
+image(
+    name = "dev-image",
+    version = "1.0.0",
+    description = "Development image with debug tools",
+    packages = BASE_PACKAGES + ["gdb", "strace", "tcpdump", "vim"],
+    exclude = ["monitoring-agent"],
+    services = BASE_SERVICES,
+    partitions = BBB_PARTITIONS,
+    hostname = "yoe-dev",
+)
 ```
-
-The inheritance chain is resolved during the DAG resolution phase.
-`yoe build dev-image` installs everything from `base-image` plus the `dev-image`
-additions, minus any exclusions. Deep inheritance is supported but discouraged —
-keep it to one level for readability.
 
 **Conditional packages per machine:**
 
-Image recipes can include machine-specific packages using the
-`[depends.machine.*]` table:
-
-```toml
-[depends]
-runtime = ["openssh", "myapp"]
-
-[depends.machine.beaglebone-black]
-runtime = ["bbb-dtb-overlay"]
-
-[depends.machine.raspberrypi4]
-runtime = ["rpi-firmware", "rpi-dt-overlays"]
+```python
+packages = ["openssh", "myapp"]
+if machine.arch == "arm64":
+    packages += ["arm64-firmware"]
 ```
 
-These are merged with the base dependency list when building for the named
-machine.
-
-### Package Recipe (`recipes/<name>.toml`)
+### Package Recipe (`recipes/<name>.star`)
 
 Describes how to build a system-level package (C/C++ libraries, system daemons,
-etc.) and produce an `.apk`. This is analogous to an Arch PKGBUILD or an Alpine
-APKBUILD.
+etc.) and produce an `.apk`. Uses a class function like `autotools()`,
+`cmake()`, or the generic `package()`.
 
-```toml
-[recipe]
-name = "openssh"
-version = "9.6p1"
-description = "OpenSSH client and server"
-license = "BSD"
+```python
+load("//classes/autotools.star", "autotools")
 
-[source]
-url = "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.6p1.tar.gz"
-sha256 = "..."
-
-[depends]
-# Build-time dependencies (must be built/installed before this recipe)
-build = ["zlib", "openssl"]
-# Runtime dependencies (recorded in the .apk, pulled in by apk on install)
-runtime = ["zlib", "openssl"]
-
-[build]
-# Build steps — plain shell commands run in the source directory.
-# The environment provides $PREFIX, $DESTDIR, $NPROC, and standard flags.
-steps = [
-    "./configure --prefix=$PREFIX --sysconfdir=/etc/ssh",
-    "make -j$NPROC",
-    "make DESTDIR=$DESTDIR install",
-]
-
-[package]
-# Metadata that ends up in the .apk's .PKGINFO
-units = ["sshd.service"]
-conffiles = ["/etc/ssh/sshd_config"]
+autotools(
+    name = "openssh",
+    version = "9.6p1",
+    description = "OpenSSH client and server",
+    license = "BSD",
+    source = "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.6p1.tar.gz",
+    sha256 = "...",
+    configure_args = ["--sysconfdir=/etc/ssh"],
+    deps = ["zlib", "openssl"],
+    runtime_deps = ["zlib", "openssl"],
+    services = ["sshd"],
+    conffiles = ["/etc/ssh/sshd_config"],
+)
 ```
 
-### Application Recipe (`recipes/<name>.toml`)
+Or using the generic `package()` for custom build steps:
 
-Describes an application built with a language-native build system. The recipe
-delegates the build to the language toolchain and packages the result as an
-`.apk`.
-
-```toml
-[recipe]
-name = "myapp"
-version = "1.2.3"
-description = "Edge data collection service"
-license = "Apache-2.0"
-language = "go"         # go, rust, zig, python, javascript
-
-[source]
-repo = "https://github.com/example/myapp.git"
-tag = "v1.2.3"
-# Or track a branch:
-# branch = "main"
-
-[depends]
-build = []
-runtime = []
-
-[build]
-# Language-specific build command (run in the source checkout)
-command = "go build -o $DESTDIR/usr/bin/myapp ./cmd/myapp"
-
-[package]
-units = ["myapp.service"]
-conffiles = ["/etc/myapp/config.toml"]
-environment = { DATA_DIR = "/var/lib/myapp" }
+```python
+package(
+    name = "openssh",
+    version = "9.6p1",
+    source = "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.6p1.tar.gz",
+    sha256 = "...",
+    deps = ["zlib", "openssl"],
+    runtime_deps = ["zlib", "openssl"],
+    build = [
+        "./configure --prefix=$PREFIX --sysconfdir=/etc/ssh",
+        "make -j$NPROC",
+        "make DESTDIR=$DESTDIR install",
+    ],
+    services = ["sshd"],
+    conffiles = ["/etc/ssh/sshd_config"],
+)
 ```
 
-Note: both system packages and application packages use the same `[recipe]`
-header and produce `.apk` files. The distinction is in how they build (shell
-steps vs. language toolchain) and what they depend on. They share a single
-`recipes/` directory.
+### Application Recipe (`recipes/<name>.star`)
 
-### Distro Configuration (`distro.toml`)
+Applications built with language-native build systems use language-specific
+class functions that delegate to the language toolchain.
+
+```python
+load("//classes/go.star", "go_binary")
+
+go_binary(
+    name = "myapp",
+    version = "1.2.3",
+    description = "Edge data collection service",
+    license = "Apache-2.0",
+    source = "https://github.com/example/myapp.git",
+    tag = "v1.2.3",
+    package = "./cmd/myapp",
+    services = ["myapp"],
+    conffiles = ["/etc/myapp/config.toml"],
+    environment = {"DATA_DIR": "/var/lib/myapp"},
+)
+```
+
+Language-specific classes handle the build details — `go_binary()` sets up
+`GOMODCACHE`, runs `go build`, and packages the result. Similar classes exist
+for Rust (`rust_binary()`), Zig (`zig_binary()`), Python (`python_package()`),
+and Node.js (`node_package()`).
+
+### Project Configuration (`PROJECT.star`)
 
 Top-level configuration that ties everything together.
 
-```toml
-[distro]
-name = "yoe"
-version = "0.1.0"
-description = "Yoe-NG embedded Linux distribution"
-
-[defaults]
-machine = "qemu-arm64"
-image = "base"
-
-[repository]
-# Local package repository (populated by builds)
-path = "/var/cache/yoe-ng/repo"
-# Optional remote repository (S3-compatible, for sharing built packages)
-# remote = "s3://yoe-ng-repo/packages"
-
-[cache]
-# Content-addressed build cache (local)
-path = "/var/cache/yoe-ng/build"
-
-# Remote cache — S3-compatible object storage for sharing builds across
-# CI runners and team members. Multiple remotes can be configured;
-# they are checked in order after the local cache.
-[[cache.remote]]
-name = "team"
-type = "s3"
-bucket = "yoe-cache"
-endpoint = "https://minio.internal:9000"  # self-hosted MinIO
-region = "us-east-1"
-prefix = "v1/"
-# credentials via AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY env vars
-
-# [[cache.remote]]
-# name = "ci"
-# type = "s3"
-# bucket = "yoe-ci-cache"
-# endpoint = "https://s3.amazonaws.com"
-# region = "us-east-1"
-
-# Cache retention — objects not accessed within this period are eligible
-# for deletion. Managed by S3 lifecycle policies; this value is advisory
-# for `yoe cache gc` on local disk.
-[cache.retention]
-days = 90
-
-# Package signing for remote cache integrity
-[cache.signing]
-public-key = "keys/cache.pub"
-# private-key is typically provided via YOE_CACHE_SIGNING_KEY env var
-# private-key = "keys/cache.key"
-
-[sources]
-# Upstream mirrors / proxies for language package managers.
-# These reduce external network dependency and speed up builds.
-go-proxy = "https://proxy.golang.org"
-# cargo-registry = "https://..."
-# npm-registry = "https://..."
-# pypi-mirror = "https://..."
+```python
+project(
+    name = "yoe",
+    version = "0.1.0",
+    description = "Yoe-NG embedded Linux distribution",
+    defaults = defaults(
+        machine = "qemu-arm64",
+        image = "base-image",
+    ),
+    repository = repository(
+        path = "/var/cache/yoe-ng/repo",
+    ),
+    cache = cache(
+        path = "/var/cache/yoe-ng/build",
+        remote = [
+            s3_cache(
+                name = "team",
+                bucket = "yoe-cache",
+                endpoint = "https://minio.internal:9000",
+                region = "us-east-1",
+            ),
+        ],
+        retention_days = 90,
+        signing = "keys/cache.pub",
+    ),
+    sources = sources(
+        go_proxy = "https://proxy.golang.org",
+    ),
+    layers = [
+        layer("github.com/yoe/recipes-core", ref = "v1.0.0"),
+        layer("github.com/vendor/bsp-recipes", ref = "main"),
+    ],
+)
 ```
 
-### Partition Layout (`partitions/<name>.toml`)
+## Classes
 
-Defines disk partition layout for image generation.
+Classes are Starlark functions that define build pipelines for different recipe
+types. They encapsulate the _how to build_ logic so that recipes only declare
+_what to build_.
 
-```toml
-[disk]
-type = "gpt"            # gpt or mbr
+### Built-in Classes
 
-[[partition]]
-label = "boot"
-type = "vfat"
-size = "64M"
-contents = ["MLO", "u-boot.img", "zImage", "*.dtb"]
+These ship with `yoe` and cover common build patterns:
 
-[[partition]]
-label = "rootfs"
-type = "ext4"
-size = "fill"           # use remaining space
-root = true
+| Class              | Description                                   |
+| ------------------ | --------------------------------------------- |
+| `package()`        | Generic package — custom build steps as shell |
+| `autotools()`      | configure / make / make install               |
+| `cmake()`          | CMake build                                   |
+| `meson()`          | Meson + Ninja build                           |
+| `go_binary()`      | Go application                                |
+| `rust_binary()`    | Rust application (Cargo)                      |
+| `zig_binary()`     | Zig application                               |
+| `python_package()` | Python package (pip/uv)                       |
+| `node_package()`   | Node.js package (npm/pnpm)                    |
+| `image()`          | Root filesystem image assembly                |
+
+### Class Composition
+
+Classes compose through function calls. A recipe can use multiple classes, and
+classes can wrap other classes:
+
+```python
+load("//classes/autotools.star", "autotools")
+load("//classes/systemd.star", "systemd_service")
+
+# Use both autotools and systemd classes
+autotools(
+    name = "openssh",
+    version = "9.6p1",
+    configure_args = ["--sysconfdir=/etc/ssh"],
+    deps = ["zlib", "openssl"],
+)
+
+systemd_service(
+    name = "openssh",
+    unit = "sshd.service",
+    conffiles = ["/etc/ssh/sshd_config"],
+)
+```
+
+Or create a combined class:
+
+```python
+# classes/systemd_autotools.star
+load("//classes/autotools.star", "autotools")
+load("//classes/systemd.star", "systemd_service")
+
+def systemd_autotools(name, unit, conffiles=[], **kwargs):
+    autotools(name=name, **kwargs)
+    systemd_service(name=name, unit=unit, conffiles=conffiles)
+```
+
+### Custom Classes
+
+Projects can define their own classes in `classes/` for patterns specific to
+their codebase:
+
+```python
+# classes/my_go_service.star
+load("//classes/go.star", "go_binary")
+load("//classes/systemd.star", "systemd_service")
+
+def my_go_service(name, version, source, **kwargs):
+    """Standard pattern for our Go microservices."""
+    go_binary(
+        name = name,
+        version = version,
+        source = source,
+        **kwargs,
+    )
+    systemd_service(
+        name = name,
+        unit = name + ".service",
+        conffiles = ["/etc/" + name + "/config.toml"],
+    )
 ```
 
 ## Directory Structure
@@ -318,24 +456,24 @@ A typical Yoe-NG project layout:
 
 ```
 my-project/
-├── distro.toml
+├── PROJECT.star
 ├── machines/
-│   ├── beaglebone-black.toml
-│   ├── raspberrypi4.toml
-│   └── qemu-arm64.toml
+│   ├── beaglebone-black.star
+│   ├── raspberrypi4.star
+│   └── qemu-arm64.star
 ├── recipes/
-│   ├── base-image.toml         # type = "image"
-│   ├── dev-image.toml          # type = "image", extends base-image
-│   ├── openssh.toml            # type = "package" (default)
-│   ├── zlib.toml
-│   ├── openssl.toml
-│   ├── myapp.toml
-│   └── monitoring-agent.toml
-├── partitions/
-│   ├── bbb.toml
-│   └── rpi.toml
+│   ├── base-image.star         # image() class
+│   ├── dev-image.star          # image() class, extends base
+│   ├── openssh.star            # autotools() class
+│   ├── zlib.star
+│   ├── openssl.star
+│   ├── myapp.star              # go_binary() class
+│   └── monitoring-agent.star
+├── classes/                    # reusable build rule functions
+│   ├── my_go_service.star
+│   └── ...
 └── overlays/
-    └── custom-configs/     # files copied directly into rootfs
+    └── custom-configs/         # files copied directly into rootfs
         └── etc/
             └── myapp/
                 └── config.toml
@@ -344,74 +482,87 @@ my-project/
 ## Build Flow
 
 ```
-  recipes/*.toml              (all recipe types: package and image)
+  recipes/*.star               (all recipe types: package and image)
        │
        ▼
-  yoe build                   (resolve DAG, then build in order)
+  yoe build                    (evaluate Starlark, resolve DAG, build)
        │
-       ├─ type=package ──▶ compile source ──▶ *.apk packages ──▶ repository/
+       ├─ package() ──▶ compile source ──▶ *.apk packages ──▶ repository/
        │
-       └─ type=image   ──▶ apk install deps into rootfs
-                           ──▶ apply overlays + config
-                           ──▶ partition + format
-                           ──▶ disk image (.img / .wic)
+       └─ image()   ──▶ apk install deps into rootfs
+                        ──▶ apply overlays + config
+                        ──▶ partition + format
+                        ──▶ disk image (.img / .wic)
 ```
 
 ## Label-Based References
 
-Inspired by GN's `//path/to:target` labels, Yoe-NG uses a URI-style scheme for
-referencing recipes across repositories. This enables the composability goal of
-pulling in recipes from external sources (similar to KAS config composition).
+Inspired by Bazel's label system and GN's `//path/to:target`, Yoe-NG uses a
+label scheme for referencing recipes and classes across repositories:
 
-```
-# Local recipe (in the current project)
-openssh                         # shorthand
-recipes/openssh                 # explicit local path
+```python
+# Local references (within the current project)
+load("//classes/autotools.star", "autotools")   # from project root
+load("//recipes/openssh.star", "openssh_config") # load shared config
 
-# External recipe (from a GitHub repository)
-github.com/yoe/recipes-core//openssh
-github.com/vendor/bsp-recipes//kernel-custom
-
-# Pinned to a specific version/commit
-github.com/yoe/recipes-core//openssh@v1.2.0
-github.com/yoe/recipes-core//openssh@abc123f
+# External references (from layers)
+load("@recipes-core//openssh.star", "openssh")
+load("@vendor-bsp//kernel.star", "vendor_kernel")
 ```
 
-External recipe references are declared in `distro.toml`:
+Layer names (`@recipes-core`, `@vendor-bsp`) map to the layers declared in
+`PROJECT.star`. When `yoe` evaluates recipes, it fetches and caches external
+layers, then resolves all `load()` references to concrete files.
 
-```toml
-[layers]
-# Pull in shared recipe collections (similar to Yocto layers or KAS includes)
-recipes-core = { url = "github.com/yoe/recipes-core", ref = "v1.0.0" }
-bsp-vendor   = { url = "github.com/vendor/bsp-recipes", ref = "main" }
+## Layer Composition
+
+Layers enable the vendor BSP / product overlay pattern without modifying
+upstream recipes:
+
+```python
+# Layer 1: @recipes-core/openssh.star — base recipe as a function
+def openssh(extra_deps=[], extra_configure_args=[], **overrides):
+    autotools(
+        name = "openssh",
+        version = "9.6p1",
+        deps = ["zlib", "openssl"] + extra_deps,
+        configure_args = ["--sysconfdir=/etc/ssh"] + extra_configure_args,
+        **overrides,
+    )
+
+# Layer 2: @vendor-bsp/openssh.star — vendor extends it
+load("@recipes-core//openssh.star", "openssh")
+openssh(extra_deps=["vendor-crypto"])
+
+# Layer 3: product recipe — further customization
+load("@vendor-bsp//openssh.star", "openssh")
+openssh(extra_configure_args=["--with-pam"])
 ```
 
-When `yoe` resolves the dependency graph, it fetches and caches external recipe
-collections, then resolves all references to concrete recipe files. Name
-collisions between layers are an error — explicit overrides must be declared.
+Each layer is explicit about what it modifies and where the base comes from.
+This is more traceable than Yocto's bbappend system — you can grep for the
+function call to find all modifications.
 
 ## Design Notes
 
-- **TOML over YAML/JSON** — avoids YAML's implicit typing pitfalls and JSON's
-  lack of comments. TOML is strict enough to prevent ambiguity but readable
-  enough to edit by hand.
-- **One file per recipe** — each recipe is its own file. This keeps diffs clean
-  and makes it easy to add/remove components.
+- **Starlark over TOML/YAML** — pure data formats accumulate escape hatches
+  (conditional deps, shell in strings, inheritance). Starlark makes the implicit
+  explicit while remaining readable for simple cases. See
+  [Build Languages](build-languages.md) for the full analysis.
+- **One file per recipe** — each recipe is its own `.star` file. This keeps
+  diffs clean and makes it easy to add/remove components.
 - **Recipes and packages are separate concerns** — recipes are
   version-controlled build instructions; packages are binary artifacts. This
   separation enables building once and deploying many times, sharing packages
   across teams, and on-device incremental updates via `apk`.
-- **Shell commands for build steps** — recipe build steps are plain shell
-  commands rather than a DSL. This is intentionally simple (like Arch's
-  PKGBUILD) and avoids inventing a new abstraction. The build environment is
-  controlled and hermetic; the shell commands just describe what to run inside
-  it.
+- **Classes as functions** — build patterns (autotools, cmake, go) are Starlark
+  functions, not a type system. Multiple classes compose through function calls.
+  This is simpler and more flexible than Yocto's class inheritance.
 - **Unified recipe directory** — system packages, application packages, and
-  images all live in `recipes/`. The `type` field determines the output:
-  packages produce `.apk` files, images produce disk images. This keeps the
-  model simple: one concept (recipe), one directory, one DAG. Images are just
-  recipes whose "build step" is assembling a rootfs from their dependencies.
-- **apk for image assembly** — image recipes declare their packages as runtime
+  images all live in `recipes/`. The class function determines the output:
+  `package()` / `autotools()` / etc. produce `.apk` files, `image()` produces
+  disk images. One concept (recipe), one directory, one DAG.
+- **apk for image assembly** — image recipes declare their packages as
   dependencies. `yoe build <image>` creates a clean rootfs and runs `apk add` to
   populate it from the repository, exactly like Alpine's image builder. This
   leverages apk's dependency resolution rather than reimplementing it.

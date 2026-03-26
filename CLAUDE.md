@@ -10,17 +10,19 @@ alternative to Yocto. Currently in the **design/documentation phase** with no
 source code yet. The repository contains architectural specifications across
 several markdown files.
 
-Core design: Go CLI (`yoe`) + TOML metadata + apk packages + bubblewrap
-isolation. Native builds only (no cross-compilation). Base system: glibc +
-busybox + systemd.
+Core design: Go CLI (`yoe`) + Starlark recipes/config + apk packages +
+bubblewrap isolation. Native builds only (no cross-compilation). Base system:
+glibc + busybox + systemd.
 
 ## Repository Structure
 
 - `README.md` — project philosophy, design goals, comparisons overview
-- `yoe-tool.md` — `yoe` CLI command reference (init, build, image, flash, etc.)
-- `metadata-format.md` — TOML spec for recipes, machines, images, partitions
+- `yoe-tool.md` — `yoe` CLI command reference (init, build, flash, etc.)
+- `metadata-format.md` — Starlark recipe and configuration spec
 - `build-environment.md` — three-tier build isolation architecture (bootstrap,
   build root, per-recipe sandbox)
+- `build-languages.md` — analysis of Starlark, CUE, Nix, and other embeddable
+  languages
 - `comparisons.md` — detailed comparison with Yocto, Buildroot, Alpine, Arch,
   NixOS, GN
 - `envsetup.sh` — shell functions (source it, don't execute)
@@ -43,7 +45,10 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
 
 ## Key Design Decisions
 
-- **TOML** for all metadata (not YAML/JSON)
+- **Starlark** for all recipes and config (Python-like, deterministic,
+  sandboxed)
+- **Classes as functions** — build patterns (autotools, cmake, image) are
+  Starlark functions, not a type system
 - **apk** package manager (same as Alpine, but with glibc)
 - **bubblewrap** for build isolation (not Docker) — 1ms overhead, unprivileged,
   no daemon
@@ -53,8 +58,8 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
   makes this feasible
 - **Language-native package managers** (Go modules, Cargo, npm, pip) instead of
   reimplementing dependency resolution
-- **Label-based references** inspired by Google GN (e.g.,
-  `github.com/yoe/recipes-core//openssh@v1.2.0`)
+- **Label-based references** inspired by Bazel (e.g.,
+  `load("@recipes-core//openssh.star", "openssh")`)
 - **Two-phase build**: resolve DAG then execute (inspired by GN's
   generate-then-build)
 - **Content-addressed caching**: input hash determines output, enabling remote

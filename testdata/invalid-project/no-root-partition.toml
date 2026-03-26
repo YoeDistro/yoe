@@ -1,7 +1,0 @@
-[disk]
-type = "gpt"
-
-[[partition]]
-label = "boot"
-type = "vfat"
-size = "64M"

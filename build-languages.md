@@ -477,8 +477,9 @@ library Yoe-NG would use:
 
 The starlark-go library is actively maintained by Google and used in production
 by a diverse set of Go projects. The pattern of embedding starlark-go to provide
-a sandboxed, deterministic configuration language in a Go CLI is well-established
-— Yoe-NG would be following a proven approach, not blazing a new trail.
+a sandboxed, deterministic configuration language in a Go CLI is
+well-established — Yoe-NG would be following a proven approach, not blazing a
+new trail.
 
 ## Open Questions
 

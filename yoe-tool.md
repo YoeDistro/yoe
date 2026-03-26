@@ -51,11 +51,10 @@ Creates:
 
 ```
 my-project/
-├── distro.toml
+├── PROJECT.star
 ├── machines/
-├── images/
 ├── recipes/
-├── partitions/
+├── classes/
 └── overlays/
 ```
 
@@ -67,10 +66,11 @@ yoe init my-project --machine beaglebone-black
 
 ### `yoe build`
 
-Builds one or more recipes. Package recipes produce `.apk` packages and publish
-them to the local repository. Image recipes assemble a root filesystem and
-produce a disk image. The recipe's `type` field determines the behavior — the
-command is the same for both.
+Builds one or more recipes. Package recipes (`package()`, `autotools()`, etc.)
+produce `.apk` packages and publish them to the local repository. Image recipes
+(`image()`) assemble a root filesystem and produce a disk image. The class
+function used in the `.star` file determines the behavior — the command is the
+same for both.
 
 ```sh
 # Build a single package recipe
@@ -89,7 +89,7 @@ yoe build base-image --machine raspberrypi4
 yoe build --all
 
 # Build all image recipes for all machines (full matrix)
-yoe build --all --type image
+yoe build --all --class image
 
 # Build a recipe and all its dependencies
 yoe build --with-deps myapp
@@ -117,48 +117,51 @@ model. The entire dependency graph is resolved and validated _before_ any build
 work starts. This catches missing dependencies, cycles, and configuration errors
 up front rather than mid-build.
 
-1. **Resolve dependencies** — read the recipe's `[depends]` table and
-   topologically sort the build order. Validate that all referenced recipes
-   exist and the graph is acyclic. **If any errors are found, stop here** — no
-   partial builds.
-2. **Check cache** — compute a content hash of the recipe + source + build
+1. **Evaluate Starlark** — load and evaluate all `.star` recipe files to produce
+   the set of build targets. Each class function call (`package()`,
+   `autotools()`, `image()`, etc.) registers a target.
+2. **Resolve dependencies** — topologically sort the build order from declared
+   dependencies. Validate that all referenced recipes exist and the graph is
+   acyclic. **If any errors are found, stop here** — no partial builds.
+3. **Check cache** — compute a content hash of the recipe + source + build
    dependencies. If a cached `.apk` with that hash exists (locally or in a
    remote cache), skip the build.
-3. **Fetch source** — download the source archive or clone the git repo (see
+4. **Fetch source** — download the source archive or clone the git repo (see
    `yoe source` below). Sources are cached in `$YOE_CACHE/sources/`.
-4. **Prepare build environment** — set up an isolated build root with only
+5. **Prepare build environment** — set up an isolated build root with only
    declared build dependencies installed via `apk`. This ensures hermetic
    builds.
-5. **Execute build steps** — run the recipe's `[build].steps` or
-   `[build].command` in the build root. The environment provides:
+6. **Execute build steps** — run the build commands defined by the class
+   function in the build root. The environment provides:
    - `$PREFIX` — install prefix (typically `/usr`)
    - `$DESTDIR` — staging directory for installed files
    - `$NPROC` — number of available CPU cores
    - `$ARCH` — target architecture
-6. **Package** — collect files from `$DESTDIR`, generate `.PKGINFO` from the
+7. **Package** — collect files from `$DESTDIR`, generate `.PKGINFO` from the
    recipe metadata, and create the `.apk` archive.
-7. **Publish** — add the `.apk` to the local repository and update the repo
+8. **Publish** — add the `.apk` to the local repository and update the repo
    index.
 
-**For image recipes** (type = "image"), steps 3-7 are replaced with image
+**For image recipes** (`image()` class), steps 4-8 are replaced with image
 assembly:
 
-1. **Resolve dependencies** — same as above.
-2. **Check cache** — same as above.
-3. **Read machine definition** — parse `machines/<name>.toml` for architecture,
-   kernel, bootloader, and partition layout.
-4. **Create empty rootfs** — set up a temporary directory.
-5. **Install packages** — run `apk add --root <rootfs>` with the Yoe-NG
-   repository to install all runtime dependencies. apk handles dependency
+1. **Evaluate Starlark** — same as above.
+2. **Resolve dependencies** — same as above.
+3. **Check cache** — same as above.
+4. **Read machine definition** — evaluate `machines/<name>.star` for
+   architecture, kernel, bootloader, and partition layout.
+5. **Create empty rootfs** — set up a temporary directory.
+6. **Install packages** — run `apk add --root <rootfs>` with the Yoe-NG
+   repository to install all declared packages. apk handles dependency
    resolution.
-6. **Apply configuration** — set hostname, timezone, locale, enable systemd
-   services per the image recipe's `[image]` section.
-7. **Apply overlays** — copy files from `overlays/` into the rootfs.
-8. **Install kernel + bootloader** — build (or fetch from cache) the kernel and
+7. **Apply configuration** — set hostname, timezone, locale, enable systemd
+   services per the image recipe's configuration.
+8. **Apply overlays** — copy files from `overlays/` into the rootfs.
+9. **Install kernel + bootloader** — build (or fetch from cache) the kernel and
    bootloader per the machine definition, install into the rootfs/boot
    partition.
-9. **Generate disk image** — partition the output image per the partition layout
-   and populate each partition.
+10. **Generate disk image** — partition the output image per the partition
+    layout and populate each partition.
 
 Output format can be specified with `--format`:
 
@@ -237,28 +240,29 @@ yoe run --daemon --port 2222:22
 
 Projects can define QEMU-specific machines alongside hardware ones:
 
-```toml
-# machines/qemu-x86_64.toml
-[machine]
-name = "qemu-x86_64"
-arch = "x86_64"
-
-[machine.kernel]
-recipe = "linux-qemu"
-cmdline = "console=ttyS0 root=/dev/vda2 rw"
-
-[machine.qemu]
-machine = "q35"
-cpu = "host"
-memory = "1G"
-firmware = "ovmf"
-display = "none"
+```python
+# machines/qemu-x86_64.star
+machine(
+    name = "qemu-x86_64",
+    arch = "x86_64",
+    kernel = kernel(
+        recipe = "linux-qemu",
+        cmdline = "console=ttyS0 root=/dev/vda2 rw",
+    ),
+    qemu = qemu_config(
+        machine = "q35",
+        cpu = "host",
+        memory = "1G",
+        firmware = "ovmf",
+        display = "none",
+    ),
+)
 ```
 
-When `yoe run` is given a machine with a `[machine.qemu]` section, it uses those
-settings directly. When given a hardware machine without a `[machine.qemu]`
-section, it falls back to a reasonable default QEMU configuration for the
-machine's architecture.
+When `yoe run` is given a machine with a `qemu` configuration, it uses those
+settings directly. When given a hardware machine without `qemu` configuration,
+it falls back to a reasonable default QEMU configuration for the machine's
+architecture.
 
 ### `yoe repo`
 
@@ -281,9 +285,9 @@ yoe repo push
 yoe repo pull
 ```
 
-The local repository lives at the path configured in `distro.toml`
-(`[repository].path`). It's a standard apk-compatible repository — you can point
-`apk` on a running device at it directly.
+The local repository lives at the path configured in `PROJECT.star`
+(`repository(path=...)`). It's a standard apk-compatible repository — you can
+point `apk` on a running device at it directly.
 
 ### `yoe cache`
 
@@ -503,11 +507,11 @@ yoe clean openssh
 
 `yoe` resolves dependencies at two levels:
 
-1. **Build-time** — recipe `[depends].build` entries form a DAG.
-   `yoe build --with-deps` topologically sorts this graph and builds in order,
-   parallelizing where the DAG allows.
+1. **Build-time** — recipe `deps` entries form a DAG. `yoe build --with-deps`
+   topologically sorts this graph and builds in order, parallelizing where the
+   DAG allows.
 
-2. **Install-time** — recipe `[depends].runtime` entries are written into the
+2. **Install-time** — recipe `runtime_deps` entries are written into the
    `.apk`'s `.PKGINFO`. When `apk add` runs during image assembly, it pulls in
    runtime dependencies automatically.
 
@@ -585,7 +589,7 @@ a rebuild. Use `yoe build --dry-run` to see what would be rebuilt and why, or
 yoe init my-product --machine beaglebone-black
 
 # Add a recipe for your application
-$EDITOR recipes/myapp.toml
+$EDITOR recipes/myapp.star
 
 # Build everything (packages and images)
 yoe build --all
@@ -594,7 +598,7 @@ yoe build --all
 yoe flash base-image /dev/sdX
 
 # Later, update just your app and rebuild the image
-$EDITOR recipes/myapp.toml  # bump version
+$EDITOR recipes/myapp.star  # bump version
 yoe build myapp
 yoe build base-image         # only myapp's .apk changed, fast rebuild
 

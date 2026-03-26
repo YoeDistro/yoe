@@ -3,53 +3,37 @@ package internal
 import (
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
-	"strings"
 
-	"github.com/BurntSushi/toml"
-
-	"github.com/YoeDistro/yoe-ng/internal/config"
+	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
-func RunConfigShow(dir string, w io.Writer) error {
-	distro, err := config.ParseDistroConfig(filepath.Join(dir, "distro.toml"))
+func ShowConfig(dir string, w io.Writer) error {
+	proj, err := yoestar.LoadProject(dir)
 	if err != nil {
 		return err
 	}
-	return toml.NewEncoder(w).Encode(distro)
-}
 
-func RunConfigSet(dir, key, value string) error {
-	path := filepath.Join(dir, "distro.toml")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("reading distro.toml: %w", err)
+	fmt.Fprintf(w, "Project:    %s %s\n", proj.Name, proj.Version)
+	fmt.Fprintf(w, "Machine:    %s (default)\n", proj.Defaults.Machine)
+	fmt.Fprintf(w, "Image:      %s (default)\n", proj.Defaults.Image)
+	fmt.Fprintf(w, "Repository: %s\n", proj.Repository.Path)
+	fmt.Fprintf(w, "Cache:      %s\n", proj.Cache.Path)
+	fmt.Fprintf(w, "Machines:   %d defined\n", len(proj.Machines))
+	fmt.Fprintf(w, "Recipes:    %d defined\n", len(proj.Recipes))
+
+	if len(proj.Machines) > 0 {
+		fmt.Fprintln(w, "\nMachines:")
+		for name, m := range proj.Machines {
+			fmt.Fprintf(w, "  %-20s %s\n", name, m.Arch)
+		}
 	}
 
-	var raw map[string]interface{}
-	if err := toml.Unmarshal(data, &raw); err != nil {
-		return fmt.Errorf("parsing distro.toml: %w", err)
+	if len(proj.Recipes) > 0 {
+		fmt.Fprintln(w, "\nRecipes:")
+		for name, r := range proj.Recipes {
+			fmt.Fprintf(w, "  %-20s [%s] %s\n", name, r.Class, r.Version)
+		}
 	}
 
-	parts := strings.SplitN(key, ".", 2)
-	if len(parts) != 2 {
-		return fmt.Errorf("key must be in section.field format, got %q", key)
-	}
-
-	section, field := parts[0], parts[1]
-	sectionMap, ok := raw[section].(map[string]interface{})
-	if !ok {
-		sectionMap = make(map[string]interface{})
-		raw[section] = sectionMap
-	}
-	sectionMap[field] = value
-
-	f, err := os.Create(path)
-	if err != nil {
-		return fmt.Errorf("writing distro.toml: %w", err)
-	}
-	defer f.Close()
-
-	return toml.NewEncoder(f).Encode(raw)
+	return nil
 }

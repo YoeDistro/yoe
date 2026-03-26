@@ -13,7 +13,7 @@ func FindProjectRoot(startDir string) (string, error) {
 	}
 
 	for {
-		candidate := filepath.Join(dir, "distro.toml")
+		candidate := filepath.Join(dir, "PROJECT.star")
 		if _, err := os.Stat(candidate); err == nil {
 			return dir, nil
 		}
@@ -25,5 +25,5 @@ func FindProjectRoot(startDir string) (string, error) {
 		dir = parent
 	}
 
-	return "", fmt.Errorf("no distro.toml found in %s or any parent directory", startDir)
+	return "", fmt.Errorf("no PROJECT.star found in %s or any parent directory", startDir)
 }

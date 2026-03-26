@@ -6,21 +6,33 @@ import (
 	"path/filepath"
 )
 
-func RunClean(dir string, all bool) error {
-	buildDir := filepath.Join(dir, "build")
-	if err := os.RemoveAll(buildDir); err != nil {
-		return fmt.Errorf("removing build directory: %w", err)
+func RunClean(projectDir string, all bool, recipes []string) error {
+	buildDir := filepath.Join(projectDir, "build")
+
+	if len(recipes) > 0 {
+		for _, r := range recipes {
+			dir := filepath.Join(buildDir, r)
+			if err := os.RemoveAll(dir); err != nil {
+				return fmt.Errorf("removing %s: %w", dir, err)
+			}
+			fmt.Printf("Cleaned %s\n", r)
+		}
+		return nil
 	}
-	fmt.Println("Removed build directory")
 
 	if all {
-		for _, subdir := range []string{"packages", "sources"} {
-			path := filepath.Join(dir, subdir)
-			if err := os.RemoveAll(path); err != nil {
-				return fmt.Errorf("removing %s: %w", subdir, err)
+		dirs := []string{buildDir, filepath.Join(projectDir, "repo")}
+		for _, dir := range dirs {
+			if err := os.RemoveAll(dir); err != nil {
+				return fmt.Errorf("removing %s: %w", dir, err)
 			}
-			fmt.Printf("Removed %s directory\n", subdir)
 		}
+		fmt.Println("Cleaned all build artifacts, packages, and sources")
+	} else {
+		if err := os.RemoveAll(buildDir); err != nil {
+			return fmt.Errorf("removing %s: %w", buildDir, err)
+		}
+		fmt.Println("Cleaned build intermediates (packages preserved)")
 	}
 
 	return nil

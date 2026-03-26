@@ -7,8 +7,8 @@ with the following priorities:
 - Focused on developer (including app developer) usability
   - First class support for application development.
 - Easy to get started
-- Build dependencies distributed through Docker, don't require building host
-  dependencies.
+- Build dependencies distributed through apk packages, isolated with bubblewrap
+  — no Docker daemon required, no host dependency pollution.
 - Easy BSP support
   - Support for a lot of boards
   - Inclusive
@@ -34,10 +34,13 @@ with the following priorities:
   them.
 - 64-bit only (no 32-bit)
 - x86, ARM, RISC-V only
-- Granular packaging (Like Yocto/Debian)
+- Granular packaging (like Yocto/Debian) — one recipe can produce multiple
+  sub-packages (`-dev`, `-doc`, `-dbg`, custom splits), keeping production
+  images small while development images stay fully featured
 - Composable
   - Pull in recipes/packages using GitHub URLs
-  - Able to compose config files like KAS
+  - Layer composition via Starlark `load()` — vendor BSP, product, and core
+    layers compose through function calls, not config file merging
   - Recipes can build packages, tools, images, everything
 - Primarily Image based device management (vs package based)
   - Full image updates, OSTree, BDiff (Android uses)
@@ -50,8 +53,8 @@ with the following priorities:
 
 - [The `yoe` Tool](yoe-tool.md) — CLI reference for building, imaging, and
   flashing
-- [Metadata File Format](metadata-format.md) — TOML recipe and configuration
-  spec
+- [Recipe & Configuration Format](metadata-format.md) — Starlark recipe and
+  configuration spec
 - [Build Environment](build-environment.md) — bootstrap, host tools, and build
   isolation
 - [Comparisons](comparisons.md) — how Yoe-NG relates to Yocto, Buildroot,
@@ -159,8 +162,8 @@ The Yoe-NG CLI tool handles:
   order, manage caching, assemble outputs. See [The `yoe` Tool](yoe-tool.md) for
   the full CLI reference.
 - **Machine/distro configuration** — define target boards and distribution
-  profiles in a simple, declarative format. See
-  [Metadata File Format](metadata-format.md) for the full specification.
+  profiles in Starlark. See [Recipe & Configuration Format](metadata-format.md)
+  for the full specification.
 
 Why Go:
 
@@ -176,9 +179,9 @@ Yoe-NG uses [apk](https://wiki.alpinelinux.org/wiki/Alpine_Package_Keeper)
 (Alpine Package Keeper) as its package manager. It is important to distinguish
 between **recipes** and **packages** — these are separate concepts:
 
-- **Recipes** are build-time metadata (TOML files in the project tree) that
-  describe _how_ to build software. See
-  [Metadata File Format](metadata-format.md).
+- **Recipes** are build-time definitions (Starlark `.star` files in the project
+  tree) that describe _how_ to build software. See
+  [Recipe & Configuration Format](metadata-format.md).
 - **Packages** are installable artifacts (`.apk` files) that recipes produce.
   They are what gets installed into root filesystem images and onto devices.
 

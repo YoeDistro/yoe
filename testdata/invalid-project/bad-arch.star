@@ -1,0 +1,1 @@
+machine(name = "bad-machine", arch = "mips")
