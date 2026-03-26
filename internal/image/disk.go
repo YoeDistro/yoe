@@ -22,8 +22,8 @@ func GenerateDiskImage(rootfs, imgPath string, recipe *yoestar.Recipe, w io.Writ
 		}
 	}
 
-	// Calculate sizes
-	totalMB := 0
+	// Calculate sizes. Add 1MB for MBR/partition table overhead.
+	totalMB := 1
 	for _, p := range partitions {
 		size := parseSizeMB(p.Size)
 		if size == 0 {
@@ -44,11 +44,12 @@ func GenerateDiskImage(rootfs, imgPath string, recipe *yoestar.Recipe, w io.Writ
 		return fmt.Errorf("partitioning: %w", err)
 	}
 
-	// Create individual partition images and dd them into the disk image
-	offsetMB := 1 // 1MB for GPT header
+	// Create individual partition images and dd them into the disk image.
+	// The first 1MB is reserved for the MBR/partition table.
+	offsetMB := 1
 	for _, p := range partitions {
 		sizeMB := parseSizeMB(p.Size)
-		if sizeMB == 0 {
+		if sizeMB == 0 || sizeMB > totalMB-offsetMB {
 			sizeMB = totalMB - offsetMB
 		}
 
