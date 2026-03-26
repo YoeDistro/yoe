@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/YoeDistro/yoe-ng/internal/image"
 	"github.com/YoeDistro/yoe-ng/internal/packaging"
 	"github.com/YoeDistro/yoe-ng/internal/repo"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
@@ -69,7 +70,7 @@ func BuildRecipes(proj *yoestar.Project, names []string, opts Options, w io.Writ
 
 		fmt.Fprintf(w, "%-20s [building]\n", name)
 
-		if err := buildOne(recipe, hash, opts, w); err != nil {
+		if err := buildOne(proj, recipe, hash, opts, w); err != nil {
 			return fmt.Errorf("building %s: %w", name, err)
 		}
 
@@ -81,8 +82,15 @@ func BuildRecipes(proj *yoestar.Project, names []string, opts Options, w io.Writ
 	return nil
 }
 
-func buildOne(recipe *yoestar.Recipe, hash string, opts Options, w io.Writer) error {
+func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts Options, w io.Writer) error {
 	buildDir := RecipeBuildDir(opts.ProjectDir, recipe.Name)
+
+	// Image recipes go through a different path — assemble rootfs
+	if recipe.Class == "image" {
+		outputDir := filepath.Join(buildDir, "output")
+		return image.Assemble(recipe, proj, opts.ProjectDir, outputDir, w)
+	}
+
 	srcDir := filepath.Join(buildDir, "src")
 	destDir := filepath.Join(buildDir, "destdir")
 
