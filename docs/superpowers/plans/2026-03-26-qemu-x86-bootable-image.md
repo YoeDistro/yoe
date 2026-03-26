@@ -48,7 +48,7 @@ dependencies. Without it, `apk add --repository <dir>` fails.
 - Create: `internal/repo/index_test.go`
 - Modify: `internal/repo/local.go` — call index generation after Publish
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/repo/index_test.go`:
 
@@ -103,7 +103,7 @@ func TestGenerateIndex(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```bash
 go test ./internal/repo/ -run TestGenerateIndex -v
@@ -111,7 +111,7 @@ go test ./internal/repo/ -run TestGenerateIndex -v
 
 Expected: FAIL — `GenerateIndex` not defined.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `internal/repo/index.go`:
 
@@ -219,7 +219,7 @@ func parseAPKFilename(filename string) (name, version string) {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 ```bash
 go test ./internal/repo/ -run TestGenerateIndex -v
@@ -227,7 +227,7 @@ go test ./internal/repo/ -run TestGenerateIndex -v
 
 Expected: PASS.
 
-- [ ] **Step 5: Wire index generation into Publish**
+- [x] **Step 5: Wire index generation into Publish**
 
 Modify `internal/repo/local.go` — add call to `GenerateIndex` after publishing:
 
@@ -241,14 +241,14 @@ func Publish(apkPath, repoDir string) error {
 }
 ```
 
-- [ ] **Step 6: Run all tests**
+- [x] **Step 6: Run all tests**
 
 ```bash
 go test ./internal/repo/ -v
 go test ./...
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add internal/repo/index.go internal/repo/index_test.go internal/repo/local.go
