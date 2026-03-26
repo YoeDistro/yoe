@@ -1,0 +1,16 @@
+machine(
+    name = "beaglebone-black",
+    arch = "arm64",
+    description = "BeagleBone Black (AM3358)",
+    kernel = kernel(
+        repo = "https://github.com/beagleboard/linux.git",
+        branch = "6.6",
+        defconfig = "bb.org_defconfig",
+        device_trees = ["am335x-boneblack.dtb"],
+    ),
+    bootloader = uboot(
+        repo = "https://github.com/beagleboard/u-boot.git",
+        branch = "v2024.01",
+        defconfig = "am335x_evm_defconfig",
+    ),
+)
