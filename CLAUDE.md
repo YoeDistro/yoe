@@ -32,13 +32,14 @@ glibc + busybox + systemd.
 ### Building yoe
 
 ```bash
-make             # builds static binary (CGO_ENABLED=0 required for Alpine container)
-make test        # run all tests
+source envsetup.sh
+yoe_build        # builds static binary (CGO_ENABLED=0 for Alpine container)
+yoe_test         # run all tests
 ```
 
 CGO_ENABLED=0 is required because `net/http` pulls in cgo's DNS resolver by
 default, producing a dynamically linked binary that won't run inside the Alpine
-(musl) container. The Makefile handles this automatically.
+(musl) container. `yoe_build` handles this automatically.
 
 ### Formatting (markdown)
 
