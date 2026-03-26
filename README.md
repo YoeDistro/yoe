@@ -7,8 +7,8 @@ with the following priorities:
 - Focused on developer (including app developer) usability
   - First class support for application development.
 - Easy to get started
-- Build dependencies distributed through Docker, don't require building host
-  dependencies.
+- Build dependencies distributed through apk packages, isolated with bubblewrap
+  — no Docker daemon required, no host dependency pollution.
 - Easy BSP support
   - Support for a lot of boards
   - Inclusive
@@ -39,7 +39,8 @@ with the following priorities:
   images small while development images stay fully featured
 - Composable
   - Pull in recipes/packages using GitHub URLs
-  - Able to compose config files like KAS
+  - Layer composition via Starlark `load()` — vendor BSP, product, and core
+    layers compose through function calls, not config file merging
   - Recipes can build packages, tools, images, everything
 - Primarily Image based device management (vs package based)
   - Full image updates, OSTree, BDiff (Android uses)
