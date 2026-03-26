@@ -1,4 +1,4 @@
-# Yoe Next Generation
+# 🐧 Yoe Next Generation
 
 Yoe-NG is an **AI-native embedded Linux distribution builder** — a simpler
 alternative to Yocto, designed from the ground up to be driven by AI assistants.
@@ -8,7 +8,7 @@ conversational: describe what you need, and the AI generates recipes, configures
 machines, traces dependencies, diagnoses build failures, and audits security —
 all with full understanding of your project's dependency graph and build state.
 
-## Why AI-Native
+## 🤖 Why AI-Native
 
 Embedded Linux is hard not because the concepts are complex, but because there
 are _many_ concepts that interact in non-obvious ways: toolchain flags,
@@ -31,12 +31,12 @@ this can:
 - **Generate machine definitions from board names** —
   `/new-machine "Raspberry Pi 5"`
 
-See [AI Skills](ai-skills.md) for the full catalog of AI-driven workflows.
+See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
 
-## Design Priorities
+## 🎯 Design Priorities
 
 - **AI-native** — structured metadata (Starlark), queryable dependency graphs,
-  and AI skills as first-class interfaces. See [AI Skills](ai-skills.md).
+  and AI skills as first-class interfaces. See [AI Skills](docs/ai-skills.md).
 - **Three interfaces** — AI conversation, interactive TUI, and traditional CLI.
   All three do the same things; use whichever fits the moment.
 - **Developer-focused** — first-class support for application development, not
@@ -60,7 +60,7 @@ See [AI Skills](ai-skills.md) for the full catalog of AI-driven workflows.
   language package managers, caches packages where possible
 - **No cross compilation** — native builds on modern ARM/RISC-V hardware
 - **Starlark for recipes and build rules** — Python-like, deterministic,
-  sandboxed (see [Build Languages](build-languages.md))
+  sandboxed (see [Build Languages](docs/build-languages.md))
 - **Leverage existing ecosystems** — integrate with language-native build
   systems rather than reimplementing them
 - **64-bit only** — x86, ARM, RISC-V
@@ -71,24 +71,24 @@ See [AI Skills](ai-skills.md) for the full catalog of AI-driven workflows.
 - **Image-based device management** — full image updates, OSTree, BDiff
 - **Good SDK story** — binary SDKs, pre-built packages like Chromium
 
-## Documentation
+## 📚 Documentation
 
-- [AI Skills](ai-skills.md) — AI-driven workflows for recipe creation, build
-  debugging, security auditing, and more
-- [The `yoe` Tool](yoe-tool.md) — CLI reference for building, imaging, and
+- [AI Skills](docs/ai-skills.md) — AI-driven workflows for recipe creation,
+  build debugging, security auditing, and more
+- [The `yoe` Tool](docs/yoe-tool.md) — CLI reference for building, imaging, and
   flashing
-- [Recipe & Configuration Format](metadata-format.md) — Starlark recipe and
+- [Recipe & Configuration Format](docs/metadata-format.md) — Starlark recipe and
   configuration spec
-- [Build Environment](build-environment.md) — bootstrap, host tools, and build
-  isolation
-- [SDK Management](sdk.md) — development environments, container-based SDK,
+- [Build Environment](docs/build-environment.md) — bootstrap, host tools, and
+  build isolation
+- [SDK Management](docs/sdk.md) — development environments, container-based SDK,
   pre-built binary packages
-- [Comparisons](comparisons.md) — how Yoe-NG relates to Yocto, Buildroot,
+- [Comparisons](docs/comparisons.md) — how Yoe-NG relates to Yocto, Buildroot,
   Alpine, Arch, and NixOS
-- [Build Languages](build-languages.md) — analysis of Starlark, CUE, Nix, and
-  other embeddable languages for recipe definitions
+- [Build Languages](docs/build-languages.md) — analysis of Starlark, CUE, Nix,
+  and other embeddable languages for recipe definitions
 
-## Inspirations
+## 💡 Inspirations
 
 Yoe-NG draws selectively from five existing systems, taking the best ideas from
 each while avoiding their respective pain points:
@@ -109,10 +109,10 @@ each while avoiding their respective pain points:
   references for composability. Leave behind the C++-specific build model and
   Ninja generation.
 
-See [Comparisons](comparisons.md) for detailed analysis of how Yoe-NG relates to
-each of these systems, including when you should use them instead.
+See [Comparisons](docs/comparisons.md) for detailed analysis of how Yoe-NG
+relates to each of these systems, including when you should use them instead.
 
-## Motivation
+## 🔧 Motivation
 
 The Yocto Project is a powerful embedded Linux build system, but it carries
 significant complexity: BitBake, extensive metadata, cross-compilation
@@ -141,9 +141,9 @@ Yoe-NG asks: what if we started fresh with these assumptions?
   AI assistants — unlike shell-based build systems where critical state is
   hidden in environment variables and implicit ordering.
 
-## Design Principles
+## ⚙️ Design Principles
 
-### No Cross Compilation
+### 🚫 No Cross Compilation
 
 Instead of maintaining cross-toolchains, Yoe-NG targets native builds:
 
@@ -156,7 +156,7 @@ Instead of maintaining cross-toolchains, Yoe-NG targets native builds:
 This eliminates an entire class of build issues (sysroot management, host
 contamination, cross-pkg-config, etc.).
 
-### Native Language Package Managers
+### 📦 Native Language Package Managers
 
 Each language ecosystem manages its own dependencies:
 
@@ -172,7 +172,7 @@ Yoe-NG provides caching infrastructure (a shared module proxy for Go, a registry
 mirror for Cargo/npm, etc.) so builds are fast and repeatable without
 re-downloading the internet.
 
-### Kernel and System Image Tooling
+### 🖥️ Kernel and System Image Tooling
 
 While application builds use native language tooling, the system-level pieces
 still need orchestration:
@@ -187,18 +187,19 @@ still need orchestration:
 This is where Yoe-NG tooling (written in Go) provides value — similar to what
 `bitbake` and `wic` do in Yocto, but simpler and more opinionated.
 
-### Go-Based Tooling
+### 🏗️ Go-Based Tooling
 
 The Yoe-NG CLI tool handles:
 
 - **TUI** — interactive interface for common workflows (configure a build,
   select a machine, build an image, flash to SD card).
 - **Build orchestration** — invoke language-native build tools in the right
-  order, manage caching, assemble outputs. See [The `yoe` Tool](yoe-tool.md) for
-  the full CLI reference.
+  order, manage caching, assemble outputs. See
+  [The `yoe` Tool](docs/yoe-tool.md) for the full CLI reference.
 - **Machine/distro configuration** — define target boards and distribution
-  profiles in Starlark. See [Recipe & Configuration Format](metadata-format.md)
-  for the full specification.
+  profiles in Starlark. See
+  [Recipe & Configuration Format](docs/metadata-format.md) for the full
+  specification.
 
 Why Go:
 
@@ -208,7 +209,7 @@ Why Go:
 - Strong standard library for file manipulation, process execution, and
   networking.
 
-### Package Management: apk
+### 📋 Package Management: apk
 
 Yoe-NG uses [apk](https://wiki.alpinelinux.org/wiki/Alpine_Package_Keeper)
 (Alpine Package Keeper) as its package manager. It is important to distinguish
@@ -216,7 +217,7 @@ between **recipes** and **packages** — these are separate concepts:
 
 - **Recipes** are build-time definitions (Starlark `.star` files in the project
   tree) that describe _how_ to build software. See
-  [Recipe & Configuration Format](metadata-format.md).
+  [Recipe & Configuration Format](docs/metadata-format.md).
 - **Packages** are installable artifacts (`.apk` files) that recipes produce.
   They are what gets installed into root filesystem images and onto devices.
 
@@ -243,7 +244,7 @@ The Yoe-NG build tooling invokes recipes to produce `.apk` packages, which are
 published to a repository. Image assembly then uses `apk` to install packages
 into a root filesystem, just as Alpine does.
 
-### Base System
+### 🧱 Base System
 
 The base userspace is **glibc + busybox + systemd**:
 
@@ -265,7 +266,7 @@ The base userspace is **glibc + busybox + systemd**:
 This combination gives a small but fully functional base system that can run
 real-world services without surprises.
 
-### Reproducibility
+### 🔒 Reproducibility
 
 Yoe-NG targets **functional equivalence**, not bit-for-bit reproducibility. Same
 inputs produce functionally identical outputs — same behavior, same files, same

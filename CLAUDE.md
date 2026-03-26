@@ -42,13 +42,15 @@ the `yoe` binary. No host dependencies beyond that.
 ### Documentation
 
 - `README.md` — project philosophy, design goals, comparisons overview
-- `yoe-tool.md` — `yoe` CLI command reference (init, build, flash, etc.)
-- `metadata-format.md` — Starlark recipe and configuration spec
-- `build-environment.md` — three-tier build isolation architecture (bootstrap,
-  build root, per-recipe sandbox)
-- `build-languages.md` — analysis of Starlark, CUE, Nix, and other embeddable
-  languages
-- `sdk.md` — SDK documentation
+- `docs/yoe-tool.md` — `yoe` CLI command reference (init, build, flash, etc.)
+- `docs/metadata-format.md` — Starlark recipe and configuration spec
+- `docs/build-environment.md` — three-tier build isolation architecture
+  (bootstrap, build root, per-recipe sandbox)
+- `docs/build-languages.md` — analysis of Starlark, CUE, Nix, and other
+  embeddable languages
+- `docs/ai-skills.md` — AI-driven workflows catalog
+- `docs/sdk.md` — development environments and pre-built packages
+- `docs/comparisons.md` — comparison with Yocto, Buildroot, Alpine, etc.
 - `comparisons.md` — comparisons with other build systems
 - `CHANGELOG.md` — release changelog
 
@@ -67,8 +69,8 @@ the `yoe` binary. No host dependencies beyond that.
   - `config/` — project configuration
   - `device/` — flash and QEMU support
   - `tui/` — terminal UI (bubbletea)
-  - `clean.go`, `init.go`, `update.go`, `dev.go`, `layer.go`,
-    `container.go`, `configcmd.go` — top-level CLI command implementations
+  - `clean.go`, `init.go`, `update.go`, `dev.go`, `layer.go`, `container.go`,
+    `configcmd.go` — top-level CLI command implementations
 
 ### Layers and Recipes
 
@@ -79,6 +81,8 @@ the `yoe` binary. No host dependencies beyond that.
   - `images/` — image definitions (base-image)
 
 ### Build Infrastructure
+
+> > > > > > > origin/main
 
 - `envsetup.sh` — shell functions (source it, don't execute)
 - `containers/Dockerfile.build` — the build container (Tier 0)
