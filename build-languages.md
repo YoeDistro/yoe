@@ -1,0 +1,444 @@
+# Build & Configuration Languages
+
+An analysis of embeddable languages for defining recipes, build rules, and
+project configuration in Yoe-NG. This informs the choice of how users express
+_what to build_ and _how to build it_.
+
+## The Problem
+
+Yoe-NG needs a way for users to define:
+
+- **Recipes** — what to build, from what source, with what dependencies
+- **Classes/rules** — how to build (autotools, cmake, go, image assembly)
+- **Project config** — cache locations, remote repos, layer references
+- **Machine definitions** — architecture, kernel, bootloader, partitions
+- **Image definitions** — package lists, services, hostname, partitions
+
+The simplest approach is a data format (TOML/YAML) for all of these. But
+experience shows that pure data formats accumulate escape hatches as complexity
+grows: conditional dependencies, machine-specific overrides, image inheritance,
+shell commands embedded in strings. These are signs the data format wants to be
+a language.
+
+## Requirements
+
+1. **Simple for the common case** — defining a package recipe should be as
+   readable as a TOML file
+2. **Composable** — layers, overlays, and recipe extensions without modifying
+   originals
+3. **Expressive when needed** — conditionals, loops, helper functions for
+   complex build logic
+4. **Deterministic** — same inputs always produce the same output (critical for
+   content-addressed caching)
+5. **Sandboxed** — build definitions cannot perform arbitrary I/O or network
+   access
+6. **Go-native** — embeddable in a Go binary without external dependencies
+7. **Familiar syntax** — low learning curve for developers
+
+## Language Survey
+
+### Starlark
+
+**Used by:** Bazel (Google), Buck2 (Meta), Pants, Gazelle
+
+Starlark is a dialect of Python designed specifically for build system
+configuration. It is deterministic (no `import os`, no network, no randomness),
+hermetic, and embeddable. The Go implementation
+([go.starlark.net](https://github.com/google/starlark-go)) is maintained by
+Google.
+
+**Example recipe:**
+
+```python
+load("//classes/autotools.star", "autotools")
+
+autotools(
+    name = "openssh",
+    version = "9.6p1",
+    source = "https://cdn.openbsd.org/.../openssh-9.6p1.tar.gz",
+    configure_args = ["--sysconfdir=/etc/ssh"],
+    deps = ["zlib", "openssl"],
+)
+```
+
+**Strengths:**
+
+- Battle-tested at enormous scale (Google's entire build, Meta's mobile builds)
+- Python-like syntax — most developers can read it immediately
+- Deterministic by design — no side effects, no mutable global state
+- Mature Go library with good documentation
+- Functions and `load()` provide natural composition
+- Built for exactly this use case
+
+**Weaknesses:**
+
+- No native data merging/overlay system (unlike Nix or CUE) — composition is
+  through explicit function arguments
+- Subtle differences from Python can trip up experienced Python developers (no
+  `class`, no exceptions, no `import`, dict insertion order matters)
+- The `load()` system adds a dependency resolution layer for build files
+  themselves
+
+**Composability model:** Function calls and macros. A base recipe exports a
+configurable function; layers call it with overrides. Explicit but verbose:
+
+```python
+# recipes-core/openssh.star — base recipe as a function
+def openssh(extra_deps=[], extra_configure_args=[], **overrides):
+    autotools(
+        name = "openssh",
+        version = "9.6p1",
+        deps = ["zlib", "openssl"] + extra_deps,
+        configure_args = ["--sysconfdir=/etc/ssh"] + extra_configure_args,
+        **overrides,
+    )
+
+# vendor-bsp/openssh.star — vendor layer extends it
+load("//recipes-core/openssh.star", "openssh")
+openssh(extra_deps=["vendor-crypto"])
+```
+
+---
+
+### CUE
+
+**Used by:** Dagger, various Kubernetes tooling
+
+CUE is a configuration language created by Marcel van Lohuizen (who also created
+`gofmt`). Its defining feature is **unification** — you define partial
+configurations in separate files and CUE merges them, checking constraints
+automatically. Types and values exist on a single lattice; a type is just a
+constraint on a value.
+
+**Example recipe:**
+
+```cue
+openssh: {
+    version: "9.6p1"
+    deps: ["zlib", "openssl"]
+    build: ["./configure --prefix=$PREFIX", "make -j$NPROC"]
+}
+```
+
+**Example overlay (separate file, merges automatically):**
+
+```cue
+openssh: {
+    deps: ["zlib", "openssl", "vendor-crypto"]
+    configure_args: ["--with-vendor-crypto"]
+}
+```
+
+**Strengths:**
+
+- **Closest to Nix-style composability** — partial definitions in different
+  files merge automatically without explicit imports
+- Types-as-constraints provide built-in validation (`version: =~"^[0-9]"`)
+- Go-native implementation
+- No Turing-completeness — guaranteed termination
+- Excellent for data-heavy configuration
+
+**Weaknesses:**
+
+- **Cannot express imperative build logic** — no loops for generating targets,
+  no calling external commands, no procedural steps
+- Unusual paradigm (lattice-based unification) — steeper learning curve than
+  expected for what looks like JSON
+- Smaller ecosystem and community than Starlark
+- Would need pairing with another language for class/rule logic
+
+**Composability model:** Implicit merging via unification. Define parts in
+different files within the same package; CUE merges them and reports conflicts.
+This is the most Nix-like model available outside of Nix itself.
+
+---
+
+### Nickel
+
+**Used by:** Tweag projects, NixOS-adjacent tooling
+
+Nickel is explicitly designed to be "Nix, but simpler." It has contracts
+(gradual typing), merge semantics (like Nix's `//` operator), and a Python-like
+syntax. It aims to be the configuration language Nix should have been.
+
+**Example recipe:**
+
+```nickel
+{
+  openssh = {
+    version = "9.6p1",
+    deps = ["zlib", "openssl"],
+    build = fun arch =>
+      if arch == "arm64" then
+        ["./configure --host=aarch64", "make"]
+      else
+        ["./configure", "make"],
+  }
+}
+```
+
+**Strengths:**
+
+- **Designed for Nix-style composition** — record merging, overrides, and
+  priority annotations
+- Contracts provide validation without a separate type system
+- More approachable syntax than Nix
+- Deterministic evaluation
+
+**Weaknesses:**
+
+- **Not Go-native** — implemented in Rust; embedding in a Go binary requires FFI
+  or running as a subprocess
+- Young project — smaller ecosystem, less battle-testing
+- Smaller community than Starlark or CUE
+
+**Composability model:** Record merging with priority, very similar to Nix
+overlays. Define a base, merge overrides, and Nickel resolves conflicts using
+priority annotations.
+
+---
+
+### Jsonnet
+
+**Used by:** Grafana (dashboards), Tanka (Kubernetes), various config generation
+
+A templating language that extends JSON with variables, conditionals, imports,
+functions, and object composition via the `+` operator.
+
+**Example recipe:**
+
+```jsonnet
+local base = import 'recipes-core/openssh.jsonnet';
+
+base {
+  deps+: ['vendor-crypto'],
+  configure_args+: ['--with-vendor-crypto'],
+}
+```
+
+**Strengths:**
+
+- Simple mental model — "JSON with functions and imports"
+- Object merging with `+:` (append) and `+` (override) is intuitive
+- Go-native implementation ([go-jsonnet](https://github.com/google/go-jsonnet))
+- Deterministic
+- Good for layered configuration
+
+**Weaknesses:**
+
+- **Designed for data generation, not build systems** — no concept of targets,
+  dependencies, or build phases
+- Verbose for complex logic
+- Weaker validation than CUE (no constraint system)
+- Less expressive than Starlark for imperative build logic
+
+**Composability model:** Object inheritance with `+` operator. Import a base
+object, override or append fields. Straightforward and explicit.
+
+---
+
+### Lua / Luau
+
+**Used by:** Neovim, Redis, game engines, Premake (build system)
+
+Lightweight embeddable scripting language. Luau (Roblox) adds gradual typing.
+
+**Example recipe:**
+
+```lua
+autotools {
+    name = "openssh",
+    version = "9.6p1",
+    deps = {"zlib", "openssl"},
+    configure_args = {"--sysconfdir=/etc/ssh"},
+}
+```
+
+**Strengths:**
+
+- Extremely lightweight runtime (~200KB)
+- Very fast (LuaJIT, Luau)
+- Simple, well-understood language
+- Good Go bindings (gopher-lua, go-luau)
+- Tables provide natural composition via metatables
+
+**Weaknesses:**
+
+- **Not deterministic by default** — has `os.execute`, `io.open`, etc. that must
+  be sandboxed by removing from the environment
+- Not designed for build systems — no built-in `load()` or module system
+  suitable for build file composition
+- 1-indexed arrays (trivial but annoys developers)
+- No built-in constraint/validation system
+
+**Composability model:** Table merging via metatables or explicit merge
+functions. Powerful but requires convention — the language doesn't enforce a
+composition pattern.
+
+---
+
+### Nix Language
+
+**Used by:** NixOS, Nixpkgs (100,000+ packages)
+
+A pure, lazy, functional language designed for package management and system
+configuration.
+
+**Example recipe:**
+
+```nix
+{ stdenv, zlib, openssl }:
+stdenv.mkDerivation {
+  pname = "openssh";
+  version = "9.6p1";
+  buildInputs = [ zlib openssl ];
+  configureFlags = [ "--sysconfdir=/etc/ssh" ];
+}
+```
+
+**Strengths:**
+
+- **The gold standard for composability** — overlays, overrides, and the
+  fixpoint pattern enable arbitrary layered modification of any package
+- Lazy evaluation means unused definitions have zero cost
+- Proven at massive scale (100,000+ packages in Nixpkgs)
+- Perfectly deterministic
+
+**Weaknesses:**
+
+- **Not embeddable** — the evaluator is a C++ application, not a library
+- Steep learning curve — the language is deceptively complex (laziness,
+  fixpoints, `callPackage` patterns)
+- Error messages are notoriously poor
+- Debugging "which overlay changed this attribute?" is difficult
+- The very power of overlays is also a debuggability problem — implicit
+  modification from anywhere makes tracing changes hard
+
+**Composability model:** Overlays and the fixed-point pattern. A base package
+set is a function; overlays are functions that modify it. The system computes
+the fixed point, producing the final package set. Extremely powerful, but the
+indirection makes debugging non-trivial.
+
+---
+
+## Comparison Matrix
+
+| Feature               | Starlark          | CUE         | Nickel    | Jsonnet         | Lua          | Nix             |
+| --------------------- | ----------------- | ----------- | --------- | --------------- | ------------ | --------------- |
+| Go-native             | Yes               | Yes         | No (Rust) | Yes             | Yes          | No (C++)        |
+| Deterministic         | By design         | By design   | By design | By design       | Must sandbox | By design       |
+| Sandboxed             | By design         | By design   | By design | By design       | Must sandbox | By design       |
+| Build system proven   | Bazel/Buck2       | Dagger      | Young     | No              | Premake      | NixOS           |
+| Composability         | Functions         | Unification | Merging   | Object `+`      | Tables       | Overlays        |
+| Implicit merging      | No                | Yes         | Yes       | Partial         | No           | Yes             |
+| Imperative logic      | Yes               | No          | Limited   | Limited         | Yes          | No (functional) |
+| Learning curve        | Low (Python-like) | Medium      | Medium    | Low (JSON-like) | Low          | High            |
+| Community size        | Large             | Medium      | Small     | Medium          | Large        | Large           |
+| Constraint validation | No                | Built-in    | Contracts | No              | No           | No              |
+
+## Recommendation
+
+**Starlark** is the recommended choice for Yoe-NG.
+
+**Why:**
+
+1. **Proven for exactly this use case.** Bazel and Buck2 demonstrate that
+   Starlark works for build system configuration at the largest scales. No other
+   language on this list has been tested as thoroughly in the build system
+   domain.
+
+2. **One language for everything.** Recipes, classes, project config, machine
+   definitions — all Starlark. No TOML + shell + something-else stack. Simple
+   recipes read like declarative config; complex classes use real control flow.
+
+3. **Go-native.** The `go.starlark.net` library embeds directly in the `yoe`
+   binary. No FFI, no subprocess, no external runtime.
+
+4. **Deterministic and sandboxed by design.** Critical for content-addressed
+   caching — if the build definition is deterministic, the cache key is
+   reliable. Starlark guarantees this without any configuration.
+
+5. **Familiar syntax.** Python-like syntax means most developers can read
+   Starlark immediately. The restrictions (no classes, no exceptions, no I/O)
+   are subtractive — you learn what you _can't_ do, not a new paradigm.
+
+**What we give up compared to Nix/CUE:**
+
+- No implicit merging — composition is through explicit function calls and
+  `**kwargs`. This means layer overrides are more verbose but also more
+  traceable. When debugging "why does openssh have vendor-crypto in its deps?",
+  you can grep for the function call. In Nix, you'd have to trace overlay
+  evaluation order.
+
+- No built-in constraint validation — recipe validation happens in Go code (the
+  `yoe` engine) rather than in the language itself. CUE's constraint system is
+  elegant, but adding a second language isn't worth it.
+
+**Composability pattern for layers:**
+
+Yoe-NG's layer system (vendor BSP layers, product layers) works through
+Starlark's function composition:
+
+```python
+# Layer 1: recipes-core/openssh.star
+def openssh(extra_deps=[], **overrides):
+    package(
+        name = "openssh",
+        version = "9.6p1",
+        deps = ["zlib", "openssl"] + extra_deps,
+        **overrides,
+    )
+
+# Layer 2: vendor-bsp/openssh.star
+load("//recipes-core/openssh.star", "openssh")
+openssh(extra_deps=["vendor-crypto"])
+
+# Layer 3: product/openssh.star (further customization)
+load("//vendor-bsp/openssh.star", "openssh")
+openssh(extra_configure_args=["--with-pam"])
+```
+
+Each layer is explicit about what it modifies and where the base comes from.
+This is less magical than Nix overlays but easier to debug.
+
+## What This Means for Yoe-NG
+
+With Starlark as the single language, the project structure becomes:
+
+```
+my-project/
+├── PROJECT.star              # project config: name, caches, layers
+├── machines/
+│   ├── beaglebone-black.star
+│   ├── raspberrypi4.star
+│   └── qemu-arm64.star
+├── recipes/
+│   ├── openssh.star          # package recipe
+│   ├── myapp.star            # app recipe (Go)
+│   ├── base-image.star       # image recipe
+│   └── dev-image.star        # image recipe (extends base)
+├── classes/                  # reusable build rule functions
+│   ├── autotools.star
+│   ├── cmake.star
+│   ├── go.star
+│   └── image.star
+└── overlays/
+```
+
+TOML is eliminated entirely. Recipes, classes, machines, and project config are
+all `.star` files. The Go `yoe` binary provides the built-in functions
+(`package()`, `image()`, `machine()`, `project()`, etc.) that Starlark code
+calls.
+
+## Open Questions
+
+- **Class composition:** Should multiple classes be applied via multiple
+  function calls (`autotools()` + `systemd_service()`) or via a single wrapper
+  macro (`systemd_autotools()`)? Both work; the question is which to encourage
+  as convention.
+- **Machine-specific conditionals:** Should machine properties be available as
+  Starlark globals during recipe evaluation, or passed explicitly? Globals are
+  convenient but reduce hermeticity.
+- **REPL / interactive evaluation:** Should `yoe` provide a Starlark REPL for
+  debugging recipe evaluation? Bazel has `bazel query`; a similar introspection
+  tool would help users understand how their recipes resolve.
