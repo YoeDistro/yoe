@@ -43,6 +43,12 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
 `**/*.md` files using Node.js 20. Prettier config: `proseWrap: always`
 (`.prettierrc`).
 
+## Plans
+
+Implementation plans live in `docs/superpowers/plans/`. After completing work
+that corresponds to plan tasks, update the relevant checkboxes (`- [ ]` →
+`- [x]`) and phase status in those plans.
+
 ## Key Design Decisions
 
 - **Starlark** for all recipes and config (Python-like, deterministic,
