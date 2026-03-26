@@ -5,18 +5,31 @@
 > superpowers:executing-plans to implement this plan task-by-task. Steps use
 > checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build `yoe`, a Go CLI tool that builds packages from TOML recipes,
+**Goal:** Build `yoe`, a Go CLI tool that builds packages from Starlark recipes,
 assembles root filesystem images, and manages an embedded Linux distribution — a
 simpler alternative to Yocto.
 
 **Architecture:** Single Go binary with stdlib CLI (no framework — switch/case
-dispatch like brun), BurntSushi/toml for metadata parsing, bubblewrap for build
-isolation, and apk-tools for package management. Two-phase resolve-then-build
-model inspired by Google GN. Content-addressed caching at every layer.
+dispatch like brun), go.starlark.net for recipe/config evaluation, bubblewrap
+for build isolation, and apk-tools for package management. Two-phase
+resolve-then-build model inspired by Bazel/GN. Content-addressed caching at
+every layer.
 
-**Tech Stack:** Go 1.22+, Go stdlib (CLI — no Cobra), BurntSushi/toml (TOML
-parsing), Bubble Tea (TUI), bubblewrap (sandboxing), apk-tools (package
+**Tech Stack:** Go 1.22+, Go stdlib (CLI — no Cobra), go.starlark.net (Starlark
+evaluation), Bubble Tea (TUI), bubblewrap (sandboxing), apk-tools (package
 management), systemd-repart (disk images)
+
+---
+
+> **NOTE: Starlark transition.** This plan was originally written with TOML
+> metadata parsing (BurntSushi/toml). The project has since adopted Starlark
+> (go.starlark.net) for all recipes and configuration. Phase 1 tasks 2-7 below
+> still contain detailed Go code using TOML structs — these need to be
+> regenerated to use the Starlark evaluation engine instead. The high-level
+> structure (phases, task ordering, test-first approach) remains valid. Key
+> changes: `distro.toml` → `PROJECT.star`, `recipes/*.toml` → `recipes/*.star`,
+> `machines/*.toml` → `machines/*.star`, `BurntSushi/toml` → `go.starlark.net`,
+> TOML struct parsing → Starlark built-in function registration.
 
 ---
 
@@ -28,7 +41,7 @@ on any dev machine). Phases 4+ require Linux with bubblewrap and apk-tools.
 
 | Phase | Name                          | Depends On | Key Deliverable                                                                   |
 | ----- | ----------------------------- | ---------- | --------------------------------------------------------------------------------- |
-| 1     | CLI Foundation                | —          | `yoe init`, `yoe config`, TOML parsing for all metadata types                     |
+| 1     | CLI Foundation                | —          | `yoe init`, `yoe config`, Starlark evaluation for all recipe/config types         |
 | 2     | Dependency Resolution         | 1          | DAG construction, topological sort, config propagation, `yoe desc`/`refs`/`graph` |
 | 3     | Source Management             | 1          | `yoe source fetch/list/verify/clean`, content-addressed cache                     |
 | 4     | Build Execution               | 2, 3       | `yoe build` with bubblewrap isolation, build step execution                       |
@@ -43,19 +56,18 @@ on any dev machine). Phases 4+ require Linux with bubblewrap and apk-tools.
 ## Phase 1: CLI Foundation
 
 **Goal:** Establish the Go project, stdlib CLI with switch/case dispatch (brun
-pattern), TOML metadata parsing for all types, `yoe init` scaffolding, and
-`yoe config` — the skeleton everything else builds on.
+pattern), Starlark evaluation engine for recipes/config, `yoe init` scaffolding,
+and `yoe config` — the skeleton everything else builds on.
 
 ### File Structure
 
 ```
 cmd/yoe/main.go                    — entry point, switch/case command dispatch, printUsage()
-internal/config/project.go         — project discovery (find distro.toml)
-internal/config/distro.go          — distro.toml parsing + types
-internal/config/machine.go         — machine TOML parsing + types
-internal/config/recipe.go          — recipe TOML parsing + types (package + image)
-internal/config/partition.go       — partition layout TOML parsing + types
-internal/config/loader.go          — load all config from a project tree
+internal/config/project.go         — project discovery (find PROJECT.star)
+internal/starlark/engine.go        — Starlark evaluation engine, built-in functions
+internal/starlark/builtins.go      — project(), machine(), package(), image(), etc.
+internal/starlark/types.go         — Go types for evaluated recipes, machines, etc.
+internal/starlark/loader.go        — load all .star files from a project tree
 internal/init.go                   — yoe init logic
 internal/clean.go                  — yoe clean logic
 go.mod
@@ -307,7 +319,7 @@ Expected: FAIL — `ParseDistroConfig` not defined.
 Install TOML library:
 
 ```bash
-go get github.com/BurntSushi/toml@latest
+go get go.starlark.net@latest
 ```
 
 Create `internal/config/distro.go`:
@@ -1218,7 +1230,7 @@ func TestFindProjectRoot(t *testing.T) {
 func TestFindProjectRoot_NotFound(t *testing.T) {
 	_, err := FindProjectRoot("/tmp")
 	if err == nil {
-		t.Fatal("expected error when no distro.toml found, got nil")
+		t.Fatal("expected error when no PROJECT.star found, got nil")
 	}
 }
 ```
@@ -1251,7 +1263,7 @@ func FindProjectRoot(startDir string) (string, error) {
 	}
 
 	for {
-		candidate := filepath.Join(dir, "distro.toml")
+		candidate := filepath.Join(dir, "PROJECT.star")
 		if _, err := os.Stat(candidate); err == nil {
 			return dir, nil
 		}
@@ -1263,7 +1275,7 @@ func FindProjectRoot(startDir string) (string, error) {
 		dir = parent
 	}
 
-	return "", fmt.Errorf("no distro.toml found in %s or any parent directory", startDir)
+	return "", fmt.Errorf("no PROJECT.star found in %s or any parent directory", startDir)
 }
 ```
 
@@ -1467,10 +1479,10 @@ func TestRunInit(t *testing.T) {
 	}
 
 	for _, path := range []string{
-		"distro.toml",
+		"PROJECT.star",
 		"machines",
 		"recipes",
-		"partitions",
+		"classes",
 		"overlays",
 	} {
 		full := filepath.Join(dir, path)
@@ -1495,7 +1507,7 @@ func TestRunInit_WithMachine(t *testing.T) {
 
 func TestRunInit_ExistingProject(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "distro.toml"), []byte("[distro]\nname = \"exists\"\n"), 0644)
+	os.WriteFile(filepath.Join(dir, "PROJECT.star"), []byte("project(name=\"exists\")\n"), 0644)
 
 	if err := RunInit(dir, ""); err == nil {
 		t.Fatal("expected error when init into existing project, got nil")
@@ -1561,11 +1573,11 @@ display = "none"
 `
 
 func RunInit(projectDir string, machine string) error {
-	if _, err := os.Stat(filepath.Join(projectDir, "distro.toml")); err == nil {
-		return fmt.Errorf("project already exists at %s (distro.toml found)", projectDir)
+	if _, err := os.Stat(filepath.Join(projectDir, "PROJECT.star")); err == nil {
+		return fmt.Errorf("project already exists at %s (PROJECT.star found)", projectDir)
 	}
 
-	dirs := []string{"machines", "recipes", "partitions", "overlays"}
+	dirs := []string{"machines", "recipes", "classes", "overlays"}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(filepath.Join(projectDir, dir), 0755); err != nil {
 			return fmt.Errorf("creating directory %s: %w", dir, err)
@@ -2095,8 +2107,8 @@ git commit -m "fix: integration test fixes for phase 1"
 
 ## Phase 2: Dependency Resolution (detailed plan TBD)
 
-**Goal:** Build the DAG engine — load all recipes, topologically sort, detect
-cycles, propagate machine config through the graph.
+**Goal:** Build the DAG engine — load all recipes from evaluated Starlark,
+topologically sort, detect cycles, propagate machine config through the graph.
 
 **Key components:**
 
@@ -2107,7 +2119,7 @@ cycles, propagate machine config through the graph.
 - `internal/resolve/hash.go` — content hash computation for cache keys
 - `cmd/yoe/main.go` — add `desc`, `refs`, `graph` commands to switch statement
 
-**Depends on:** Phase 1 (config types and project loader)
+**Depends on:** Phase 1 (Starlark types and project loader)
 
 ---
 
@@ -2123,7 +2135,7 @@ cycles, propagate machine config through the graph.
 - `internal/source/verify.go` — SHA256 verification
 - `cmd/yoe/main.go` — add `source` command with subcommands to switch statement
 
-**Depends on:** Phase 1 (recipe config for source URLs)
+**Depends on:** Phase 1 (recipe types for source URLs)
 
 ---
 

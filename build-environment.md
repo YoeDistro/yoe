@@ -88,7 +88,7 @@ Bubblewrap provides:
 - **Minimal overhead** — bubblewrap is a thin namespace wrapper, not a full
   container runtime. Build performance is near-native.
 - **Declared dependencies only** — the build environment is assembled from only
-  the packages listed in the recipe's `[depends].build`.
+  the packages listed in the recipe's `deps`.
 
 ## Why Not Docker for Builds?
 
@@ -242,8 +242,8 @@ For the final step of creating a partitioned disk image (GPT/MBR with boot and
 rootfs partitions), `yoe` can use **systemd-repart** as a complementary tool.
 Since Yoe-NG already uses systemd, `systemd-repart` is a natural fit:
 
-- Declarative partition definitions (aligns with the TOML partition layout
-  files).
+- Declarative partition definitions (aligns with the partition definitions in
+  image recipes).
 - Handles GPT, MBR, filesystem creation, and image sizing.
 - Runs unprivileged with user namespaces.
 - Maintained by the systemd project.
@@ -262,13 +262,13 @@ First time setup:
   yoe build --all            ← build all recipes (packages + images)
 
 Day-to-day development:
-  $EDITOR recipes/myapp.toml
+  $EDITOR recipes/myapp.star
   yoe build myapp            ← builds in isolated bwrap sandbox
   yoe build base-image       ← assembles rootfs with apk
   yoe flash base-image /dev/sdX
 
 Adding a host tool:
-  $EDITOR recipes/cmake.toml ← write a recipe for the tool
+  $EDITOR recipes/cmake.star ← write a recipe for the tool
   yoe build cmake            ← produces cmake.apk
   (cmake is now available as a build dependency for other recipes)
 
@@ -325,7 +325,7 @@ S3 API, and works in air-gapped environments.
 
 The cache key for a recipe is a cryptographic hash of:
 
-- The recipe TOML file contents
+- The recipe `.star` file contents
 - The source archive/commit hash
 - The `.apk` hashes of all build dependencies (transitive)
 - The machine architecture and propagated build flags
@@ -360,8 +360,8 @@ pulling from a remote cache, `yoe` verifies the signature before using the
 cached package. This prevents cache poisoning — a compromised cache server
 cannot inject malicious packages.
 
-The signing key is configured in `distro.toml` (`[cache.signing]`). For CI, the
-private key is provided via environment variable; workstations can use a
+The signing key is configured in `PROJECT.star` (`cache(signing=...)`). For CI,
+the private key is provided via environment variable; workstations can use a
 read-only public key for verification only.
 
 ## Multi-Target Builds
@@ -379,9 +379,9 @@ can be built for any compatible machine.
 
 ```
 machines/                    images/
-├── beaglebone-black.toml    ├── base.toml
-├── raspberrypi4.toml        ├── dev.toml
-└── qemu-arm64.toml          └── production.toml
+├── beaglebone-black.star    ├── base-image.star
+├── raspberrypi4.star        ├── dev-image.star
+└── qemu-arm64.star          └── production-image.star
 
 Build matrix:
   yoe build base-image --machine beaglebone-black

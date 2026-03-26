@@ -37,11 +37,11 @@ capable but carries significant complexity.
 | ------------------- | -------------------------------------------- | ----------------------------------------------- |
 | Build system        | BitBake (Python)                             | `yoe` (Go)                                      |
 | Package format      | rpm / deb / ipk                              | apk                                             |
-| Config format       | BitBake recipes (.bb/.bbappend)              | TOML                                            |
+| Config format       | BitBake recipes (.bb/.bbappend)              | Starlark (Python-like)                          |
 | Cross-compilation   | Required, central design assumption          | None — native builds only                       |
 | Dependency model    | Task-level DAG (do_fetch → do_compile → ...) | Recipe-level DAG (simpler, atomic per-recipe)   |
 | Language ecosystems | Wrapped in recipes                           | Native toolchains (go modules, cargo, etc.)     |
-| Learning curve      | Steep — weeks to become productive           | Shallow — TOML + shell commands                 |
+| Learning curve      | Steep — weeks to become productive           | Shallow — Starlark (Python-like)                |
 | Build caching       | sstate (per-task, hash-based, complex setup) | Per-recipe `.apk` hashes in S3-compatible cache |
 | Multi-image support | Yes — multiple images from one project       | Yes — image inheritance + machine matrix        |
 | On-device updates   | Possible but complex (smart image)           | Built-in via apk repositories                   |
@@ -72,7 +72,7 @@ shares Yoe-NG's preference for simplicity.
 
 |                    | Buildroot                                     | Yoe-NG                                              |
 | ------------------ | --------------------------------------------- | --------------------------------------------------- |
-| Configuration      | Kconfig (menuconfig)                          | TOML files                                          |
+| Configuration      | Kconfig (menuconfig)                          | Starlark files                                      |
 | Build engine       | Make                                          | `yoe` (Go)                                          |
 | Cross-compilation  | Required                                      | None — native builds only                           |
 | On-device packages | None — monolithic image only                  | apk — incremental updates                           |
@@ -138,7 +138,7 @@ looks like.
 | Target            | Containers, small servers         | Custom embedded hardware                             |
 | BSP support       | Generic x86/ARM images            | Per-board machine definitions                        |
 | Image assembly    | `alpine-make-rootfs`              | `yoe build <image>` with machine + partition support |
-| Build system      | `abuild` + APKBUILD shell scripts | `yoe build` + TOML recipes                           |
+| Build system      | `abuild` + APKBUILD shell scripts | `yoe build` + Starlark recipes                       |
 | Kernel management | Generic kernels                   | Per-machine kernel config, device trees              |
 | OTA updates       | Standard apk upgrade              | apk + full image update + rollback                   |
 
@@ -159,8 +159,8 @@ transparency directly influences Yoe-NG's design.
 - **Minimal base, user-assembled** — ship the smallest useful system and let the
   integrator compose what they need.
 - **PKGBUILD-style simplicity** — build definitions should be concise, readable
-  shell-like scripts, not complex metadata. Yoe-NG's TOML recipes aim for
-  similar auditability.
+  shell-like scripts, not complex metadata. Yoe-NG's Starlark recipes aim for
+  similar auditability — simple recipes read like declarative config.
 - **Documentation culture** — invest in clear, practical docs rather than tribal
   knowledge.
 
@@ -178,7 +178,7 @@ transparency directly influences Yoe-NG's design.
 | Target            | Desktop/server, x86-first | Embedded, multi-arch            |
 | Package manager   | pacman                    | apk                             |
 | Package format    | tar.zst + .PKGINFO        | apk (tar.gz + .PKGINFO)         |
-| Build definitions | PKGBUILD (bash)           | TOML recipes                    |
+| Build definitions | PKGBUILD (bash)           | Starlark recipes                |
 | Reproducibility   | Not a goal                | Content-addressed builds        |
 | Image assembly    | Manual (pacstrap)         | Automated (`yoe build <image>`) |
 | Administration    | Interactive (hands-on)    | Declarative (config-driven)     |
@@ -215,7 +215,7 @@ its implementation complexity is not.
 
 |                 | NixOS                                | Yoe-NG                                     |
 | --------------- | ------------------------------------ | ------------------------------------------ |
-| Config language | Nix (custom functional language)     | TOML                                       |
+| Config language | Nix (custom functional language)     | Starlark (Python-like)                     |
 | Store model     | Content-addressed `/nix/store` paths | Standard FHS with apk                      |
 | Closure size    | Often 1GB+ for simple systems        | Target single-digit MB base                |
 | Target          | Desktop, server, CI                  | Embedded hardware                          |
@@ -223,7 +223,7 @@ its implementation complexity is not.
 | Package manager | Nix                                  | apk                                        |
 | Reproducibility | Bit-for-bit (aspirational)           | Content-addressed, functionally equivalent |
 | Rollback        | Via Nix generations                  | Via A/B partitions or apk                  |
-| Learning curve  | Steep (must learn Nix language)      | Shallow (TOML + shell)                     |
+| Learning curve  | Steep (must learn Nix language)      | Shallow (Starlark, Python-like)            |
 
 **Caching comparison:** Nix's binary cache (Cachix, or self-hosted with
 `nix-serve`) is conceptually similar to Yoe-NG's remote cache — both store
@@ -265,7 +265,7 @@ tooling design.
 
 - Ninja file generation — Yoe-NG's recipe builds are coarse-grained enough that
   `yoe` orchestrates directly.
-- GN's custom scripting language — TOML is sufficient for Yoe-NG's metadata.
+- GN's custom scripting language — Starlark serves the same purpose for Yoe-NG.
 - C/C++ build model specifics — GN is deeply tied to source-file-level
   dependency tracking, which isn't relevant for recipe-level builds.
 
@@ -275,7 +275,7 @@ tooling design.
 | ---------------------- | ----------------------- | ----------------------------------- |
 | Purpose                | C/C++ meta-build system | Embedded Linux distribution builder |
 | Output                 | Ninja build files       | `.apk` packages and disk images     |
-| Config language        | GN (custom)             | TOML                                |
+| Config language        | GN (custom)             | Starlark (Python-like)              |
 | Dependency granularity | Source file / target    | Recipe (package)                    |
 | Build execution        | Ninja                   | `yoe` directly                      |
 | Introspection          | `gn desc`, `gn refs`    | `yoe desc`, `yoe refs`, `yoe graph` |
