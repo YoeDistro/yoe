@@ -11,7 +11,7 @@ machine(
         machine = "q35",
         cpu = "host",
         memory = "1G",
-        firmware = "ovmf",
+        firmware = "seabios",
         display = "none",
     ),
 )

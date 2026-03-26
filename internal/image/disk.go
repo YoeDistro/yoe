@@ -86,6 +86,11 @@ func GenerateDiskImage(rootfs, imgPath string, recipe *yoestar.Recipe, w io.Writ
 		offsetMB += sizeMB
 	}
 
+	// Install syslinux bootloader (MBR + VBR + ldlinux.sys)
+	if err := installBootloader(imgPath, rootfs, recipe, w); err != nil {
+		fmt.Fprintf(w, "  Warning: could not install bootloader: %v\n", err)
+	}
+
 	info, _ := os.Stat(imgPath)
 	if info != nil {
 		fmt.Fprintf(w, "  Disk image: %s (%dMB)\n", imgPath, info.Size()/(1024*1024))
@@ -109,21 +114,26 @@ func partitionImage(imgPath string, partitions []yoestar.Partition, w io.Writer)
 		return nil
 	}
 
-	script := "label: gpt\n"
-	for _, p := range partitions {
+	script := "label: dos\n"
+	for i, p := range partitions {
 		size := ""
 		sizeMB := parseSizeMB(p.Size)
-		if sizeMB > 0 {
-			size = fmt.Sprintf("size=%dM, ", sizeMB)
+		if sizeMB > 0 && i < len(partitions)-1 {
+			// Specify size only for non-last partitions; last gets remaining space
+			size = fmt.Sprintf("size=%dMiB, ", sizeMB)
 		}
-		ptype := "linux"
+		ptype := "83" // Linux
 		if p.Type == "vfat" {
-			ptype = "uefi"
+			ptype = "c" // W95 FAT32 (LBA)
 		}
-		script += fmt.Sprintf("%stype=%s, name=%s\n", size, ptype, p.Label)
+		bootable := ""
+		if p.Root {
+			bootable = ", bootable"
+		}
+		script += fmt.Sprintf("%stype=%s%s\n", size, ptype, bootable)
 	}
 
-	fmt.Fprintln(w, "  Partitioning (GPT)...")
+	fmt.Fprintln(w, "  Partitioning (MBR)...")
 	cmd := exec.Command("sfdisk", "--quiet", imgPath)
 	cmd.Stdin = strings.NewReader(script)
 	cmd.Stderr = os.Stderr
@@ -189,6 +199,94 @@ func createExt4Partition(partImg string, sizeMB int, rootfs string, p yoestar.Pa
 		return fmt.Errorf("mkfs.ext4 -d: %s\n%s", err, out)
 	}
 
+	return nil
+}
+
+// installBootloader writes syslinux MBR code and runs extlinux --install
+// on the root partition to set up the VBR and ldlinux.sys.
+func installBootloader(imgPath, rootfs string, recipe *yoestar.Recipe, w io.Writer) error {
+	// Write MBR boot code
+	// Try rootfs first (from syslinux recipe), then container's syslinux
+	mbrBin := filepath.Join(rootfs, "usr", "share", "syslinux", "mbr.bin")
+	if _, err := os.Stat(mbrBin); os.IsNotExist(err) {
+		mbrBin = "/usr/share/syslinux/mbr.bin"
+		if _, err := os.Stat(mbrBin); os.IsNotExist(err) {
+			return fmt.Errorf("syslinux mbr.bin not found")
+		}
+	}
+
+	mbrData, err := os.ReadFile(mbrBin)
+	if err != nil {
+		return err
+	}
+	if len(mbrData) > 440 {
+		mbrData = mbrData[:440]
+	}
+
+	img, err := os.OpenFile(imgPath, os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	if _, err := img.WriteAt(mbrData, 0); err != nil {
+		img.Close()
+		return fmt.Errorf("writing MBR: %w", err)
+	}
+	img.Close()
+	fmt.Fprintln(w, "  Installed syslinux MBR boot code")
+
+	// Run extlinux --install on the root partition using a loop device
+	// This writes the VBR and ldlinux.sys to the right disk sectors
+	if _, err := exec.LookPath("losetup"); err != nil {
+		fmt.Fprintln(w, "  (losetup not available — skipping extlinux install)")
+		return nil
+	}
+
+	// Find the root partition offset
+	offsetBytes := int64(1024 * 1024) // 1MB default (after MBR)
+	for _, p := range recipe.Partitions {
+		if p.Root {
+			break
+		}
+		sizeMB := parseSizeMB(p.Size)
+		if sizeMB > 0 {
+			offsetBytes += int64(sizeMB) * 1024 * 1024
+		}
+	}
+
+	// Set up loop device for the partition
+	out, err := exec.Command("losetup", "--find", "--show",
+		"--offset", fmt.Sprintf("%d", offsetBytes),
+		"--sizelimit", fmt.Sprintf("%d", 512*1024*1024),
+		imgPath).CombinedOutput()
+	if err != nil {
+		fmt.Fprintf(w, "  (losetup failed: %v: %s — skipping extlinux install)\n", err, strings.TrimSpace(string(out)))
+		return nil
+	}
+	loopDev := strings.TrimSpace(string(out))
+	defer exec.Command("losetup", "-d", loopDev).Run()
+
+	// Mount the partition
+	mountDir, err := os.MkdirTemp("", "yoe-extlinux-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(mountDir)
+
+	if err := exec.Command("mount", loopDev, mountDir).Run(); err != nil {
+		fmt.Fprintf(w, "  (mount failed: %v — skipping extlinux install)\n", err)
+		return nil
+	}
+	defer exec.Command("umount", mountDir).Run()
+
+	// Run extlinux --install
+	extlinuxDir := filepath.Join(mountDir, "boot", "extlinux")
+	cmd := exec.Command("extlinux", "--install", extlinuxDir)
+	if cmdOut, err := cmd.CombinedOutput(); err != nil {
+		fmt.Fprintf(w, "  extlinux --install failed: %s\n%s", err, cmdOut)
+		return nil // non-fatal — image still has the files, just no VBR
+	}
+
+	fmt.Fprintln(w, "  Installed extlinux bootloader")
 	return nil
 }
 

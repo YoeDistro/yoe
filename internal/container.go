@@ -14,7 +14,7 @@ const (
 	// containerVersion is bumped when the Dockerfile changes (i.e., the tool
 	// set inside the container changes). The image is tagged yoe-ng:<version>
 	// so yoe automatically rebuilds when the version doesn't match.
-	containerVersion = "5"
+	containerVersion = "8"
 
 	containerImage = "yoe-ng"
 	containerEnv   = "YOE_IN_CONTAINER"
@@ -76,9 +76,9 @@ func ExecInContainer(args []string) error {
 
 	runArgs := []string{
 		"run", "--rm",
-		// Allow bwrap to create namespaces and mount /proc inside the container
-		"--security-opt", "seccomp=unconfined",
-		"--cap-add", "SYS_ADMIN",
+		// --privileged provides: bwrap namespaces, losetup/mount for disk
+		// images, /dev/kvm for QEMU. Container user is still non-root.
+		"--privileged",
 		"-v", mountDir + ":/project",
 		"-v", exe + ":/usr/local/bin/yoe:ro",
 		"-w", containerWorkDir,
@@ -101,8 +101,9 @@ func ExecInContainer(args []string) error {
 		runArgs = append(runArgs, "-v", cacheDir+":/cache", "-e", "YOE_CACHE=/cache")
 	}
 
-	// Pass through user/group for file ownership
-	runArgs = append(runArgs, "--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()))
+	// Note: running as root inside the container (needed for losetup/mount
+	// during disk image creation). File ownership on the bind mount follows
+	// the host filesystem.
 
 	runArgs = append(runArgs, containerTag())
 	runArgs = append(runArgs, args...)

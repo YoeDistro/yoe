@@ -5,13 +5,12 @@ image(
     packages = [
         "busybox",
         "linux",
+        "syslinux",
     ],
     hostname = "yoe",
     timezone = "UTC",
     services = [],
     partitions = [
-        partition(label="boot", type="vfat", size="64M",
-                  contents=["vmlinuz"]),
         partition(label="rootfs", type="ext4", size="512M", root=True),
     ],
 )

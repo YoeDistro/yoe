@@ -156,7 +156,7 @@ func applyConfig(rootfs string, recipe *yoestar.Recipe, w io.Writer) error {
 	extlinuxConf := `DEFAULT yoe
 LABEL yoe
     LINUX /boot/vmlinuz
-    APPEND console=ttyS0 root=/dev/vda2 rw
+    APPEND console=ttyS0 root=/dev/vda1 rw init=/bin/sh
 `
 	os.WriteFile(filepath.Join(bootDir, "extlinux.conf"), []byte(extlinuxConf), 0644)
 	fmt.Fprintln(w, "  Installed boot configuration (extlinux)")
