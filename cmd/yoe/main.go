@@ -8,6 +8,7 @@ import (
 
 	yoe "github.com/YoeDistro/yoe-ng/internal"
 	"github.com/YoeDistro/yoe-ng/internal/build"
+	"github.com/YoeDistro/yoe-ng/internal/device"
 	"github.com/YoeDistro/yoe-ng/internal/repo"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
 	"github.com/YoeDistro/yoe-ng/internal/source"
@@ -58,6 +59,10 @@ func main() {
 	switch command {
 	case "build":
 		cmdBuild(args)
+	case "flash":
+		cmdFlash(args)
+	case "run":
+		cmdRun(args)
 	case "layer":
 		cmdLayer(args)
 	case "config":
@@ -421,6 +426,83 @@ func cmdDev(args []string) {
 		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown dev subcommand: %s\n", args[0])
+		os.Exit(1)
+	}
+}
+
+func cmdFlash(args []string) {
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Usage: %s flash <image-recipe> <device> [--dry-run]\n", os.Args[0])
+		os.Exit(1)
+	}
+
+	recipeName := args[0]
+	devicePath := ""
+	dryRun := false
+
+	for _, a := range args[1:] {
+		switch a {
+		case "--dry-run":
+			dryRun = true
+		default:
+			devicePath = a
+		}
+	}
+
+	if devicePath == "" && !dryRun {
+		fmt.Fprintf(os.Stderr, "Usage: %s flash <image-recipe> <device>\n", os.Args[0])
+		os.Exit(1)
+	}
+
+	proj := loadProject()
+	if err := device.Flash(proj, recipeName, devicePath, projectDir(), dryRun, os.Stdout); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func cmdRun(args []string) {
+	recipeName := ""
+	machineName := ""
+	opts := device.QEMUOptions{Memory: "1G"}
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--machine", "-machine":
+			if i+1 < len(args) {
+				machineName = args[i+1]
+				i++
+			}
+		case "--memory":
+			if i+1 < len(args) {
+				opts.Memory = args[i+1]
+				i++
+			}
+		case "--port":
+			if i+1 < len(args) {
+				opts.Ports = append(opts.Ports, args[i+1])
+				i++
+			}
+		case "--display":
+			opts.Display = true
+		case "--daemon":
+			opts.Daemon = true
+		default:
+			recipeName = args[i]
+		}
+	}
+
+	proj := loadProject()
+	if recipeName == "" {
+		recipeName = proj.Defaults.Image
+	}
+	if recipeName == "" {
+		fmt.Fprintf(os.Stderr, "Usage: %s run <image-recipe> [--machine <name>]\n", os.Args[0])
+		os.Exit(1)
+	}
+
+	if err := device.RunQEMU(proj, recipeName, machineName, projectDir(), opts, os.Stdout); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
