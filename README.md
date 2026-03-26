@@ -37,9 +37,17 @@ See [AI Skills](ai-skills.md) for the full catalog of AI-driven workflows.
 
 - **AI-native** — structured metadata (Starlark), queryable dependency graphs,
   and AI skills as first-class interfaces. See [AI Skills](ai-skills.md).
+- **Three interfaces** — AI conversation, interactive TUI, and traditional CLI.
+  All three do the same things; use whichever fits the moment.
+- **Developer-focused** — first-class support for application development, not
+  just system integration. Good tooling for kernel, applications, and BSPs
+  (similar to Yocto's scope, but simpler).
 - **Simple** — one Go binary, one language (Starlark), one package format (apk)
 - **Easy to get started** — AI guides you through project setup, recipe
   creation, and image configuration
+- **Tooling written in Go** — single static binary, no runtime dependencies, TUI
+  built with [Bubble Tea](https://github.com/charmbracelet/bubbletea), fast
+  enough, trivial to distribute
 - **Build dependencies isolated with bubblewrap** — no Docker daemon required,
   no host dependency pollution
 - **Easy BSP support** — support for many boards, inclusive of hardware
@@ -53,11 +61,13 @@ See [AI Skills](ai-skills.md) for the full catalog of AI-driven workflows.
 - **No cross compilation** — native builds on modern ARM/RISC-V hardware
 - **Starlark for recipes and build rules** — Python-like, deterministic,
   sandboxed (see [Build Languages](build-languages.md))
+- **Leverage existing ecosystems** — integrate with language-native build
+  systems rather than reimplementing them
 - **64-bit only** — x86, ARM, RISC-V
 - **Granular packaging** (like Yocto/Debian) — one recipe can produce multiple
   sub-packages (`-dev`, `-doc`, `-dbg`, custom splits)
-- **Composable layers** — vendor BSP, product, and core layers compose through
-  Starlark `load()` function calls
+- **Composable layers** — pull in recipes/packages using GitHub URLs; vendor
+  BSP, product, and core layers compose through Starlark `load()` function calls
 - **Image-based device management** — full image updates, OSTree, BDiff
 - **Good SDK story** — binary SDKs, pre-built packages like Chromium
 
