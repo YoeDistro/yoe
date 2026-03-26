@@ -27,17 +27,18 @@ This project is broken into 9 phases. Each phase produces working, testable
 software. Phases 1-3 are pure Go with no external system dependencies (testable
 on any dev machine). Phases 4+ require Linux with bubblewrap and apk-tools.
 
-| Phase | Name                          | Depends On | Key Deliverable                                                                   |
-| ----- | ----------------------------- | ---------- | --------------------------------------------------------------------------------- |
-| 1     | CLI Foundation                | —          | `yoe init`, `yoe config`, Starlark evaluation for all recipe/config types         |
-| 2     | Dependency Resolution         | 1          | DAG construction, topological sort, config propagation, `yoe desc`/`refs`/`graph` |
-| 3     | Source Management             | 1          | `yoe source fetch/list/verify/clean`, content-addressed cache                     |
-| 4     | Build Execution               | 2, 3       | `yoe build` with bubblewrap isolation, build step execution                       |
-| 5     | Package Creation & Repository | 4          | APK package creation, `yoe repo` commands, local repository                       |
-| 6     | Image Assembly                | 5          | Image recipe builds — rootfs via apk, overlays, disk image generation             |
-| 7     | Device Interaction            | 6          | `yoe flash`, `yoe run` (QEMU with KVM)                                            |
-| 8     | TUI                           | 2          | `yoe tui` — Bubble Tea interactive interface                                      |
-| 9     | Bootstrap                     | 5          | `yoe bootstrap stage0/stage1` — self-hosting toolchain                            |
+| Phase | Name                          | Depends On | Key Deliverable                                                                             |
+| ----- | ----------------------------- | ---------- | ------------------------------------------------------------------------------------------- |
+| 1     | CLI Foundation                | —          | `yoe init`, `yoe config`, `yoe layer list`, Starlark evaluation for all recipe/config types |
+| 2     | Dependency Resolution         | 1          | DAG construction, topological sort, config propagation, `yoe desc`/`refs`/`graph`           |
+| 2.5   | Layer Management              | 1          | `yoe layer sync`, layer fetching, LAYER.star parsing, transitive dep resolution             |
+| 3     | Source Management             | 1          | `yoe source fetch/list/verify/clean`, content-addressed cache                               |
+| 4     | Build Execution               | 2, 3       | `yoe build` with bubblewrap isolation, build step execution                                 |
+| 5     | Package Creation & Repository | 4          | APK package creation, `yoe repo` commands, local repository                                 |
+| 6     | Image Assembly                | 5          | Image recipe builds — rootfs via apk, overlays, disk image generation                       |
+| 7     | Device Interaction            | 6          | `yoe flash`, `yoe run` (QEMU with KVM)                                                      |
+| 8     | TUI                           | 2          | `yoe tui` — Bubble Tea interactive interface                                                |
+| 9     | Bootstrap                     | 5          | `yoe bootstrap stage0/stage1` — self-hosting toolchain                                      |
 
 ---
 
@@ -53,13 +54,15 @@ and `yoe config` — the skeleton everything else builds on.
 cmd/yoe/main.go                        — entry point, switch/case command dispatch
 internal/config/project.go             — project discovery (find PROJECT.star)
 internal/starlark/engine.go            — Starlark thread setup, load() handler, evaluation
-internal/starlark/builtins.go          — built-in functions: project(), machine(), package(), image(), etc.
-internal/starlark/types.go             — Go types produced by evaluation (Project, Machine, Recipe, etc.)
+internal/starlark/builtins.go          — built-in functions: project(), machine(), package(), image(), layer_info(), etc.
+internal/starlark/types.go             — Go types produced by evaluation (Project, Machine, Recipe, LayerInfo, etc.)
 internal/starlark/loader.go            — walk project tree, evaluate all .star files, return Project
 internal/starlark/engine_test.go       — tests for engine + builtins
 internal/starlark/loader_test.go       — tests for full project loading
 internal/init.go                       — yoe init logic
 internal/clean.go                      — yoe clean logic
+internal/layer.go                      — yoe layer list logic
+internal/configcmd.go                  — yoe config show logic
 go.mod
 go.sum
 testdata/valid-project/                — test fixture: complete valid project
@@ -112,6 +115,8 @@ func main() {
 	switch command {
 	case "init":
 		cmdInit(args)
+	case "layer":
+		cmdLayer(args)
 	case "config":
 		cmdConfig(args)
 	case "clean":
@@ -133,6 +138,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  build [recipes...]      Build recipes (packages and images)\n")
 	fmt.Fprintf(os.Stderr, "  flash <device>          Write an image to a device/SD card\n")
 	fmt.Fprintf(os.Stderr, "  run                     Run an image in QEMU\n")
+	fmt.Fprintf(os.Stderr, "  layer                   Manage external layers (fetch, sync, list)\n")
 	fmt.Fprintf(os.Stderr, "  repo                    Manage the local apk package repository\n")
 	fmt.Fprintf(os.Stderr, "  cache                   Manage the build cache (local and remote)\n")
 	fmt.Fprintf(os.Stderr, "  source                  Download and manage source archives/repos\n")
@@ -254,8 +260,16 @@ type SourcesConfig struct {
 }
 
 type LayerRef struct {
-	URL string
-	Ref string
+	URL   string
+	Ref   string
+	Local string // local path override (like Go's replace directive)
+}
+
+// LayerInfo represents an evaluated LAYER.star from an external layer.
+type LayerInfo struct {
+	Name        string
+	Description string
+	Deps        []LayerRef
 }
 
 // Machine represents an evaluated machine() call.
@@ -627,6 +641,7 @@ func (e *Engine) builtins() starlark.StringDict {
 		"s3_cache":   starlark.NewBuiltin("s3_cache", fnS3Cache),
 		"sources":    starlark.NewBuiltin("sources", fnSources),
 		"layer":      starlark.NewBuiltin("layer", fnLayer),
+		"layer_info": starlark.NewBuiltin("layer_info", e.fnLayerInfo),
 		"machine":    starlark.NewBuiltin("machine", e.fnMachine),
 		"kernel":     starlark.NewBuiltin("kernel", fnKernel),
 		"uboot":      starlark.NewBuiltin("uboot", fnUboot),
@@ -1073,6 +1088,9 @@ project(
         ],
     ),
     sources = sources(go_proxy = "https://proxy.golang.org"),
+    layers = [
+        layer("github.com/yoe/recipes-core", ref = "v1.0.0"),
+    ],
 )
 ```
 
@@ -1749,6 +1767,35 @@ git commit -m "fix: integration test fixes for phase 1"
 ```
 
 (Skip if no fixes needed.)
+
+---
+
+## Phase 2.5: Layer Management (detailed plan TBD)
+
+**Goal:** Fetch, cache, and resolve external layers declared in `PROJECT.star`
+and their transitive dependencies from `LAYER.star` files.
+
+**Key components:**
+
+- `internal/layer/fetch.go` — Git clone/fetch layers into `$YOE_CACHE/layers/`
+- `internal/layer/resolve.go` — resolve transitive deps from LAYER.star, version
+  conflict resolution (PROJECT.star wins, then highest semver)
+- `internal/layer/cache.go` — bare Git repo caching with worktree checkouts at
+  pinned refs
+- `internal/layer/local.go` — local override support (skip fetch, use local dir)
+- `cmd/yoe/main.go` — `yoe layer sync`, `yoe layer list --tree`,
+  `yoe layer info`, `yoe layer check-updates`
+- Update `internal/starlark/loader.go` — resolve `@layer-name//...` load()
+  references to cached layer paths
+
+**Depends on:** Phase 1 (LayerRef/LayerInfo types, Starlark engine, project
+loader)
+
+**v1 behavior:** `yoe layer sync` reads LAYER.star from each layer and errors if
+transitive deps are missing from PROJECT.star. This is explicit and debuggable.
+
+**v2 behavior (future):** Transitive deps are fetched automatically when not
+overridden by PROJECT.star. Diamond dependencies resolve to the highest semver.
 
 ---
 

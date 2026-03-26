@@ -450,6 +450,55 @@ def my_go_service(name, version, source, **kwargs):
     )
 ```
 
+### Extensibility: Starlark and Go
+
+Starlark is not a standalone language — it runs embedded inside the `yoe` Go
+binary. Every built-in function (`package()`, `machine()`, `image()`, etc.) is a
+Go function registered into the Starlark environment. When Starlark code calls
+`package(name="openssh", ...)`, it executes Go code that has full access to the
+host runtime.
+
+This means the system is extensible in two directions:
+
+**Go to Starlark (primitives):** The `yoe` binary provides built-in functions
+that Starlark code can call. These have capabilities Starlark alone cannot —
+filesystem I/O, network access, executing system tools (apk, bwrap, git),
+managing the build engine state. Adding a new built-in is a Go function with the
+right signature:
+
+```go
+// In Go: register a new built-in function
+func (e *Engine) fnDeploy(thread *starlark.Thread, fn *starlark.Builtin,
+    args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+    target := kwString(kwargs, "target")
+    // Full access to Go runtime — HTTP, filesystem, exec, etc.
+    return starlark.None, nil
+}
+
+// Register it in builtins():
+"deploy": starlark.NewBuiltin("deploy", e.fnDeploy),
+```
+
+Now any `.star` file can call `deploy(target="production")`.
+
+**Starlark to Starlark (composition):** Users define functions in `.star` files
+that compose the Go-provided primitives. Classes, macros, and helpers are just
+Starlark functions that call built-in functions:
+
+```python
+# classes/my_service.star — user-defined class wrapping Go builtins
+def my_service(name, version, **kwargs):
+    go_binary(name=name, version=version, **kwargs)  # calls Go
+    systemd_service(name=name, unit=name + ".service")  # calls Go
+```
+
+**The architecture mirrors Bazel:** Go provides the **primitives** (package
+creation, image assembly, sandbox execution, cache management), Starlark
+provides the **composition layer** (classes, conditionals, layer overrides,
+shared variables). Starlark code cannot perform arbitrary I/O — it can only call
+the Go functions that `yoe` explicitly exposes, maintaining the sandboxed,
+deterministic evaluation model.
+
 ## Directory Structure
 
 A typical Yoe-NG project layout:
@@ -494,6 +543,111 @@ my-project/
                         ──▶ partition + format
                         ──▶ disk image (.img / .wic)
 ```
+
+## Layers
+
+Layers are external Git repositories that provide recipes, classes, and machine
+definitions. They are the primary mechanism for reusing and sharing build
+definitions across projects — BSP vendors ship layers, and product teams compose
+them.
+
+### Declaring Layers in PROJECT.star
+
+```python
+project(
+    name = "my-product",
+    version = "1.0.0",
+    layers = [
+        layer("github.com/yoe/recipes-core", ref = "v1.0.0"),
+        layer("github.com/vendor/bsp-imx8", ref = "v2.1.0"),
+    ],
+)
+```
+
+Each `layer()` call declares a Git repository URL and a ref (tag, branch, or
+commit SHA). The `yoe` tool fetches and caches these repositories, making them
+available as `@layer-name` in `load()` statements.
+
+### Layer Manifests (LAYER.star)
+
+Layers can declare their own dependencies via a `LAYER.star` file in the
+repository root. This enables BSP vendors to ship self-contained layers without
+requiring users to manually discover transitive dependencies.
+
+```python
+# In github.com/vendor/bsp-imx8/LAYER.star
+layer_info(
+    name = "vendor-bsp-imx8",
+    description = "i.MX8 BSP recipes and machine definitions",
+    deps = [
+        layer("github.com/vendor/hal-common", ref = "v1.3.0"),
+        layer("github.com/vendor/firmware-imx", ref = "v5.4"),
+    ],
+)
+```
+
+### Dependency Resolution Rules
+
+Layer dependencies follow the **Go modules model** — the root project has final
+authority over versions:
+
+1. **PROJECT.star always wins.** If PROJECT.star and a LAYER.star both reference
+   the same repository, the version in PROJECT.star takes precedence. This gives
+   the project owner full control over the dependency tree.
+
+2. **Transitive deps are checked, not silently fetched (v1).** In the initial
+   implementation, `yoe` reads each layer's `LAYER.star` and **errors** if a
+   required dependency is missing from PROJECT.star, rather than silently
+   fetching it. The error message tells the user exactly what to add. This is
+   explicit and debuggable.
+
+3. **Automatic transitive resolution (v2).** In a future version, transitive
+   dependencies declared in `LAYER.star` are fetched automatically when not
+   overridden by PROJECT.star. `yoe layer list` shows the full resolved tree so
+   nothing is hidden.
+
+4. **Diamond dependencies resolve to the highest version.** If two layers depend
+   on different versions of the same repository, `yoe` selects the higher
+   version (semver comparison) unless PROJECT.star pins a specific version.
+
+**Example — v1 behavior (missing transitive dep):**
+
+```
+$ yoe build --all
+Error: layer "vendor-bsp-imx8" requires "github.com/vendor/hal-common" (ref v1.3.0)
+       but it is not declared in PROJECT.star.
+
+Add this to your PROJECT.star layers list:
+    layer("github.com/vendor/hal-common", ref = "v1.3.0"),
+```
+
+**Example — PROJECT.star overriding a transitive version:**
+
+```python
+# PROJECT.star
+layers = [
+    layer("github.com/yoe/recipes-core", ref = "v1.0.0"),
+    layer("github.com/vendor/bsp-imx8", ref = "v2.1.0"),
+    # Override the version that bsp-imx8 requests (v1.3.0 → v1.4.0)
+    layer("github.com/vendor/hal-common", ref = "v1.4.0"),
+]
+```
+
+### Local Layer Overrides
+
+During development, you often want to work on a layer locally instead of
+fetching from Git. The `local` parameter overrides the remote URL:
+
+```python
+layers = [
+    layer("github.com/yoe/recipes-core", ref = "v1.0.0"),
+    # Use a local checkout during development
+    layer("github.com/vendor/bsp-imx8", local = "../bsp-imx8"),
+]
+```
+
+When `local` is set, `yoe` uses the local directory directly (no fetch, no ref
+checking). This is equivalent to Go's `replace` directive in `go.mod`.
 
 ## Label-Based References
 

@@ -17,6 +17,7 @@ func (e *Engine) builtins() starlark.StringDict {
 		"s3_cache":    starlark.NewBuiltin("s3_cache", fnS3Cache),
 		"sources":     starlark.NewBuiltin("sources", fnSources),
 		"layer":       starlark.NewBuiltin("layer", fnLayer),
+		"layer_info":  starlark.NewBuiltin("layer_info", e.fnLayerInfo),
 		"machine":     starlark.NewBuiltin("machine", e.fnMachine),
 		"kernel":      starlark.NewBuiltin("kernel", fnKernel),
 		"uboot":       starlark.NewBuiltin("uboot", fnUboot),
@@ -174,6 +175,45 @@ func fnPartition(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwar
 	return makeStruct("partition", kwargs), nil
 }
 
+// --- Built-in functions that register layer info ---
+
+func (e *Engine) fnLayerInfo(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	name := kwString(kwargs, "name")
+	if name == "" {
+		return nil, fmt.Errorf("layer_info() requires name")
+	}
+
+	info := &LayerInfo{
+		Name:        name,
+		Description: kwString(kwargs, "description"),
+	}
+
+	// Parse deps list of layer() structs
+	for _, kv := range kwargs {
+		if string(kv[0].(starlark.String)) == "deps" {
+			if list, ok := kv[1].(*starlark.List); ok {
+				iter := list.Iterate()
+				defer iter.Done()
+				var v starlark.Value
+				for iter.Next(&v) {
+					if s, ok := v.(*starlarkstruct.Struct); ok {
+						info.Deps = append(info.Deps, LayerRef{
+							URL: structString(s, "url"),
+							Ref: structString(s, "ref"),
+						})
+					}
+				}
+			}
+		}
+	}
+
+	e.layerInfo = info
+	return starlark.None, nil
+}
+
 // --- Built-in functions that register targets (side-effecting) ---
 
 func (e *Engine) fnProject(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
@@ -188,7 +228,7 @@ func (e *Engine) fnProject(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 	repo := kwStruct(kwargs, "repository")
 	cacheS := kwStruct(kwargs, "cache")
 
-	e.project = &Project{
+	p := &Project{
 		Name:    kwString(kwargs, "name"),
 		Version: kwString(kwargs, "version"),
 		Defaults: Defaults{
@@ -203,6 +243,27 @@ func (e *Engine) fnProject(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 		},
 	}
 
+	// Parse layers list
+	for _, kv := range kwargs {
+		if string(kv[0].(starlark.String)) == "layers" {
+			if list, ok := kv[1].(*starlark.List); ok {
+				iter := list.Iterate()
+				defer iter.Done()
+				var v starlark.Value
+				for iter.Next(&v) {
+					if s, ok := v.(*starlarkstruct.Struct); ok {
+						p.Layers = append(p.Layers, LayerRef{
+							URL:   structString(s, "url"),
+							Ref:   structString(s, "ref"),
+							Local: structString(s, "local"),
+						})
+					}
+				}
+			}
+		}
+	}
+
+	e.project = p
 	return starlark.None, nil
 }
 
