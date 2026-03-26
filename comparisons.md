@@ -131,16 +131,16 @@ looks like.
 
 **Key differences:**
 
-|                   | Alpine                            | Yoe-NG                                       |
-| ----------------- | --------------------------------- | -------------------------------------------- |
-| C library         | musl                              | glibc                                        |
-| Init system       | OpenRC                            | systemd                                      |
-| Target            | Containers, small servers         | Custom embedded hardware                     |
-| BSP support       | Generic x86/ARM images            | Per-board machine definitions                |
-| Image assembly    | `alpine-make-rootfs`              | `yoe image` with machine + partition support |
-| Build system      | `abuild` + APKBUILD shell scripts | `yoe build` + TOML recipes                   |
-| Kernel management | Generic kernels                   | Per-machine kernel config, device trees      |
-| OTA updates       | Standard apk upgrade              | apk + full image update + rollback           |
+|                   | Alpine                            | Yoe-NG                                               |
+| ----------------- | --------------------------------- | ---------------------------------------------------- |
+| C library         | musl                              | glibc                                                |
+| Init system       | OpenRC                            | systemd                                              |
+| Target            | Containers, small servers         | Custom embedded hardware                             |
+| BSP support       | Generic x86/ARM images            | Per-board machine definitions                        |
+| Image assembly    | `alpine-make-rootfs`              | `yoe build <image>` with machine + partition support |
+| Build system      | `abuild` + APKBUILD shell scripts | `yoe build` + TOML recipes                           |
+| Kernel management | Generic kernels                   | Per-machine kernel config, device trees              |
+| OTA updates       | Standard apk upgrade              | apk + full image update + rollback                   |
 
 **When to use Alpine instead:** when you're targeting containers or generic
 server hardware and don't need custom BSP, kernel configuration, or image
@@ -173,15 +173,15 @@ transparency directly influences Yoe-NG's design.
 
 **Key differences:**
 
-|                   | Arch                      | Yoe-NG                      |
-| ----------------- | ------------------------- | --------------------------- |
-| Target            | Desktop/server, x86-first | Embedded, multi-arch        |
-| Package manager   | pacman                    | apk                         |
-| Package format    | tar.zst + .PKGINFO        | apk (tar.gz + .PKGINFO)     |
-| Build definitions | PKGBUILD (bash)           | TOML recipes                |
-| Reproducibility   | Not a goal                | Content-addressed builds    |
-| Image assembly    | Manual (pacstrap)         | Automated (`yoe image`)     |
-| Administration    | Interactive (hands-on)    | Declarative (config-driven) |
+|                   | Arch                      | Yoe-NG                          |
+| ----------------- | ------------------------- | ------------------------------- |
+| Target            | Desktop/server, x86-first | Embedded, multi-arch            |
+| Package manager   | pacman                    | apk                             |
+| Package format    | tar.zst + .PKGINFO        | apk (tar.gz + .PKGINFO)         |
+| Build definitions | PKGBUILD (bash)           | TOML recipes                    |
+| Reproducibility   | Not a goal                | Content-addressed builds        |
+| Image assembly    | Manual (pacstrap)         | Automated (`yoe build <image>`) |
+| Administration    | Interactive (hands-on)    | Declarative (config-driven)     |
 
 **When to use Arch instead:** when you're building a desktop or server system
 for personal use and value having full manual control. Arch's philosophy works
