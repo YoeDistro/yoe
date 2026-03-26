@@ -107,8 +107,35 @@ func cmdInit(args []string) {
 }
 
 func cmdConfig(args []string) {
-	fmt.Fprintf(os.Stderr, "config: not yet implemented\n")
-	os.Exit(1)
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Usage: %s config <show|set> [...]\n", os.Args[0])
+		os.Exit(1)
+	}
+
+	dir := os.Getenv("YOE_PROJECT")
+	if dir == "" {
+		dir = "."
+	}
+
+	switch args[0] {
+	case "show":
+		if err := yoe.RunConfigShow(dir, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "set":
+		if len(args) < 3 {
+			fmt.Fprintf(os.Stderr, "Usage: %s config set <key> <value>\n", os.Args[0])
+			os.Exit(1)
+		}
+		if err := yoe.RunConfigSet(dir, args[1], args[2]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown config subcommand: %s\n", args[0])
+		os.Exit(1)
+	}
 }
 
 func cmdClean(args []string) {
