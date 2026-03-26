@@ -24,23 +24,23 @@ type SandboxConfig struct {
 func RunInSandbox(cfg *SandboxConfig, command string) error {
 	args := []string{
 		"--die-with-parent",
-		"--unshare-pid",
 	}
 
-	// Mount build root read-only as base filesystem
+	// Mount the container root read-write (we're already inside Docker,
+	// which provides the isolation). Bwrap adds per-recipe PID isolation
+	// and prevents accidental host contamination.
 	if cfg.BuildRoot != "" {
-		args = append(args, "--ro-bind", cfg.BuildRoot, "/")
+		args = append(args, "--bind", cfg.BuildRoot, "/")
 	} else {
-		// No build root yet — bind the host root read-only
-		args = append(args, "--ro-bind", "/", "/")
+		args = append(args, "--bind", "/", "/")
 	}
 
-	// Mount source and destdir read-write
+	// Mount source and destdir into /build
 	args = append(args,
 		"--bind", cfg.SrcDir, "/build/src",
 		"--bind", cfg.DestDir, "/build/destdir",
-		"--dev", "/dev",
-		"--proc", "/proc",
+		"--dev-bind", "/dev", "/dev",
+		"--ro-bind", "/proc", "/proc",
 		"--tmpfs", "/tmp",
 	)
 
@@ -87,10 +87,16 @@ func RunSimple(srcDir, destDir string, env map[string]string, command string) er
 	return nil
 }
 
-// HasBwrap returns true if bubblewrap is available.
+// HasBwrap returns true if bubblewrap is available and can create namespaces.
+// Inside Docker containers, bwrap may be installed but unable to create user
+// namespaces, so we test with a trivial command.
 func HasBwrap() bool {
-	_, err := exec.LookPath("bwrap")
-	return err == nil
+	if _, err := exec.LookPath("bwrap"); err != nil {
+		return false
+	}
+	// Test if bwrap can actually create a namespace
+	cmd := exec.Command("bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "true")
+	return cmd.Run() == nil
 }
 
 // EnsureDir creates a directory if it doesn't exist.

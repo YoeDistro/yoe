@@ -14,7 +14,7 @@ const (
 	// containerVersion is bumped when the Dockerfile changes (i.e., the tool
 	// set inside the container changes). The image is tagged yoe-ng:<version>
 	// so yoe automatically rebuilds when the version doesn't match.
-	containerVersion = "2"
+	containerVersion = "3"
 
 	containerImage = "yoe-ng"
 	containerEnv   = "YOE_IN_CONTAINER"
@@ -76,6 +76,9 @@ func ExecInContainer(args []string) error {
 
 	runArgs := []string{
 		"run", "--rm",
+		// Allow bwrap to create namespaces and mount /proc inside the container
+		"--security-opt", "seccomp=unconfined",
+		"--cap-add", "SYS_ADMIN",
 		"-v", mountDir + ":/project",
 		"-v", exe + ":/usr/local/bin/yoe:ro",
 		"-w", containerWorkDir,

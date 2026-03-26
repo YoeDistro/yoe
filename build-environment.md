@@ -26,9 +26,13 @@ Yoe-NG uses a layered build environment with three tiers:
 
 ### Tier 0: Bootstrap Layer (Automatic Container)
 
-The outermost layer provides `yoe`, `apk`, `bubblewrap`, `gcc`, and other build
-tools. **This is handled automatically** — the `yoe` binary on the host detects
-that it's not inside the build container and re-executes itself inside one.
+**All build operations run inside a Docker/Podman container. The host provides
+ONLY the `yoe` binary and a container runtime. No build tools, no compilers, no
+package managers — nothing from the host leaks into builds.**
+
+The `yoe` binary on the host detects that it's not inside the build container and
+re-executes itself inside one automatically. Developers never need to think about
+this — they run `yoe build` and it works.
 
 The only host requirements are:
 
