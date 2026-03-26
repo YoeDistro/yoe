@@ -29,6 +29,17 @@ glibc + busybox + systemd.
 
 ## Commands
 
+### Building yoe
+
+```bash
+make             # builds static binary (CGO_ENABLED=0 required for Alpine container)
+make test        # run all tests
+```
+
+CGO_ENABLED=0 is required because `net/http` pulls in cgo's DNS resolver by
+default, producing a dynamically linked binary that won't run inside the Alpine
+(musl) container. The Makefile handles this automatically.
+
 ### Formatting (markdown)
 
 ```bash

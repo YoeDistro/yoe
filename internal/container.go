@@ -32,12 +32,15 @@ func InContainer() bool {
 // ExecInContainer re-executes the current yoe command inside the build
 // container. The host yoe binary is bind-mounted into the container so
 // the container image only contains tools, not yoe itself.
+//
+// The cwd is mounted as /project. If YOE_PROJECT is set, it's passed
+// through so the container can find the project root within the mount.
 func ExecInContainer(args []string) error {
-	projectDir, err := os.Getwd()
+	hostDir, err := os.Getwd()
 	if err != nil {
 		return err
 	}
-	projectDir, err = filepath.Abs(projectDir)
+	hostDir, err = filepath.Abs(hostDir)
 	if err != nil {
 		return err
 	}
@@ -57,12 +60,31 @@ func ExecInContainer(args []string) error {
 		return fmt.Errorf("resolving yoe binary path: %w", err)
 	}
 
+	// Determine what to mount. If there's a git repo root above cwd,
+	// mount that so relative layer paths (../../layers/...) work.
+	mountDir := findGitRoot(hostDir)
+	if mountDir == "" {
+		mountDir = hostDir
+	}
+
+	// Compute the working directory inside the container
+	containerWorkDir := "/project"
+	if mountDir != hostDir {
+		rel, _ := filepath.Rel(mountDir, hostDir)
+		containerWorkDir = filepath.Join("/project", rel)
+	}
+
 	runArgs := []string{
 		"run", "--rm",
-		"-v", projectDir + ":/project",
+		"-v", mountDir + ":/project",
 		"-v", exe + ":/usr/local/bin/yoe:ro",
-		"-w", "/project",
+		"-w", containerWorkDir,
 		"--entrypoint", "yoe",
+	}
+
+	// Pass through YOE_PROJECT if set
+	if yp := os.Getenv("YOE_PROJECT"); yp != "" {
+		runArgs = append(runArgs, "-e", "YOE_PROJECT="+yp)
 	}
 
 	// Pass through cache directory
@@ -134,6 +156,20 @@ func EnsureImage() error {
 // ContainerVersion returns the container version embedded in this binary.
 func ContainerVersion() string {
 	return containerVersion
+}
+
+// findGitRoot walks up from dir to find the nearest .git directory.
+func findGitRoot(dir string) string {
+	for {
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
 }
 
 func detectRuntime() (string, error) {
