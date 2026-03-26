@@ -27,21 +27,21 @@ This project is broken into 9 phases. Each phase produces working, testable
 software. Phases 1-3 are pure Go with no external system dependencies (testable
 on any dev machine). Phases 4+ require Linux with bubblewrap and apk-tools.
 
-| Phase | Name                          | Depends On | Key Deliverable                                                                             |
-| ----- | ----------------------------- | ---------- | ------------------------------------------------------------------------------------------- |
-| 1     | CLI Foundation                | —          | `yoe init`, `yoe config`, `yoe layer list`, Starlark evaluation for all recipe/config types |
-| 2     | Dependency Resolution         | 1          | DAG construction, topological sort, config propagation, `yoe desc`/`refs`/`graph`           |
-| 2.5   | Layer Management & Engine     | 1          | `yoe layer sync`, load() resolution, remove class builtins, recursive discovery             |
-| 2.6   | recipes-core Layer (Phase 1)  | 2.5        | Layer skeleton, Starlark classes, toolchain recipes                                         |
-| 2.7   | recipes-core Layer (Phase 2)  | 2.6, 6     | Base system recipes, QEMU machines, base/dev images                                         |
-| 2.8   | recipes-core Layer (Phase 3)  | 2.7        | Essential libs, crypto/TLS, networking, debug tools                                         |
-| 3     | Source Management             | 1          | `yoe source fetch/list/verify/clean`, content-addressed cache                               |
-| 4     | Build Execution               | 2, 3       | `yoe build` with bubblewrap isolation, build step execution                                 |
-| 5     | Package Creation & Repository | 4          | APK package creation, `yoe repo` commands, local repository                                 |
-| 6     | Image Assembly                | 5          | Image recipe builds — rootfs via apk, overlays, disk image generation                       |
-| 7     | Device Interaction            | 6          | `yoe flash`, `yoe run` (QEMU with KVM)                                                      |
-| 8     | TUI                           | 2          | `yoe tui` — Bubble Tea interactive interface                                                |
-| 9     | Bootstrap                     | 5          | `yoe bootstrap stage0/stage1` — self-hosting toolchain                                      |
+| Phase | Name                          | Depends On | Key Deliverable                                                                        |
+| ----- | ----------------------------- | ---------- | -------------------------------------------------------------------------------------- |
+| 1     | CLI Foundation                | —          | **DONE** — `yoe init/config/clean/layer`, Starlark engine, all builtins                |
+| 2     | Dependency Resolution         | 1          | **DONE** — DAG, topo sort, hashing, `desc/refs/graph`, `dev`, custom commands, patches |
+| 2.5   | Layer Management & Engine     | 1          | `yoe layer sync`, load() resolution, remove class builtins, recursive discovery        |
+| 2.6   | recipes-core Layer (Phase 1)  | 2.5        | Layer skeleton, Starlark classes, toolchain recipes                                    |
+| 2.7   | recipes-core Layer (Phase 2)  | 2.6, 6     | Base system recipes, QEMU machines, base/dev images                                    |
+| 2.8   | recipes-core Layer (Phase 3)  | 2.7        | Essential libs, crypto/TLS, networking, debug tools                                    |
+| 3     | Source Management             | 1          | `yoe source fetch/list/verify/clean`, content-addressed cache                          |
+| 4     | Build Execution               | 2, 3       | `yoe build` with bubblewrap isolation, build step execution                            |
+| 5     | Package Creation & Repository | 4          | APK package creation, `yoe repo` commands, local repository                            |
+| 6     | Image Assembly                | 5          | Image recipe builds — rootfs via apk, overlays, disk image generation                  |
+| 7     | Device Interaction            | 6          | `yoe flash`, `yoe run` (QEMU with KVM)                                                 |
+| 8     | TUI                           | 2          | `yoe tui` — Bubble Tea interactive interface                                           |
+| 9     | Bootstrap                     | 5          | `yoe bootstrap stage0/stage1` — self-hosting toolchain                                 |
 
 ---
 
@@ -1819,27 +1819,32 @@ overridden by PROJECT.star. Diamond dependencies resolve to the highest semver.
 
 ---
 
-## Phase 2: Dependency Resolution (detailed plan TBD)
+## Phase 2: Dependency Resolution — DONE
 
-**Goal:** Build the DAG engine — load all recipes from evaluated Starlark,
-topologically sort, detect cycles, propagate machine config through the graph.
+**Implemented:**
 
-**Key components:**
+- `internal/resolve/dag.go` — DAG construction from recipes, Kahn's algorithm
+  topological sort with cycle detection, transitive dep/rdep queries
+- `internal/resolve/hash.go` — SHA256 content-addressed cache key computation
+  (recipe + source + patches + dep hashes + arch)
+- `internal/resolve/describe.go` — `yoe desc`, `yoe refs`, `yoe graph` (text and
+  DOT format)
+- 11 tests for DAG, topo sort, cycles, hashing, hash cascading
 
-- `internal/resolve/dag.go` — directed acyclic graph data structure
-- `internal/resolve/topo.go` — topological sort with cycle detection
-- `internal/resolve/config.go` — config propagation (machine -> recipes,
-  public_config)
-- `internal/resolve/hash.go` — content hash computation for cache keys
-- `cmd/yoe/main.go` — add `desc`, `refs`, `graph` commands to switch statement
+**Also implemented beyond original plan:**
 
-**Depends on:** Phase 1 (Starlark types and project loader)
+- `yoe dev` — source modification workflow (extract patches, diff, status)
+- `yoe` custom commands — extensible CLI via `commands/*.star` with `command()`,
+  `arg()`, `run(ctx)` pattern
+- Patches support — `patches` field in recipes, included in cache hash
 
 ---
 
 ## Phase 3: Source Management (detailed plan TBD)
 
-**Goal:** Download, cache, and verify source archives and git repos.
+**Goal:** Download, cache, and verify source archives and git repos. Source
+directories are git repos with an `upstream` tag so that `yoe dev` can detect
+local modifications and extract patches.
 
 **Key components:**
 
@@ -1847,15 +1852,25 @@ topologically sort, detect cycles, propagate machine config through the graph.
 - `internal/source/cache.go` — content-addressed source cache
   ($YOE_CACHE/sources/)
 - `internal/source/verify.go` — SHA256 verification
+- `internal/source/patch.go` — apply recipe patches as git commits on top of
+  upstream tag
 - `cmd/yoe/main.go` — add `source` command with subcommands to switch statement
 
-**Depends on:** Phase 1 (recipe types for source URLs)
+**Integration with `yoe dev`:** After fetching source, the build directory
+(`build/<recipe>/src/`) is a git repo with the `upstream` tag. Existing patches
+from the recipe are applied as individual commits. If the developer has local
+commits beyond upstream, `yoe build` uses them directly (skips re-fetch).
+`yoe dev extract` runs `git format-patch upstream..HEAD` to produce patch files.
+
+**Depends on:** Phase 1 (recipe types for source URLs), Phase 2 (for patch field
+in recipes)
 
 ---
 
 ## Phase 4: Build Execution (detailed plan TBD)
 
-**Goal:** Execute recipe build steps inside bubblewrap sandboxes.
+**Goal:** Execute recipe build steps inside bubblewrap sandboxes. Detect local
+source modifications (`yoe dev`) and skip re-fetch when present.
 
 **Key components:**
 
@@ -1863,11 +1878,13 @@ topologically sort, detect cycles, propagate machine config through the graph.
   mounts)
 - `internal/build/environment.go` — build environment assembly (apk install of
   build deps)
-- `internal/build/executor.go` — build step execution with logging
-- `internal/build/cache.go` — content-addressed build cache
+- `internal/build/executor.go` — build step execution with logging; detect
+  `build/<recipe>/src/` with local commits and skip fetch/patch when present
+- `internal/build/cache.go` — content-addressed build cache using hashes from
+  Phase 2
 - `cmd/yoe/main.go` — add `build` command to switch statement
 
-**Depends on:** Phase 2 (DAG for build ordering), Phase 3 (source fetching)
+**Depends on:** Phase 2 (DAG + hashing), Phase 3 (source fetching + patching)
 **System requirements:** Linux with bubblewrap, apk-tools
 
 ---
