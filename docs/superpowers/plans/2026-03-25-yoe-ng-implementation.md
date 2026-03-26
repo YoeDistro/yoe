@@ -31,7 +31,10 @@ on any dev machine). Phases 4+ require Linux with bubblewrap and apk-tools.
 | ----- | ----------------------------- | ---------- | ------------------------------------------------------------------------------------------- |
 | 1     | CLI Foundation                | —          | `yoe init`, `yoe config`, `yoe layer list`, Starlark evaluation for all recipe/config types |
 | 2     | Dependency Resolution         | 1          | DAG construction, topological sort, config propagation, `yoe desc`/`refs`/`graph`           |
-| 2.5   | Layer Management              | 1          | `yoe layer sync`, layer fetching, LAYER.star parsing, transitive dep resolution             |
+| 2.5   | Layer Management & Engine     | 1          | `yoe layer sync`, load() resolution, remove class builtins, recursive discovery             |
+| 2.6   | recipes-core Layer (Phase 1)  | 2.5        | Layer skeleton, Starlark classes, toolchain recipes                                         |
+| 2.7   | recipes-core Layer (Phase 2)  | 2.6, 6     | Base system recipes, QEMU machines, base/dev images                                         |
+| 2.8   | recipes-core Layer (Phase 3)  | 2.7        | Essential libs, crypto/TLS, networking, debug tools                                         |
 | 3     | Source Management             | 1          | `yoe source fetch/list/verify/clean`, content-addressed cache                               |
 | 4     | Build Execution               | 2, 3       | `yoe build` with bubblewrap isolation, build step execution                                 |
 | 5     | Package Creation & Repository | 4          | APK package creation, `yoe repo` commands, local repository                                 |
@@ -1770,10 +1773,16 @@ git commit -m "fix: integration test fixes for phase 1"
 
 ---
 
-## Phase 2.5: Layer Management (detailed plan TBD)
+## Phase 2.5: Layer Management & Engine Changes (detailed plan TBD)
 
 **Goal:** Fetch, cache, and resolve external layers declared in `PROJECT.star`
-and their transitive dependencies from `LAYER.star` files.
+and their transitive dependencies from `LAYER.star` files. Also make the engine
+changes required to support Starlark-based classes in layers.
+
+See
+[recipes-core Layer Design](../specs/2026-03-26-recipes-core-layer-design.md)
+for the full specification of what the base layer contains and the engine
+changes needed.
 
 **Key components:**
 
@@ -1787,6 +1796,17 @@ and their transitive dependencies from `LAYER.star` files.
   `yoe layer info`, `yoe layer check-updates`
 - Update `internal/starlark/loader.go` — resolve `@layer-name//...` load()
   references to cached layer paths
+
+**Engine changes for class support:**
+
+- Remove Go builtins for classes (`autotools()`, `cmake()`, `go_binary()`) —
+  these become Starlark functions in layer `.star` files loaded via `load()`
+- Implement `load()` resolution: `//path` relative to current file's layer root,
+  `@layer-name//path` relative to named layer's root
+- Add `package_extend()` primitive for modifier classes like `systemd_service()`
+- Add `bootstrap` flag to `package()` for stage 0/1 toolchain recipes
+- Change recipe discovery from `recipes/*.star` to `recipes/**/*.star` for
+  categorized subdirectories
 
 **Depends on:** Phase 1 (LayerRef/LayerInfo types, Starlark engine, project
 loader)
@@ -1925,6 +1945,74 @@ user namespaces (bubblewrap), mkfs.ext4, mkfs.vfat, systemd-repart
 
 ---
 
+## Phase 2.6: recipes-core Layer Phase 1 — Skeleton + Classes + Toolchain (detailed plan TBD)
+
+**Goal:** Create the `layers/recipes-core/` directory with the layer manifest,
+all Starlark class files, and the toolchain/build-tool recipes. This is the
+foundation that all other recipes build on.
+
+See
+[recipes-core Layer Design](../specs/2026-03-26-recipes-core-layer-design.md)
+for the full specification.
+
+**Key deliverables:**
+
+- `layers/recipes-core/LAYER.star` — layer manifest
+- 10 class files: `autotools`, `cmake`, `meson`, `go`, `rust`, `python`, `node`,
+  `image`, `sdk`, `systemd`
+- Toolchain recipes: `gcc`, `binutils`, `glibc`, `linux-headers`
+- Build tool recipes: `make`, `pkg-config`, `autoconf`, `automake`, `libtool`,
+  `cmake` (the package), `meson`, `ninja`
+
+**Depends on:** Phase 2.5 (load() resolution, class builtins removed, recursive
+recipe discovery)
+
+**Deliverable:** Can build C/C++ packages from source inside a Yoe-NG build
+root.
+
+---
+
+## Phase 2.7: recipes-core Layer Phase 2 — Base System + QEMU Machines (detailed plan TBD)
+
+**Goal:** Add the base system packages, kernel, bootloaders, QEMU machine
+definitions, and image recipes needed to produce a bootable system.
+
+**Key deliverables:**
+
+- Base recipes: `busybox`, `systemd`, `util-linux`, `kmod`, `apk-tools`,
+  `bubblewrap`
+- Kernel recipe: `linux`
+- Bootloader recipes: `u-boot`, `ovmf`, `opensbi`
+- Machine definitions: `qemu-x86_64`, `qemu-arm64`, `qemu-riscv64`
+- Image recipes: `base-image`, `dev-image`
+
+**Depends on:** Phase 2.6 (toolchain recipes), Phase 6 (image assembly engine)
+
+**Deliverable:** `yoe build base-image --machine qemu-x86_64` produces a
+bootable image.
+
+---
+
+## Phase 2.8: recipes-core Layer Phase 3 — Essential Libs + Networking (detailed plan TBD)
+
+**Goal:** Add the libraries and networking packages that most embedded projects
+need.
+
+**Key deliverables:**
+
+- Compression: `zlib`, `xz`, `zstd`, `bzip2`
+- Crypto/TLS: `openssl`, `ca-certificates`
+- Core libs: `libffi`, `ncurses`, `readline`, `expat`, `gmp`, `mpfr`
+- Networking: `openssh`, `curl`, `networkmanager`, `dbus`, `iproute2`
+- Debug tools: `gdb`, `strace`, `tcpdump`, `vim`
+
+**Depends on:** Phase 2.7 (base system)
+
+**Deliverable:** A practical embedded image with SSH, network management, and
+TLS.
+
+---
+
 ## Phase 9: Bootstrap (detailed plan TBD)
 
 **Goal:** Self-hosting bootstrap from Alpine — build glibc, gcc, binutils from
@@ -1935,9 +2023,13 @@ an existing toolchain, then rebuild with own toolchain.
 - `internal/bootstrap/stage0.go` — cross-pollination from Alpine
 - `internal/bootstrap/stage1.go` — self-hosting rebuild
 - `cmd/yoe/main.go` — add `bootstrap` command to switch statement
-- Bootstrap recipe set: glibc, binutils, gcc, linux-headers, busybox, apk-tools,
-  bubblewrap
+- Bootstrap recipe set from `layers/recipes-core/recipes/toolchain/` — recipes
+  with `bootstrap = True` (glibc, binutils, gcc, linux-headers) plus base
+  recipes (busybox, apk-tools, bubblewrap)
 
-**Depends on:** Phase 5 (package creation and repository) **This is the most
-complex phase** — building a C library and compiler toolchain is non-trivial.
-Consider starting with pre-built packages and implementing bootstrap last.
+**Depends on:** Phase 5 (package creation and repository), Phase 2.6 (toolchain
+recipes exist in recipes-core)
+
+**This is the most complex phase** — building a C library and compiler toolchain
+is non-trivial. Consider starting with pre-built packages and implementing
+bootstrap last.
