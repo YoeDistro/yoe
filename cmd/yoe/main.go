@@ -38,6 +38,9 @@ func main() {
 	case "container":
 		cmdContainer(args)
 		return
+	case "tui":
+		cmdTUI(args)
+		return
 	}
 
 	// Everything else runs inside the container
@@ -80,8 +83,6 @@ func main() {
 		cmdRefs(args)
 	case "graph":
 		cmdGraph(args)
-	case "tui":
-		cmdTUI(args)
 	case "clean":
 		cmdClean(args)
 	default:
