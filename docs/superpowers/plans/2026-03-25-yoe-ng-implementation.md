@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
 > superpowers:executing-plans to implement this plan task-by-task. Steps use
-> checkbox (`- [ ]`) syntax for tracking.
+> checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Build `yoe`, a Go CLI tool that builds packages from Starlark recipes,
 assembles root filesystem images, and manages an embedded Linux distribution — a
@@ -85,14 +85,14 @@ testdata/invalid-project/              — test fixture: various invalid configs
 - Create: `go.mod`
 - Create: `cmd/yoe/main.go`
 
-- [ ] **Step 1: Initialize Go module**
+- [x] **Step 1: Initialize Go module**
 
 ```bash
 cd /scratch4/yoe/yoe-ng
 go mod init github.com/YoeDistro/yoe-ng
 ```
 
-- [ ] **Step 2: Write the entry point with command dispatch**
+- [x] **Step 2: Write the entry point with command dispatch**
 
 Create `cmd/yoe/main.go`:
 
@@ -183,7 +183,7 @@ func cmdClean(args []string) {
 }
 ```
 
-- [ ] **Step 3: Build and run**
+- [x] **Step 3: Build and run**
 
 ```bash
 go build -o yoe ./cmd/yoe
@@ -193,7 +193,7 @@ go build -o yoe ./cmd/yoe
 
 Expected: Usage text on bare `yoe`, "dev" on `yoe version`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add go.mod cmd/
@@ -211,7 +211,7 @@ git commit -m "feat: initialize Go module with stdlib CLI skeleton"
 Define the Go types that Starlark evaluation produces. These are plain Go
 structs — no Starlark dependency yet.
 
-- [ ] **Step 1: Write the types**
+- [x] **Step 1: Write the types**
 
 Create `internal/starlark/types.go`:
 
@@ -362,7 +362,7 @@ var validArchitectures = map[string]bool{
 }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add internal/starlark/types.go
@@ -382,7 +382,7 @@ git commit -m "feat: add Go types for Starlark evaluation output"
 The engine evaluates `.star` files and collects the results of built-in function
 calls (project(), machine(), package(), image(), etc.) into Go types.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/starlark/engine_test.go`:
 
@@ -559,7 +559,7 @@ package(name = "broken", version = "1.0.0")
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```bash
 go get go.starlark.net@latest
@@ -568,7 +568,7 @@ go test ./internal/starlark/ -v
 
 Expected: FAIL — types exist but `NewEngine`, `ExecString`, etc. not defined.
 
-- [ ] **Step 3: Write the engine**
+- [x] **Step 3: Write the engine**
 
 Create `internal/starlark/engine.go`:
 
@@ -620,7 +620,7 @@ func (e *Engine) ExecFile(path string) error {
 }
 ```
 
-- [ ] **Step 4: Write the built-in functions**
+- [x] **Step 4: Write the built-in functions**
 
 Create `internal/starlark/builtins.go`:
 
@@ -1042,7 +1042,7 @@ func (e *Engine) fnImage(_ *starlark.Thread, _ *starlark.Builtin, args starlark.
 }
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 ```bash
 go test ./internal/starlark/ -v
@@ -1050,7 +1050,7 @@ go test ./internal/starlark/ -v
 
 Expected: All 6 tests PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add internal/starlark/
@@ -1072,7 +1072,7 @@ git commit -m "feat: add Starlark evaluation engine with built-in functions"
 - Create: `testdata/minimal-project/PROJECT.star`
 - Create: `testdata/invalid-project/bad-arch.star`
 
-- [ ] **Step 1: Create valid project fixtures**
+- [x] **Step 1: Create valid project fixtures**
 
 Create `testdata/valid-project/PROJECT.star`:
 
@@ -1197,7 +1197,7 @@ Create `testdata/invalid-project/bad-arch.star`:
 machine(name = "bad-machine", arch = "mips")
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add testdata/
@@ -1214,7 +1214,7 @@ git commit -m "feat: add Starlark test fixtures for valid and invalid projects"
 - Create: `internal/starlark/loader.go`
 - Create: `internal/starlark/loader_test.go`
 
-- [ ] **Step 1: Write project discovery**
+- [x] **Step 1: Write project discovery**
 
 Create `internal/config/project.go`:
 
@@ -1250,7 +1250,7 @@ func FindProjectRoot(startDir string) (string, error) {
 }
 ```
 
-- [ ] **Step 2: Write the loader**
+- [x] **Step 2: Write the loader**
 
 Create `internal/starlark/loader.go`:
 
@@ -1316,7 +1316,7 @@ func evalDir(eng *Engine, root, subdir string) error {
 }
 ```
 
-- [ ] **Step 3: Write the failing test**
+- [x] **Step 3: Write the failing test**
 
 Create `internal/starlark/loader_test.go`:
 
@@ -1390,7 +1390,7 @@ func TestLoadMinimalProject(t *testing.T) {
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 go test ./internal/starlark/ -run TestLoadProject -v
@@ -1398,7 +1398,7 @@ go test ./internal/starlark/ -run TestLoadProject -v
 
 Expected: All tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/config/project.go internal/starlark/loader.go internal/starlark/loader_test.go
@@ -1415,7 +1415,7 @@ git commit -m "feat: add project discovery and Starlark project loader"
 - Create: `internal/init_test.go`
 - Modify: `cmd/yoe/main.go` — wire up cmdInit
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/init_test.go`:
 
@@ -1481,7 +1481,7 @@ func TestRunInit_ExistingProject(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Write the implementation**
+- [x] **Step 2: Write the implementation**
 
 Create `internal/init.go`:
 
@@ -1578,12 +1578,12 @@ func createMachineFile(projectDir, name string) error {
 }
 ```
 
-- [ ] **Step 3: Wire up in main.go**
+- [x] **Step 3: Wire up in main.go**
 
 Update `cmd/yoe/main.go` — replace the `cmdInit` stub with a call to
 `internal.RunInit`. Parse `--machine` flag from args.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 go test ./internal/ -run TestRunInit -v
@@ -1591,7 +1591,7 @@ go test ./internal/ -run TestRunInit -v
 
 Expected: All 3 tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/init.go internal/init_test.go cmd/yoe/main.go
@@ -1607,7 +1607,7 @@ git commit -m "feat: implement yoe init with Starlark project scaffolding"
 - Create: `internal/config/show.go`
 - Modify: `cmd/yoe/main.go` — wire up cmdConfig
 
-- [ ] **Step 1: Write the implementation**
+- [x] **Step 1: Write the implementation**
 
 `yoe config show` loads the project via the Starlark loader and prints the
 resolved configuration. `yoe config set` is deferred — Starlark files are not
@@ -1657,7 +1657,7 @@ func ShowConfig(dir string) error {
 }
 ```
 
-- [ ] **Step 2: Wire up in main.go and test manually**
+- [x] **Step 2: Wire up in main.go and test manually**
 
 ```bash
 go build -o yoe ./cmd/yoe
@@ -1666,7 +1666,7 @@ cd testdata/valid-project && ../../yoe config show
 
 Expected: prints project name, machines, recipes.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add internal/config/show.go cmd/yoe/main.go
@@ -1683,7 +1683,7 @@ git commit -m "feat: implement yoe config show via Starlark project loader"
 - Create: `internal/clean_test.go`
 - Modify: `cmd/yoe/main.go` — wire up cmdClean
 
-- [ ] **Step 1: Write the implementation**
+- [x] **Step 1: Write the implementation**
 
 Create `internal/clean.go`:
 
@@ -1729,7 +1729,7 @@ func RunClean(projectDir string, all bool, recipes []string) error {
 }
 ```
 
-- [ ] **Step 2: Write test, wire up, commit**
+- [x] **Step 2: Write test, wire up, commit**
 
 ```bash
 git add internal/clean.go internal/clean_test.go cmd/yoe/main.go
@@ -1740,7 +1740,7 @@ git commit -m "feat: implement yoe clean command"
 
 ### Task 9: Run All Phase 1 Tests
 
-- [ ] **Step 1: Run full test suite**
+- [x] **Step 1: Run full test suite**
 
 ```bash
 go test ./... -v
@@ -1748,7 +1748,7 @@ go test ./... -v
 
 Expected: All tests PASS across all packages.
 
-- [ ] **Step 2: Build and smoke test**
+- [x] **Step 2: Build and smoke test**
 
 ```bash
 go build -o yoe ./cmd/yoe
@@ -1762,7 +1762,7 @@ rm -rf /tmp/test-yoe-project
 
 Expected: All commands succeed.
 
-- [ ] **Step 3: Commit any fixes from integration testing**
+- [x] **Step 3: Commit any fixes from integration testing**
 
 ```bash
 git add -A

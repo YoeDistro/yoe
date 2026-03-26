@@ -1,5 +1,5 @@
 # Yoe-NG build container (Tier 0)
-# Version: 2
+# Version: 8
 #
 # Tools-only container. The host yoe binary is bind-mounted at runtime,
 # not baked into the image. This means the container only rebuilds when
@@ -22,7 +22,31 @@ RUN apk add --no-cache \
     gcc \
     g++ \
     musl-dev \
-    linux-headers
+    linux-headers \
+    sfdisk \
+    e2fsprogs \
+    dosfstools \
+    mtools \
+    syslinux \
+    losetup \
+    mount \
+    qemu-system-x86_64 \
+    ovmf \
+    perl \
+    bc \
+    flex \
+    bison \
+    elfutils-dev \
+    openssl-dev \
+    diffutils \
+    findutils \
+    sed
+
+# Create /build for bwrap bind mounts
+RUN mkdir -p /build/src /build/destdir
+
+# Create loop device nodes (needed for losetup in --privileged mode)
+RUN for i in $(seq 0 7); do mknod -m 0660 /dev/loop$i b 7 $i 2>/dev/null || true; done
 
 ENV YOE_IN_CONTAINER=1
 

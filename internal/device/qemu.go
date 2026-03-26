@@ -47,7 +47,7 @@ func RunQEMU(proj *yoestar.Project, recipeName, machineName, projectDir string, 
 	qemuBin := qemuBinary(machine.Arch)
 	args := baseQEMUArgs(machine, opts)
 
-	// Attach the image
+	// Attach the image as the root disk
 	args = append(args, "-drive", fmt.Sprintf("file=%s,format=raw,if=virtio", imgPath))
 
 	// Port forwarding

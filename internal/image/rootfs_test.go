@@ -72,10 +72,10 @@ func TestAssemble(t *testing.T) {
 		t.Error("overlay file not applied")
 	}
 
-	// Check tar.gz was generated
-	tarPath := filepath.Join(outputDir, "test-image.img.tar.gz")
-	if _, err := os.Stat(tarPath); os.IsNotExist(err) {
-		t.Error("image tar.gz not generated")
+	// Check disk image was generated
+	imgPath := filepath.Join(outputDir, "test-image.img")
+	if _, err := os.Stat(imgPath); os.IsNotExist(err) {
+		t.Error("disk image not generated")
 	}
 
 	// Check output messages

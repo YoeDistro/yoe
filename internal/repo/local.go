@@ -13,7 +13,20 @@ import (
 )
 
 // RepoDir returns the local package repository path for a project.
+// Packages are stored in an architecture subdirectory (e.g., build/repo/x86_64/)
+// because apk expects this layout.
 func RepoDir(proj *yoestar.Project, projectDir string) string {
+	base := filepath.Join(projectDir, "build", "repo")
+	if proj != nil && proj.Repository.Path != "" {
+		base = proj.Repository.Path
+	}
+	// TODO: get arch from project/machine config instead of hardcoding
+	return filepath.Join(base, "x86_64")
+}
+
+// RepoBaseDir returns the repository base path (without arch subdirectory).
+// This is what gets passed to apk --repository.
+func RepoBaseDir(proj *yoestar.Project, projectDir string) string {
 	if proj != nil && proj.Repository.Path != "" {
 		return proj.Repository.Path
 	}
