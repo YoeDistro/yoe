@@ -26,6 +26,7 @@ yoe init            Create a new Yoe-NG project
 yoe build           Build recipes (packages and images)
 yoe flash           Write an image to a device/SD card
 yoe run             Run an image in QEMU
+yoe layer           Manage external layers (fetch, sync, list)
 yoe repo            Manage the local apk package repository
 yoe cache           Manage the build cache (local and remote)
 yoe source          Download and manage source archives/repos
@@ -117,50 +118,53 @@ model. The entire dependency graph is resolved and validated _before_ any build
 work starts. This catches missing dependencies, cycles, and configuration errors
 up front rather than mid-build.
 
-1. **Evaluate Starlark** — load and evaluate all `.star` recipe files to produce
-   the set of build targets. Each class function call (`package()`,
-   `autotools()`, `image()`, etc.) registers a target.
-2. **Resolve dependencies** — topologically sort the build order from declared
+1. **Sync layers** — fetch or update external layers declared in `PROJECT.star`
+   (skipped if already up to date). See `yoe layer sync`.
+2. **Evaluate Starlark** — load and evaluate all `.star` recipe files (including
+   those from layers) to produce the set of build targets. Each class function
+   call (`package()`, `autotools()`, `image()`, etc.) registers a target.
+3. **Resolve dependencies** — topologically sort the build order from declared
    dependencies. Validate that all referenced recipes exist and the graph is
    acyclic. **If any errors are found, stop here** — no partial builds.
-3. **Check cache** — compute a content hash of the recipe + source + build
+4. **Check cache** — compute a content hash of the recipe + source + build
    dependencies. If a cached `.apk` with that hash exists (locally or in a
    remote cache), skip the build.
-4. **Fetch source** — download the source archive or clone the git repo (see
+5. **Fetch source** — download the source archive or clone the git repo (see
    `yoe source` below). Sources are cached in `$YOE_CACHE/sources/`.
-5. **Prepare build environment** — set up an isolated build root with only
+6. **Prepare build environment** — set up an isolated build root with only
    declared build dependencies installed via `apk`. This ensures hermetic
    builds.
-6. **Execute build steps** — run the build commands defined by the class
+7. **Execute build steps** — run the build commands defined by the class
    function in the build root. The environment provides:
    - `$PREFIX` — install prefix (typically `/usr`)
    - `$DESTDIR` — staging directory for installed files
    - `$NPROC` — number of available CPU cores
    - `$ARCH` — target architecture
-7. **Package** — collect files from `$DESTDIR`, generate `.PKGINFO` from the
+8. **Package** — collect files from `$DESTDIR`, generate `.PKGINFO` from the
    recipe metadata, and create the `.apk` archive.
-8. **Publish** — add the `.apk` to the local repository and update the repo
+9. **Publish** — add the `.apk` to the local repository and update the repo
    index.
 
-**For image recipes** (`image()` class), steps 4-8 are replaced with image
+**For image recipes** (`image()` class), steps 5-9 are replaced with image
 assembly:
 
-1. **Evaluate Starlark** — same as above.
-2. **Resolve dependencies** — same as above.
-3. **Check cache** — same as above.
-4. **Read machine definition** — evaluate `machines/<name>.star` for
+1. **Sync layers** — same as above.
+2. **Evaluate Starlark** — same as above.
+3. **Resolve dependencies** — same as above.
+4. **Check cache** — same as above.
+5. **Read machine definition** — evaluate `machines/<name>.star` for
    architecture, kernel, bootloader, and partition layout.
-5. **Create empty rootfs** — set up a temporary directory.
-6. **Install packages** — run `apk add --root <rootfs>` with the Yoe-NG
+6. **Create empty rootfs** — set up a temporary directory.
+7. **Install packages** — run `apk add --root <rootfs>` with the Yoe-NG
    repository to install all declared packages. apk handles dependency
    resolution.
-7. **Apply configuration** — set hostname, timezone, locale, enable systemd
+8. **Apply configuration** — set hostname, timezone, locale, enable systemd
    services per the image recipe's configuration.
-8. **Apply overlays** — copy files from `overlays/` into the rootfs.
-9. **Install kernel + bootloader** — build (or fetch from cache) the kernel and
-   bootloader per the machine definition, install into the rootfs/boot
-   partition.
-10. **Generate disk image** — partition the output image per the partition
+9. **Apply overlays** — copy files from `overlays/` into the rootfs.
+10. **Install kernel + bootloader** — build (or fetch from cache) the kernel and
+    bootloader per the machine definition, install into the rootfs/boot
+    partition.
+11. **Generate disk image** — partition the output image per the partition
     layout and populate each partition.
 
 Output format can be specified with `--format`:
@@ -263,6 +267,62 @@ When `yoe run` is given a machine with a `qemu` configuration, it uses those
 settings directly. When given a hardware machine without `qemu` configuration,
 it falls back to a reasonable default QEMU configuration for the machine's
 architecture.
+
+### `yoe layer`
+
+Manages external layers — the Git repositories declared in `PROJECT.star` that
+provide recipes, classes, and machine definitions.
+
+```sh
+# Fetch/update all layers to the refs declared in PROJECT.star
+yoe layer sync
+
+# List all layers with status (fetched, local override, version)
+yoe layer list
+
+# Show the full resolved layer tree (including transitive deps from LAYER.star)
+yoe layer list --tree
+
+# Show details for a specific layer
+yoe layer info @vendor-bsp
+
+# Check for updates — show if upstream has newer tags
+yoe layer check-updates
+```
+
+**What happens during `yoe layer sync`:**
+
+1. **Read PROJECT.star** — parse the `layers` list.
+2. **Read LAYER.star from each layer** — discover transitive dependencies.
+3. **Resolve versions** — PROJECT.star versions override transitive deps. If a
+   required transitive dep is missing, error with an actionable message.
+4. **Fetch/update** — clone or update each layer's Git repo into
+   `$YOE_CACHE/layers/`. Checkout the declared ref.
+5. **Verify** — confirm that each layer's `LAYER.star` (if present) is valid
+   Starlark.
+
+**Layer caching:** Layers are cached in `$YOE_CACHE/layers/` as bare Git
+repositories with worktree checkouts at the pinned ref. `yoe layer sync`
+performs incremental fetches — only downloading new objects.
+
+**Automatic sync:** `yoe build` automatically runs layer sync if any layer is
+missing or if `PROJECT.star` has changed since the last sync. You rarely need to
+run `yoe layer sync` manually.
+
+**Local overrides:** Layers with `local = "..."` in PROJECT.star skip fetching
+entirely and use the local directory. `yoe layer list` shows these as
+`(local: ../path)`.
+
+**Example output of `yoe layer list`:**
+
+```
+Layer                              Ref        Status
+@recipes-core                      v1.0.0     up to date
+@vendor-bsp-imx8                   v2.1.0     up to date
+  └─ @hal-common                   v1.3.0     up to date (transitive)
+  └─ @firmware-imx                 v5.4       up to date (transitive)
+@my-local-layer                    main       (local: ../my-layer)
+```
 
 ### `yoe repo`
 

@@ -45,8 +45,16 @@ type SourcesConfig struct {
 }
 
 type LayerRef struct {
-	URL string
-	Ref string
+	URL   string
+	Ref   string
+	Local string // local path override (like Go's replace directive)
+}
+
+// LayerInfo represents an evaluated LAYER.star from an external layer.
+type LayerInfo struct {
+	Name        string
+	Description string
+	Deps        []LayerRef
 }
 
 // Machine represents an evaluated machine() call.

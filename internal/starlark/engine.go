@@ -9,10 +9,11 @@ import (
 
 // Engine evaluates .star files and collects results.
 type Engine struct {
-	mu       sync.Mutex
-	project  *Project
-	machines map[string]*Machine
-	recipes  map[string]*Recipe
+	mu        sync.Mutex
+	project   *Project
+	machines  map[string]*Machine
+	recipes   map[string]*Recipe
+	layerInfo *LayerInfo
 }
 
 func NewEngine() *Engine {
@@ -22,9 +23,10 @@ func NewEngine() *Engine {
 	}
 }
 
-func (e *Engine) Project() *Project              { return e.project }
-func (e *Engine) Machines() map[string]*Machine   { return e.machines }
-func (e *Engine) Recipes() map[string]*Recipe     { return e.recipes }
+func (e *Engine) Project() *Project            { return e.project }
+func (e *Engine) Machines() map[string]*Machine { return e.machines }
+func (e *Engine) Recipes() map[string]*Recipe   { return e.recipes }
+func (e *Engine) LayerInfo() *LayerInfo         { return e.layerInfo }
 
 // ExecString evaluates Starlark source code with built-in functions available.
 func (e *Engine) ExecString(filename, src string) error {

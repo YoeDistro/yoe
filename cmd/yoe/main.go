@@ -21,6 +21,8 @@ func main() {
 	switch command {
 	case "init":
 		cmdInit(args)
+	case "layer":
+		cmdLayer(args)
 	case "config":
 		cmdConfig(args)
 	case "clean":
@@ -42,6 +44,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  build [recipes...]      Build recipes (packages and images)\n")
 	fmt.Fprintf(os.Stderr, "  flash <device>          Write an image to a device/SD card\n")
 	fmt.Fprintf(os.Stderr, "  run                     Run an image in QEMU\n")
+	fmt.Fprintf(os.Stderr, "  layer                   Manage external layers (fetch, sync, list)\n")
 	fmt.Fprintf(os.Stderr, "  repo                    Manage the local apk package repository\n")
 	fmt.Fprintf(os.Stderr, "  cache                   Manage the build cache (local and remote)\n")
 	fmt.Fprintf(os.Stderr, "  source                  Download and manage source archives/repos\n")
@@ -63,6 +66,38 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  YOE_CACHE               Cache directory (default: ~/.cache/yoe-ng)\n")
 	fmt.Fprintf(os.Stderr, "  YOE_LOG                 Log level: debug, info, warn, error (default: info)\n")
 	fmt.Fprintf(os.Stderr, "\n")
+}
+
+func cmdLayer(args []string) {
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Usage: %s layer <sync|list|info> [...]\n", os.Args[0])
+		os.Exit(1)
+	}
+
+	dir := os.Getenv("YOE_PROJECT")
+	if dir == "" {
+		dir = "."
+	}
+
+	switch args[0] {
+	case "sync":
+		fmt.Fprintf(os.Stderr, "layer sync: not yet implemented\n")
+		os.Exit(1)
+	case "list":
+		if err := yoe.ListLayers(dir, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "info":
+		fmt.Fprintf(os.Stderr, "layer info: not yet implemented\n")
+		os.Exit(1)
+	case "check-updates":
+		fmt.Fprintf(os.Stderr, "layer check-updates: not yet implemented\n")
+		os.Exit(1)
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown layer subcommand: %s\n", args[0])
+		os.Exit(1)
+	}
 }
 
 func cmdInit(args []string) {
