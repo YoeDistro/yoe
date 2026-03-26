@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# vim: set ts=2 sw=2 tw=0 fo=cnqoj
+
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+    - bash -c './scripts/extract-changelog.sh $(git describe --tags --abbrev=0) > .release-notes.md'
+
+builds:
+  - main: ./cmd/yoe
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - arm64
+      - amd64
+      - riscv64
+
+archives:
+  - formats: ['binary']
+    name_template: >-
+      {{ .ProjectName }}-
+      {{- .Tag }}-
+      {{- title .Os }}-
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+release:
+  footer: >-
+
+    ---
+
+    To install, download the binary for your architecture and place it in your PATH.
