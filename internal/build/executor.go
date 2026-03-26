@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/YoeDistro/yoe-ng/internal/packaging"
+	"github.com/YoeDistro/yoe-ng/internal/repo"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
 	"github.com/YoeDistro/yoe-ng/internal/source"
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
@@ -128,6 +130,20 @@ func buildOne(recipe *yoestar.Recipe, hash string, opts Options, w io.Writer) er
 			if err := RunSimple(srcDir, destDir, env, cmd); err != nil {
 				return err
 			}
+		}
+	}
+
+	// Package the output into an .apk and publish to the local repo
+	if recipe.Class != "image" {
+		apkPath, err := packaging.CreateAPK(recipe, destDir, filepath.Join(buildDir, "pkg"))
+		if err != nil {
+			return fmt.Errorf("creating apk: %w", err)
+		}
+		fmt.Fprintf(w, "  → %s\n", filepath.Base(apkPath))
+
+		repoDir := repo.RepoDir(nil, opts.ProjectDir)
+		if err := repo.Publish(apkPath, repoDir); err != nil {
+			return fmt.Errorf("publishing to repo: %w", err)
 		}
 	}
 

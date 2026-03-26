@@ -8,6 +8,7 @@ import (
 
 	yoe "github.com/YoeDistro/yoe-ng/internal"
 	"github.com/YoeDistro/yoe-ng/internal/build"
+	"github.com/YoeDistro/yoe-ng/internal/repo"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
 	"github.com/YoeDistro/yoe-ng/internal/source"
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
@@ -61,6 +62,8 @@ func main() {
 		cmdLayer(args)
 	case "config":
 		cmdConfig(args)
+	case "repo":
+		cmdRepo(args)
 	case "source":
 		cmdSource(args)
 	case "dev":
@@ -418,6 +421,45 @@ func cmdDev(args []string) {
 		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown dev subcommand: %s\n", args[0])
+		os.Exit(1)
+	}
+}
+
+func cmdRepo(args []string) {
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Usage: %s repo <list|info|remove> [args...]\n", os.Args[0])
+		os.Exit(1)
+	}
+
+	proj := loadProject()
+	repoDir := repo.RepoDir(proj, projectDir())
+
+	switch args[0] {
+	case "list":
+		if err := repo.List(repoDir, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "info":
+		if len(args) < 2 {
+			fmt.Fprintf(os.Stderr, "Usage: %s repo info <package>\n", os.Args[0])
+			os.Exit(1)
+		}
+		if err := repo.Info(repoDir, args[1], os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "remove":
+		if len(args) < 2 {
+			fmt.Fprintf(os.Stderr, "Usage: %s repo remove <package>\n", os.Args[0])
+			os.Exit(1)
+		}
+		if err := repo.Remove(repoDir, args[1], os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown repo subcommand: %s\n", args[0])
 		os.Exit(1)
 	}
 }
