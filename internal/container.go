@@ -1,16 +1,14 @@
 package internal
 
 import (
-	_ "embed"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-)
 
-//go:embed container_dockerfile
-var embeddedDockerfile string
+	"github.com/YoeDistro/yoe-ng/containers"
+)
 
 const (
 	// containerVersion is bumped when the Dockerfile changes. The image is
@@ -108,7 +106,7 @@ func EnsureImage() error {
 
 	// Write the embedded Dockerfile
 	dockerfilePath := filepath.Join(tmpDir, "Dockerfile")
-	if err := os.WriteFile(dockerfilePath, []byte(embeddedDockerfile), 0644); err != nil {
+	if err := os.WriteFile(dockerfilePath, []byte(containers.Dockerfile), 0644); err != nil {
 		return fmt.Errorf("writing Dockerfile: %w", err)
 	}
 
