@@ -1,8 +1,9 @@
 # Yoe-NG build container (Tier 0)
-# Version: 1
+# Version: 2
 #
-# This Dockerfile is embedded in the yoe binary. The host yoe copies itself
-# into the container rather than rebuilding from source.
+# Tools-only container. The host yoe binary is bind-mounted at runtime,
+# not baked into the image. This means the container only rebuilds when
+# the tool set changes, not when yoe itself is recompiled.
 
 FROM alpine:3.21
 
@@ -23,10 +24,6 @@ RUN apk add --no-cache \
     musl-dev \
     linux-headers
 
-# The yoe binary is copied in during docker build (from build context)
-COPY yoe /usr/local/bin/yoe
-
 ENV YOE_IN_CONTAINER=1
 
 WORKDIR /project
-ENTRYPOINT ["yoe"]

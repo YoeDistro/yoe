@@ -11,10 +11,10 @@ import (
 )
 
 const (
-	// containerVersion is bumped when the Dockerfile changes. The image is
-	// tagged yoe-ng:<version> so yoe automatically rebuilds when the version
-	// in the binary doesn't match the running image.
-	containerVersion = "1"
+	// containerVersion is bumped when the Dockerfile changes (i.e., the tool
+	// set inside the container changes). The image is tagged yoe-ng:<version>
+	// so yoe automatically rebuilds when the version doesn't match.
+	containerVersion = "2"
 
 	containerImage = "yoe-ng"
 	containerEnv   = "YOE_IN_CONTAINER"
@@ -30,7 +30,8 @@ func InContainer() bool {
 }
 
 // ExecInContainer re-executes the current yoe command inside the build
-// container with the project directory mounted.
+// container. The host yoe binary is bind-mounted into the container so
+// the container image only contains tools, not yoe itself.
 func ExecInContainer(args []string) error {
 	projectDir, err := os.Getwd()
 	if err != nil {
@@ -46,10 +47,22 @@ func ExecInContainer(args []string) error {
 		return err
 	}
 
+	// Find the running yoe binary
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("finding yoe binary: %w", err)
+	}
+	exe, err = filepath.EvalSymlinks(exe)
+	if err != nil {
+		return fmt.Errorf("resolving yoe binary path: %w", err)
+	}
+
 	runArgs := []string{
 		"run", "--rm",
 		"-v", projectDir + ":/project",
+		"-v", exe + ":/usr/local/bin/yoe:ro",
 		"-w", "/project",
+		"--entrypoint", "yoe",
 	}
 
 	// Pass through cache directory
@@ -80,15 +93,14 @@ func ExecInContainer(args []string) error {
 }
 
 // EnsureImage checks if the versioned container image exists and builds it
-// if not. When the container version embedded in the yoe binary changes,
-// the old image won't match and a new one is built automatically.
+// if not. Since the container only contains tools (not yoe), it only needs
+// rebuilding when the tool set changes (version bump in Dockerfile).
 func EnsureImage() error {
 	runtime, err := detectRuntime()
 	if err != nil {
 		return err
 	}
 
-	// Check if the versioned image exists
 	tag := containerTag()
 	cmd := exec.Command(runtime, "image", "inspect", tag)
 	if err := cmd.Run(); err == nil {
@@ -97,34 +109,18 @@ func EnsureImage() error {
 
 	fmt.Fprintf(os.Stderr, "[yoe] building container image %s...\n", tag)
 
-	// Create a temp build context with the Dockerfile and the yoe binary
+	// Create a temp build context with just the Dockerfile
 	tmpDir, err := os.MkdirTemp("", "yoe-container-build-*")
 	if err != nil {
 		return fmt.Errorf("creating temp dir: %w", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Write the embedded Dockerfile
 	dockerfilePath := filepath.Join(tmpDir, "Dockerfile")
 	if err := os.WriteFile(dockerfilePath, []byte(containers.Dockerfile), 0644); err != nil {
 		return fmt.Errorf("writing Dockerfile: %w", err)
 	}
 
-	// Copy the running yoe binary into the build context
-	exe, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("finding yoe binary: %w", err)
-	}
-	exeData, err := os.ReadFile(exe)
-	if err != nil {
-		return fmt.Errorf("reading yoe binary: %w", err)
-	}
-	yoeDst := filepath.Join(tmpDir, "yoe")
-	if err := os.WriteFile(yoeDst, exeData, 0755); err != nil {
-		return fmt.Errorf("copying yoe binary: %w", err)
-	}
-
-	// Build the image
 	cmd = exec.Command(runtime, "build", "-t", tag, tmpDir)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
