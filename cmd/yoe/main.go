@@ -32,6 +32,9 @@ func main() {
 	case "version":
 		fmt.Println(version)
 		return
+	case "update":
+		cmdUpdate()
+		return
 	case "init":
 		cmdInit(args)
 		return
@@ -115,6 +118,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  graph                   Visualize the dependency DAG\n")
 	fmt.Fprintf(os.Stderr, "  tui                     Launch the interactive TUI\n")
 	fmt.Fprintf(os.Stderr, "  clean                   Remove build artifacts\n")
+	fmt.Fprintf(os.Stderr, "  update                  Update yoe to the latest release\n")
 	fmt.Fprintf(os.Stderr, "  version                 Display version information\n")
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "Examples:\n")
@@ -430,6 +434,13 @@ func cmdDev(args []string) {
 		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown dev subcommand: %s\n", args[0])
+		os.Exit(1)
+	}
+}
+
+func cmdUpdate() {
+	if err := yoe.Update(version); err != nil {
+		fmt.Fprintf(os.Stderr, "Update failed: %v\n", err)
 		os.Exit(1)
 	}
 }
