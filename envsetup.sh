@@ -18,3 +18,7 @@ yoe_format() {
 yoe_format_check() {
   (cd "${OE_BASE}" && prettier --check "**/*.md") || return 1
 }
+
+yoe_sloc() {
+  (cd "${OE_BASE}" && scc --count-as 'star:py') || return 1
+}
