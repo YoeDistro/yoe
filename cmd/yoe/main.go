@@ -139,6 +139,25 @@ func cmdConfig(args []string) {
 }
 
 func cmdClean(args []string) {
-	fmt.Fprintf(os.Stderr, "clean: not yet implemented\n")
-	os.Exit(1)
+	all := false
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-all":
+			all = true
+		default:
+			fmt.Fprintf(os.Stderr, "Unknown flag: %s\n", args[i])
+			os.Exit(1)
+		}
+	}
+
+	dir := os.Getenv("YOE_PROJECT")
+	if dir == "" {
+		dir = "."
+	}
+
+	if err := yoe.RunClean(dir, all); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 }
