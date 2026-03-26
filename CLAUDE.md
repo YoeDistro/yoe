@@ -39,12 +39,15 @@ the `yoe` binary. No host dependencies beyond that.
 ## Repository Structure
 
 - `README.md` — project philosophy, design goals, comparisons overview
-- `yoe-tool.md` — `yoe` CLI command reference (init, build, flash, etc.)
-- `metadata-format.md` — Starlark recipe and configuration spec
-- `build-environment.md` — three-tier build isolation architecture (bootstrap,
-  build root, per-recipe sandbox)
-- `build-languages.md` — analysis of Starlark, CUE, Nix, and other embeddable
-  languages
+- `docs/yoe-tool.md` — `yoe` CLI command reference (init, build, flash, etc.)
+- `docs/metadata-format.md` — Starlark recipe and configuration spec
+- `docs/build-environment.md` — three-tier build isolation architecture
+  (bootstrap, build root, per-recipe sandbox)
+- `docs/build-languages.md` — analysis of Starlark, CUE, Nix, and other
+  embeddable languages
+- `docs/ai-skills.md` — AI-driven workflows catalog
+- `docs/sdk.md` — development environments and pre-built packages
+- `docs/comparisons.md` — comparison with Yocto, Buildroot, Alpine, etc.
 - `envsetup.sh` — shell functions (source it, don't execute)
 - `containers/Dockerfile.build` — the build container (Tier 0)
 
