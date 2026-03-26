@@ -80,6 +80,20 @@ func (e *Engine) makeLoadFunc(fromFile string) func(thread *starlark.Thread, mod
 	}
 }
 
+// rootForFile returns the appropriate root directory for a file — if the file
+// is inside a layer directory, returns that layer root; otherwise returns the
+// project root.
+func (e *Engine) rootForFile(file string) string {
+	absFile, _ := filepath.Abs(file)
+	for _, layerRoot := range e.layerRoots {
+		absLayer, _ := filepath.Abs(layerRoot)
+		if strings.HasPrefix(absFile, absLayer+string(filepath.Separator)) {
+			return absLayer
+		}
+	}
+	return e.projectRoot
+}
+
 // resolveLoadPath converts a module string to an absolute filesystem path.
 //
 // Supported forms:
@@ -103,11 +117,13 @@ func (e *Engine) resolveLoadPath(fromFile, module string) (string, error) {
 		return filepath.Join(root, relPath), nil
 
 	case strings.HasPrefix(module, "//"):
-		// Project-root-relative
-		if e.projectRoot == "" {
-			return "", fmt.Errorf("cannot resolve %q: project root not set", module)
+		// Root-relative — resolve to the layer root if fromFile is inside a
+		// layer, otherwise to the project root.
+		root := e.rootForFile(fromFile)
+		if root == "" {
+			return "", fmt.Errorf("cannot resolve %q: no root for %s", module, fromFile)
 		}
-		return filepath.Join(e.projectRoot, module[2:]), nil
+		return filepath.Join(root, module[2:]), nil
 
 	default:
 		// Relative to the loading file's directory

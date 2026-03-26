@@ -135,6 +135,17 @@ func applyConfig(rootfs string, recipe *yoestar.Recipe, w io.Writer) error {
 		os.Symlink(target, link)
 	}
 
+	// Install boot configuration (extlinux for QEMU serial console)
+	bootDir := filepath.Join(rootfs, "boot", "extlinux")
+	os.MkdirAll(bootDir, 0755)
+	extlinuxConf := `DEFAULT yoe
+LABEL yoe
+    LINUX /boot/vmlinuz
+    APPEND console=ttyS0 root=/dev/vda2 rw
+`
+	os.WriteFile(filepath.Join(bootDir, "extlinux.conf"), []byte(extlinuxConf), 0644)
+	fmt.Fprintln(w, "  Installed boot configuration (extlinux)")
+
 	return nil
 }
 
@@ -165,21 +176,6 @@ func applyOverlays(rootfs, overlayDir string, w io.Writer) error {
 }
 
 func generateImage(rootfs, imgPath string, recipe *yoestar.Recipe, w io.Writer) error {
-	// For now, create a tar.gz of the rootfs as the "image"
-	// Full disk image generation (partitioning, ext4, etc.) requires
-	// systemd-repart or manual partition tools — implemented in a later phase
-	fmt.Fprintln(w, "  Generating rootfs archive...")
-
-	tarPath := imgPath + ".tar.gz"
-	cmd := exec.Command("tar", "czf", tarPath, "-C", rootfs, ".")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("tar: %s\n%s", err, out)
-	}
-
-	// Also record image metadata
-	meta := fmt.Sprintf("name: %s\nversion: %s\nformat: rootfs.tar.gz\n",
-		recipe.Name, recipe.Version)
-	os.WriteFile(imgPath+".meta", []byte(meta), 0644)
-
-	return nil
+	fmt.Fprintln(w, "  Generating disk image...")
+	return GenerateDiskImage(rootfs, imgPath, recipe, w)
 }
