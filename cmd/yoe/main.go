@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+
+	yoe "github.com/YoeDistro/yoe-ng/internal"
 )
 
 var version = "dev"
@@ -63,19 +65,82 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "\n")
 }
 
-// Stub command handlers — implemented in subsequent tasks
-
 func cmdInit(args []string) {
-	fmt.Fprintf(os.Stderr, "init: not yet implemented\n")
-	os.Exit(1)
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Usage: %s init <project-dir> [-machine <name>]\n", os.Args[0])
+		os.Exit(1)
+	}
+
+	projectDir := args[0]
+	machine := ""
+
+	for i := 1; i < len(args); i++ {
+		switch args[i] {
+		case "-machine", "--machine":
+			if i+1 >= len(args) {
+				fmt.Fprintf(os.Stderr, "Error: -machine requires a name\n")
+				os.Exit(1)
+			}
+			machine = args[i+1]
+			i++
+		default:
+			fmt.Fprintf(os.Stderr, "Unknown flag: %s\n", args[i])
+			os.Exit(1)
+		}
+	}
+
+	if err := yoe.RunInit(projectDir, machine); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 func cmdConfig(args []string) {
-	fmt.Fprintf(os.Stderr, "config: not yet implemented\n")
-	os.Exit(1)
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Usage: %s config <show|set> [...]\n", os.Args[0])
+		os.Exit(1)
+	}
+
+	dir := os.Getenv("YOE_PROJECT")
+	if dir == "" {
+		dir = "."
+	}
+
+	switch args[0] {
+	case "show":
+		if err := yoe.ShowConfig(dir, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "set":
+		fmt.Fprintf(os.Stderr, "config set: edit PROJECT.star directly (Starlark files are not patchable via CLI)\n")
+		os.Exit(1)
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown config subcommand: %s\n", args[0])
+		os.Exit(1)
+	}
 }
 
 func cmdClean(args []string) {
-	fmt.Fprintf(os.Stderr, "clean: not yet implemented\n")
-	os.Exit(1)
+	all := false
+	var recipes []string
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-all", "--all":
+			all = true
+		default:
+			recipes = append(recipes, args[i])
+		}
+	}
+
+	dir := os.Getenv("YOE_PROJECT")
+	if dir == "" {
+		dir = "."
+	}
+
+	if err := yoe.RunClean(dir, all, recipes); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 }
