@@ -35,8 +35,8 @@ func TestLoadProject(t *testing.T) {
 	}
 
 	// Recipes
-	if len(proj.Recipes) != 3 {
-		t.Errorf("got %d recipes, want 3", len(proj.Recipes))
+	if len(proj.Recipes) != 5 {
+		t.Errorf("got %d recipes, want 5", len(proj.Recipes))
 	}
 	if r, ok := proj.Recipes["openssh"]; !ok {
 		t.Error("expected recipe 'openssh'")

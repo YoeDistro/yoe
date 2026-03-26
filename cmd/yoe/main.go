@@ -5,6 +5,8 @@ import (
 	"os"
 
 	yoe "github.com/YoeDistro/yoe-ng/internal"
+	"github.com/YoeDistro/yoe-ng/internal/resolve"
+	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
 var version = "dev"
@@ -25,6 +27,12 @@ func main() {
 		cmdLayer(args)
 	case "config":
 		cmdConfig(args)
+	case "desc":
+		cmdDesc(args)
+	case "refs":
+		cmdRefs(args)
+	case "graph":
+		cmdGraph(args)
 	case "clean":
 		cmdClean(args)
 	case "version":
@@ -175,6 +183,83 @@ func cmdClean(args []string) {
 	}
 
 	if err := yoe.RunClean(dir, all, recipes); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func loadProject() *yoestar.Project {
+	dir := os.Getenv("YOE_PROJECT")
+	if dir == "" {
+		dir = "."
+	}
+	proj, err := yoestar.LoadProject(dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	return proj
+}
+
+func defaultArch(proj *yoestar.Project) string {
+	if m, ok := proj.Machines[proj.Defaults.Machine]; ok {
+		return m.Arch
+	}
+	// Fallback: pick the first machine's arch
+	for _, m := range proj.Machines {
+		return m.Arch
+	}
+	return "unknown"
+}
+
+func cmdDesc(args []string) {
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Usage: %s desc <recipe>\n", os.Args[0])
+		os.Exit(1)
+	}
+	proj := loadProject()
+	arch := defaultArch(proj)
+	if err := resolve.Describe(os.Stdout, proj, args[0], arch); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func cmdRefs(args []string) {
+	if len(args) < 1 {
+		fmt.Fprintf(os.Stderr, "Usage: %s refs <recipe> [--direct]\n", os.Args[0])
+		os.Exit(1)
+	}
+	name := args[0]
+	direct := false
+	for _, a := range args[1:] {
+		if a == "--direct" || a == "-direct" {
+			direct = true
+		}
+	}
+	proj := loadProject()
+	if err := resolve.Refs(os.Stdout, proj, name, direct); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func cmdGraph(args []string) {
+	format := "text"
+	filter := ""
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--format", "-format":
+			if i+1 < len(args) {
+				format = args[i+1]
+				i++
+			}
+		default:
+			filter = args[i]
+		}
+	}
+	proj := loadProject()
+	if err := resolve.Graph(os.Stdout, proj, format, filter); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}

@@ -101,10 +101,11 @@ type Recipe struct {
 	License     string
 
 	// Source
-	Source string // URL or git repo
-	SHA256 string
-	Tag    string
-	Branch string
+	Source  string // URL or git repo
+	SHA256  string
+	Tag     string
+	Branch  string
+	Patches []string // patch files applied after source fetch, before build
 
 	// Dependencies
 	Deps        []string
