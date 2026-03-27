@@ -46,6 +46,9 @@ func main() {
 	case "tui":
 		cmdTUI(args)
 		return
+	case "layer":
+		cmdLayer(args)
+		return
 	}
 
 	// Everything else runs inside the container
@@ -74,8 +77,6 @@ func main() {
 		cmdFlash(args)
 	case "run":
 		cmdRun(args)
-	case "layer":
-		cmdLayer(args)
 	case "config":
 		cmdConfig(args)
 	case "repo":
