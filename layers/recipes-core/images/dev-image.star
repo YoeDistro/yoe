@@ -4,6 +4,7 @@ image(
     description = "Development image with networking, SSH, and debug tools",
     packages = [
         # Base
+        "base-files",
         "busybox",
         "musl",
         "linux",

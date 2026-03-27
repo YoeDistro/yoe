@@ -8,6 +8,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **base-files recipe** — provides filesystem skeleton: `/etc/passwd` (root with
+  blank password), `/etc/inittab` (busybox init + getty), `/boot/extlinux/`
+  (boot config), and essential mount point dirs (`/proc`, `/sys`, `/dev`, etc.).
+  Moved from hardcoded Go to a recipe so users can customize via overlays.
+- Serial console uses `getty` for proper login prompt.
+
 ## [0.2.5] - 2026-03-27
 
 ### Added

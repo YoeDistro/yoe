@@ -166,36 +166,6 @@ func applyConfig(rootfs string, recipe *yoestar.Recipe, w io.Writer) error {
 		os.Symlink(target, link)
 	}
 
-	// Create essential directories for virtual filesystem mount points.
-	// mkfs.ext4 -d only copies non-empty directories, so we add a
-	// .keep file to ensure they exist in the image.
-	for _, dir := range []string{"proc", "sys", "dev", "tmp", "run"} {
-		dirPath := filepath.Join(rootfs, dir)
-		os.MkdirAll(dirPath, 0755)
-		os.WriteFile(filepath.Join(dirPath, ".keep"), nil, 0644)
-	}
-
-	// Install boot configuration (extlinux for QEMU serial console)
-	bootDir := filepath.Join(rootfs, "boot", "extlinux")
-	os.MkdirAll(bootDir, 0755)
-	extlinuxConf := `DEFAULT yoe
-LABEL yoe
-    LINUX /boot/vmlinuz
-    APPEND console=ttyS0 root=/dev/vda1 rw devtmpfs.mount=1
-`
-	os.WriteFile(filepath.Join(bootDir, "extlinux.conf"), []byte(extlinuxConf), 0644)
-	fmt.Fprintln(w, "  Installed boot configuration (extlinux)")
-
-	// Install minimal inittab for busybox init
-	inittab := `::sysinit:/bin/mount -t proc proc /proc
-::sysinit:/bin/mount -t sysfs sys /sys
-::sysinit:/bin/hostname -F /etc/hostname
-ttyS0::respawn:/bin/sh
-::ctrlaltdel:/sbin/reboot
-::shutdown:/bin/umount -a -r
-`
-	os.WriteFile(filepath.Join(rootfs, "etc", "inittab"), []byte(inittab), 0644)
-
 	return nil
 }
 
