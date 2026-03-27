@@ -42,6 +42,45 @@ func TestBwrapCommand(t *testing.T) {
 	}
 }
 
+func TestBwrapCommand_InnerCommandQuoted(t *testing.T) {
+	cfg := &SandboxConfig{
+		SrcDir:  "/tmp/src",
+		DestDir: "/tmp/dest",
+		Env: map[string]string{
+			"PREFIX": "/usr",
+		},
+	}
+
+	cmd := bwrapCommand(cfg, "make -j4")
+
+	// The inner sh -c argument must be single-quoted so semicolons in env
+	// exports don't get interpreted by the outer shell.
+	if !strings.Contains(cmd, "-- sh -c '") {
+		t.Errorf("inner command should be single-quoted: %s", cmd)
+	}
+	// Should end with closing quote
+	if !strings.HasSuffix(cmd, "'") {
+		t.Errorf("command should end with closing single quote: %s", cmd)
+	}
+}
+
+func TestShellQuote(t *testing.T) {
+	tests := []struct {
+		in, want string
+	}{
+		{"simple", "'simple'"},
+		{"has space", "'has space'"},
+		{"has;semicolon", "'has;semicolon'"},
+		{"it's quoted", "'it'\\''s quoted'"},
+	}
+	for _, tt := range tests {
+		got := shellQuote(tt.in)
+		if got != tt.want {
+			t.Errorf("shellQuote(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
 func TestBwrapCommand_WithBuildRoot(t *testing.T) {
 	cfg := &SandboxConfig{
 		BuildRoot: "/tmp/buildroot",

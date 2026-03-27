@@ -89,8 +89,14 @@ func bwrapCommand(cfg *SandboxConfig, command string) string {
 	}
 	fullCmd += command
 
-	parts = append(parts, "--", "sh", "-c", fullCmd)
+	parts = append(parts, "--", "sh", "-c", shellQuote(fullCmd))
 	return strings.Join(parts, " ")
+}
+
+// shellQuote wraps a string in single quotes for safe embedding in a
+// shell command. Single quotes inside the string are escaped.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }
 
 func containerMountsForBuild(cfg *SandboxConfig) []yoe.Mount {
