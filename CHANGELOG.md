@@ -19,6 +19,10 @@ and this project adheres to
 - **Autotools `autoreconf`** — autotools class auto-runs `autoreconf -fi` when
   `./configure` is missing (common with git sources)
 - SSH URL support for source fetching (`git@host:user/repo.git`)
+- **Design: per-recipe tasks and containers** — planned support for named
+  `task()` build steps with optional per-task Docker container images. Container
+  resolves: task → package → bwrap. See
+  `docs/superpowers/plans/per-recipe-containers.md`.
 
 ### Changed
 
