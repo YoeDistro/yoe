@@ -15,6 +15,7 @@ Prerequisites: an x86_64 Linux host with Git and Docker (or Podman) installed.
 ```sh
 # Download the yoe binary
 curl -L https://github.com/yoe/yoe-ng/releases/latest/download/yoe-Linux-x86_64 -o yoe
+(project is not public yet, so download manually from releases page)
 chmod +x yoe
 sudo mv yoe /usr/local/bin/
 
