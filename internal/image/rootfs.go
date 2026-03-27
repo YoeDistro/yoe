@@ -52,7 +52,8 @@ func Assemble(recipe *yoestar.Recipe, proj *yoestar.Project, projectDir, outputD
 }
 
 // resolvePackageDeps expands a list of package names to include all transitive
-// dependencies. The returned list is in dependency order (deps before dependents).
+// dependencies (both build and runtime). The returned list is in dependency
+// order (deps before dependents), with image-class recipes excluded.
 func resolvePackageDeps(packages []string, proj *yoestar.Project) []string {
 	seen := make(map[string]bool)
 	var result []string
@@ -65,7 +66,14 @@ func resolvePackageDeps(packages []string, proj *yoestar.Project) []string {
 		seen[name] = true
 
 		if recipe, ok := proj.Recipes[name]; ok {
+			// Skip image recipes — they aren't installable packages
+			if recipe.Class == "image" {
+				return
+			}
 			for _, dep := range recipe.Deps {
+				walk(dep)
+			}
+			for _, dep := range recipe.RuntimeDeps {
 				walk(dep)
 			}
 		}
