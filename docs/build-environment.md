@@ -361,15 +361,120 @@ Updating the base toolchain:
 
 ## Caching Architecture
 
-Yoe-NG's content-addressed build cache is designed around a multi-level fallback
-chain. Each level is checked in order; the first hit wins.
+Yoe-NG uses a unified, content-addressed object store for both source archives
+and built packages. The design is inspired by Nix's `/nix/store` and Git's
+object database: immutable blobs keyed by cryptographic hashes, with a
+multi-level fallback chain for local and remote storage.
+
+### Object Store Layout
+
+All cached artifacts live under `$YOE_CACHE` (default: `~/.cache/yoe-ng/`):
+
+```
+$YOE_CACHE/
+├── objects/
+│   ├── sources/
+│   │   ├── ab/cd1234...5678.tar.gz     # tarball, keyed by content SHA256
+│   │   ├── ef/01abcd...9012.tar.xz     # another tarball
+│   │   └── 34/567890...abcd.git/       # bare git repo, keyed by url#ref hash
+│   └── packages/
+│       ├── x86_64/
+│       │   ├── a1/b2c3d4...e5f6.apk    # built .apk, keyed by recipe input hash
+│       │   └── 78/90abcd...1234.apk
+│       └── aarch64/
+│           └── ...
+├── index/
+│   ├── sources.json                     # URL → content hash mapping
+│   └── packages.json                    # recipe name+version → input hash mapping
+└── tmp/                                 # atomic writes land here first
+```
+
+**Key design points:**
+
+- **Two-character prefix directories** (like Git) prevent any single directory
+  from accumulating millions of entries.
+- **Sources are keyed by content hash** — the SHA256 of the actual file, which
+  recipes already declare in their `sha256` field. Two different URLs serving
+  identical tarballs share one cache entry.
+- **Git sources are keyed by `sha256(url + "#" + ref)`** — since a git repo is a
+  directory (not a single file), content-addressing isn't practical. The URL+ref
+  key ensures different tags/branches get separate clones.
+- **Packages are keyed by recipe input hash** — the same hash computed by
+  `internal/resolve/hash.go` from recipe fields, source hash, dependency hashes,
+  and architecture. This is the Nix-like property: if the inputs haven't
+  changed, the cached output is valid.
+- **Index files** provide human-readable reverse lookups (hash → name) for
+  debugging and `yoe cache list`. They are not authoritative — the object store
+  is the source of truth.
+
+### Build Flow with Cache
+
+```
+yoe build openssh
+  │
+  ├─ 1. Resolve DAG, compute input hashes for all recipes
+  │     (internal/resolve/hash.go — already implemented)
+  │
+  ├─ 2. For each recipe in topological order:
+  │     │
+  │     ├─ Check local object store: objects/packages/<arch>/<hash>.apk
+  │     │   Hit → publish to build/repo/, skip to next recipe
+  │     │
+  │     ├─ Check remote cache: GET s3://bucket/packages/<arch>/<hash>.apk
+  │     │   Hit → download to local object store, publish to repo, skip
+  │     │
+  │     ├─ Cache miss → need to build:
+  │     │   │
+  │     │   ├─ Check source cache: objects/sources/<hash>.<ext>
+  │     │   │   Hit → extract to build/<recipe>/src/
+  │     │   │   Miss → download, verify SHA256, store in object store
+  │     │   │
+  │     │   ├─ Build recipe (sandbox or direct)
+  │     │   │
+  │     │   ├─ Package output as .apk
+  │     │   │
+  │     │   ├─ Store .apk in local object store under input hash
+  │     │   │
+  │     │   ├─ Push to remote cache (if configured): PUT s3://bucket/...
+  │     │   │
+  │     │   └─ Publish .apk to build/repo/ for image assembly
+  │     │
+  │     └─ Next recipe
+  │
+  └─ 3. Assemble image (if target is an image recipe)
+```
+
+The critical property: **a cache hit on a package skips the entire build,
+including source download.** This is why CI builds are fast — most packages come
+from the remote cache, and only the changed recipe (plus anything that
+transitively depends on it) actually builds.
+
+### Cache Key Computation
+
+The cache key for a recipe is computed by `internal/resolve/hash.go`. It is a
+SHA256 hash of:
+
+- Recipe identity: name, version, class
+- Architecture
+- Source: URL, SHA256, tag, branch, patches
+- Build configuration: build steps, configure args, Go package
+- **Dependency hashes (transitive)**: the input hash of every dependency
+
+The transitive dependency hashes are the key property. If `glibc` is rebuilt
+(new version, new patch, new build flags), its hash changes. That propagates to
+every package that depends on `glibc`, which all get new hashes, which all
+become cache misses. This is automatic — there are no stale entries, only unused
+ones.
+
+For image recipes, the hash also includes the package list, hostname, timezone,
+locale, and service list.
 
 ### Cache Levels
 
 ```
 ┌──────────────────────────────────────────────────┐
-│  Level 1: Local Disk Cache                       │
-│  $YOE_CACHE/build/                               │
+│  Level 1: Local Object Store                     │
+│  $YOE_CACHE/objects/                             │
 │  Fastest — no network. Populated by local builds │
 ├──────────────────────────────────────────────────┤
 │  Level 2: LAN / Self-Hosted Cache (optional)     │
@@ -381,6 +486,10 @@ chain. Each level is checked in order; the first hit wins.
 │  Shared across CI runners and distributed teams  │
 └──────────────────────────────────────────────────┘
 ```
+
+All levels use the same key scheme — the object path is the same locally and
+remotely. Pushing a local object to S3 is a direct upload of the file under the
+same key. Pulling is a direct download. No translation or repackaging needed.
 
 ### Why S3-Compatible Storage
 
@@ -403,18 +512,21 @@ Self-hosted MinIO is the recommended starting point for teams that want shared
 caching without cloud dependency. It runs as a single binary, supports the full
 S3 API, and works in air-gapped environments.
 
-### Cache Key Computation
+### Comparison with Nix and Yocto
 
-The cache key for a recipe is a cryptographic hash of:
+|                   | Nix                          | Yocto sstate               | Yoe-NG                          |
+| ----------------- | ---------------------------- | -------------------------- | ------------------------------- |
+| Cache granularity | Per derivation output        | Per task                   | Per recipe                      |
+| Key computation   | Full derivation hash         | Task hash + signatures     | Recipe input hash (SHA256)      |
+| Object size       | Closures (can be 1GB+)       | Individual task outputs    | Single `.apk` file              |
+| Remote backend    | Cachix, nix-serve, S3        | sstate-mirror (HTTP/S3)    | Any S3-compatible               |
+| Setup complexity  | Moderate (Cachix simplifies) | High (mirrors, hashequiv)  | Low (just a bucket URL)         |
+| Sharing model     | Binary cache + substituters  | sstate mirrors + hashequiv | Push/pull to S3                 |
+| Source caching    | Separate (fixed-output drv)  | DL_DIR (by filename)       | Unified object store by content |
 
-- The recipe `.star` file contents
-- The source archive/commit hash
-- The `.apk` hashes of all build dependencies (transitive)
-- The machine architecture and propagated build flags
-
-This means any change to a recipe, its source, or any of its dependencies
-produces a new cache key. Cache invalidation is automatic — there are no stale
-entries, only unused ones.
+The key simplification over Yocto: no hash equivalence server, no sstate mirror
+configuration, no signing key infrastructure to get started. Point `cache.url`
+at an S3 bucket and it works. Signing is optional and adds one config line.
 
 ### Language Package Manager Caches
 

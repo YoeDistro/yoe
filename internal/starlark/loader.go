@@ -54,16 +54,30 @@ func LoadProjectFromRoot(root string) (*Project, error) {
 		return nil, fmt.Errorf("evaluating PROJECT.star: %w", err)
 	}
 
-	// Register local layer roots so load("@layer//...") works
+	// Register layer roots so load("@layer//...") works.
+	// Check local overrides first, then the layer cache.
 	if proj := eng.Project(); proj != nil {
 		for _, l := range proj.Layers {
+			name := filepath.Base(strings.TrimSuffix(l.URL, ".git"))
+
 			if l.Local != "" {
 				layerPath := l.Local
 				if !filepath.IsAbs(layerPath) {
 					layerPath = filepath.Join(root, layerPath)
 				}
-				name := filepath.Base(l.URL)
 				eng.SetLayerRoot(name, layerPath)
+				continue
+			}
+
+			// Check layer cache
+			cacheDir := os.Getenv("YOE_CACHE")
+			if cacheDir == "" {
+				home, _ := os.UserHomeDir()
+				cacheDir = filepath.Join(home, ".cache", "yoe-ng")
+			}
+			layerDir := filepath.Join(cacheDir, "layers", name)
+			if _, err := os.Stat(layerDir); err == nil {
+				eng.SetLayerRoot(name, layerDir)
 			}
 		}
 	}

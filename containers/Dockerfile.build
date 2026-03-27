@@ -1,5 +1,5 @@
 # Yoe-NG build container (Tier 0)
-# Version: 8
+# Version: 9
 #
 # Tools-only container. The host yoe binary is bind-mounted at runtime,
 # not baked into the image. This means the container only rebuilds when
@@ -32,6 +32,9 @@ RUN apk add --no-cache \
     mount \
     qemu-system-x86_64 \
     ovmf \
+    autoconf \
+    automake \
+    libtool \
     perl \
     bc \
     flex \

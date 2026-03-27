@@ -9,6 +9,7 @@ import (
 	yoe "github.com/YoeDistro/yoe-ng/internal"
 	"github.com/YoeDistro/yoe-ng/internal/bootstrap"
 	"github.com/YoeDistro/yoe-ng/internal/build"
+	"github.com/YoeDistro/yoe-ng/internal/layer"
 	"github.com/YoeDistro/yoe-ng/internal/device"
 	"github.com/YoeDistro/yoe-ng/internal/repo"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
@@ -149,8 +150,11 @@ func cmdLayer(args []string) {
 
 	switch args[0] {
 	case "sync":
-		fmt.Fprintf(os.Stderr, "layer sync: not yet implemented\n")
-		os.Exit(1)
+		proj := loadProject()
+		if _, err := layer.Sync(proj, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 	case "list":
 		if err := yoe.ListLayers(dir, os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)

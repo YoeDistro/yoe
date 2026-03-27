@@ -16,6 +16,9 @@ type SandboxConfig struct {
 	SrcDir string
 	// DestDir is the staging directory (bind mounted as /build/destdir)
 	DestDir string
+	// Sysroot is the shared build sysroot containing installed deps.
+	// Overlaid onto /usr so recipes can find deps' headers and libraries.
+	Sysroot string
 	// Env is the build environment variables
 	Env map[string]string
 }
@@ -33,6 +36,12 @@ func RunInSandbox(cfg *SandboxConfig, command string) error {
 		args = append(args, "--bind", cfg.BuildRoot, "/")
 	} else {
 		args = append(args, "--bind", "/", "/")
+	}
+
+	// Mount sysroot at /build/sysroot — contains deps' headers/libraries.
+	// Build environment vars (CFLAGS, LDFLAGS, PKG_CONFIG_PATH) point here.
+	if cfg.Sysroot != "" {
+		args = append(args, "--ro-bind", cfg.Sysroot, "/build/sysroot")
 	}
 
 	// Mount source and destdir into /build
@@ -85,6 +94,22 @@ func RunSimple(srcDir, destDir string, env map[string]string, command string) er
 		return fmt.Errorf("build step failed: %w", err)
 	}
 	return nil
+}
+
+// SysrootDir returns the shared build sysroot path for a project.
+func SysrootDir(projectDir string) string {
+	return filepath.Join(projectDir, "build", "sysroot")
+}
+
+// InstallToSysroot copies a recipe's destdir contents into the shared sysroot.
+// This makes the recipe's headers, libraries, and pkg-config files available
+// to subsequent recipe builds.
+func InstallToSysroot(destDir, sysrootDir string) error {
+	if err := os.MkdirAll(sysrootDir, 0755); err != nil {
+		return err
+	}
+	cmd := exec.Command("cp", "-a", destDir+"/.", sysrootDir+"/")
+	return cmd.Run()
 }
 
 // HasBwrap returns true if bubblewrap is available and can create namespaces.
