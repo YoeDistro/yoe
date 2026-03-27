@@ -57,32 +57,12 @@ func installPackages(rootfs, repoDir string, packages []string, w io.Writer) err
 
 	fmt.Fprintf(w, "  Installing %d packages into rootfs...\n", len(packages))
 
-	// Check if apk is available
-	if _, err := exec.LookPath("apk"); err != nil {
-		// Fallback: just create the directory structure
-		fmt.Fprintln(w, "  (apk not available — creating minimal rootfs structure)")
-		for _, dir := range []string{"usr/bin", "usr/lib", "etc", "var", "tmp"} {
-			os.MkdirAll(filepath.Join(rootfs, dir), 0755)
-		}
-
-		// Copy .apk files from repo into rootfs as a manifest
-		for _, pkg := range packages {
-			fmt.Fprintf(w, "    %s\n", pkg)
-		}
-		// Write package list for reference
-		os.WriteFile(filepath.Join(rootfs, "etc", "yoe-packages"),
-			[]byte(strings.Join(packages, "\n")+"\n"), 0644)
-		return nil
-	}
-
 	// Install packages by extracting .apk files directly into the rootfs.
 	// Our packages are single-stream gzip'd tars with .PKGINFO + files.
-	// This avoids apk signature verification issues with our unsigned packages.
-	// When we add package signing, we can switch to using apk directly.
+	// tar is available on the host — no container needed.
 	absRepo, _ := filepath.Abs(repoDir)
 
 	for _, pkg := range packages {
-		// Find the .apk file for this package
 		apkFile := findAPK(absRepo, pkg)
 		if apkFile == "" {
 			return fmt.Errorf("package %q not found in %s", pkg, absRepo)
@@ -90,7 +70,6 @@ func installPackages(rootfs, repoDir string, packages []string, w io.Writer) err
 
 		fmt.Fprintf(w, "    %s\n", filepath.Base(apkFile))
 
-		// Extract tar.gz into rootfs, skipping .PKGINFO
 		cmd := exec.Command("tar", "xzf", apkFile, "-C", rootfs, "--exclude=.PKGINFO")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("extracting %s: %s\n%s", pkg, err, out)
