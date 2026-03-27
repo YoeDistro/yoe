@@ -234,7 +234,9 @@ func createExt4Partition(partImg string, sizeMB int, rootfs string, p yoestar.Pa
 		return err
 	}
 
-	mkfsCmd := fmt.Sprintf("mkfs.ext4 -q -L %s -d %s %s", p.Label, cRootfs, cPartImg)
+	// Disable ext4 features that syslinux 6.03 can't read:
+	// 64bit, metadata_csum, extent tree. Use classic indirect blocks.
+	mkfsCmd := fmt.Sprintf("mkfs.ext4 -q -L %s -O ^64bit,^metadata_csum,^extent -d %s %s", p.Label, cRootfs, cPartImg)
 	if err := yoe.RunInContainer(yoe.ContainerRunConfig{
 		Command:    mkfsCmd,
 		ProjectDir: projectDir,

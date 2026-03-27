@@ -8,7 +8,7 @@ package(
     deps = ["zlib"],
     runtime_deps = ["zlib"],
     build = [
-        "./Configure --prefix=$PREFIX --openssldir=/etc/ssl shared zlib",
+        "./Configure --prefix=$PREFIX --libdir=lib --openssldir=/etc/ssl shared zlib",
         "make -j$NPROC",
         "make DESTDIR=$DESTDIR install_sw install_ssldirs",
     ],

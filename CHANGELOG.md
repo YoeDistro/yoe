@@ -8,6 +8,30 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **musl libc recipe** — copies the musl dynamic linker from the build container
+  into the image so dynamically linked packages work at runtime.
+- **Automatic package dep resolution** — image assembly now resolves transitive
+  build and runtime deps from recipe metadata. e.g., openssh automatically pulls
+  in openssl and zlib without listing them in the image recipe.
+- **Recipes without source** — recipes with no `source` field (e.g., musl) skip
+  source preparation instead of erroring.
+
+### Fixed
+
+- Disable ext4 features (`64bit`, `metadata_csum`, `extent`) incompatible with
+  syslinux 6.03 so bootloader can load kernel from any partition size.
+- Image package dep resolution walks both `deps` and `runtime_deps` so shared
+  libraries are included.
+- OpenSSL recipe uses `--libdir=lib` so libraries install to `/usr/lib` instead
+  of `/usr/lib64` — fixes "Error loading shared library libcrypto.so.3".
+- Inittab no longer tries to mount `/dev` (already mounted by kernel via
+  `devtmpfs.mount=1`).
+- Skip `TestBuildRecipes_WithDeps` in CI — GitHub Actions runners don't support
+  user namespaces inside Docker.
+- Most stuff in `dev-image` now works.
+
 ## [0.2.4] - 2026-03-27
 
 - update BL config

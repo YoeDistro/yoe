@@ -117,3 +117,15 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
   QEMU. Never suggest QEMU-only shortcuts like `-kernel` direct boot that bypass
   the bootloader. QEMU is a development convenience; the real target is always
   physical boards.
+
+## Working on This Codebase
+
+- **No shortcuts.** Build systems are fragile. Always implement the correct fix,
+  not a workaround that happens to make things pass. If the correct fix is
+  significantly harder, explain the trade-off and ask before taking a shortcut.
+- **Understand before changing.** Read the relevant code paths end-to-end before
+  proposing changes. Build failures often have non-obvious root causes — trace
+  the actual problem rather than patching symptoms.
+- **Silent failures are bugs.** If something can fail, it should fail loudly
+  with a clear error. Never swallow errors or degrade silently in ways that make
+  debugging harder later.
