@@ -1,13 +1,14 @@
 def autotools(name, version, source, sha256="", deps=[], runtime_deps=[],
               configure_args=[], patches=[], services=[], conffiles=[],
-              license="", description="", **kwargs):
-    build = [
-        # Run autoreconf if configure doesn't exist (git sources)
-        "test -f configure || autoreconf -fi",
-        "./configure --prefix=$PREFIX " + " ".join(configure_args),
-        "make -j$NPROC",
-        "make DESTDIR=$DESTDIR install",
-    ]
+              license="", description="", build=[], **kwargs):
+    if not build:
+        build = [
+            # Run autoreconf if configure doesn't exist (git sources)
+            "test -f configure || autoreconf -fi",
+            "./configure --prefix=$PREFIX " + " ".join(configure_args),
+            "make -j$NPROC",
+            "make DESTDIR=$DESTDIR install",
+        ]
     package(
         name=name, version=version, source=source, sha256=sha256,
         deps=deps, runtime_deps=runtime_deps, patches=patches,

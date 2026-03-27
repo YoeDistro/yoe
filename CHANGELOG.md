@@ -8,6 +8,9 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Autotools class respects explicit `build` steps — no longer prepends default
+  autoreconf/configure when a recipe provides its own build commands.
+
 ## [0.2.7] - 2026-03-27
 
 - **Per-recipe build logs** — build output written to
