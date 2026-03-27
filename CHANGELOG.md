@@ -30,6 +30,7 @@ and this project adheres to
   `devtmpfs.mount=1`).
 - Skip `TestBuildRecipes_WithDeps` in CI — GitHub Actions runners don't support
   user namespaces inside Docker.
+- Most stuff in `dev-image` now works.
 
 ## [0.2.4] - 2026-03-27
 
