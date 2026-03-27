@@ -36,6 +36,8 @@ yoe run base-image
 poweroff
 ```
 
+`dev-image` is another included image with a few more things in it.
+
 ## 🤖 Why AI-Native
 
 Embedded Linux is hard not because the concepts are complex, but because there
