@@ -44,7 +44,11 @@ func BuildRecipes(proj *yoestar.Project, names []string, opts Options, w io.Writ
 	}
 
 	// Filter to requested recipes (and their deps)
+	requested := make(map[string]bool)
 	if len(names) > 0 {
+		for _, n := range names {
+			requested[n] = true
+		}
 		order, err = filterBuildOrder(dag, order, names)
 		if err != nil {
 			return err
@@ -52,7 +56,7 @@ func BuildRecipes(proj *yoestar.Project, names []string, opts Options, w io.Writ
 	}
 
 	if opts.DryRun {
-		return dryRun(w, proj, order, hashes, opts)
+		return dryRun(w, proj, order, hashes, opts, requested)
 	}
 
 	// Build in order
@@ -60,8 +64,11 @@ func BuildRecipes(proj *yoestar.Project, names []string, opts Options, w io.Writ
 		recipe := proj.Recipes[name]
 		hash := hashes[name]
 
-		// Check cache (--clean implies --force)
-		if !opts.Force && !opts.Clean && !opts.NoCache {
+		// --force/--clean only apply to explicitly requested recipes;
+		// dependencies still use the cache.
+		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
+
+		if !forceThis && !opts.NoCache {
 			if isBuildCached(opts.ProjectDir, name, hash) {
 				fmt.Fprintf(w, "%-20s [cached] %s\n", name, hash[:12])
 				continue
@@ -245,12 +252,13 @@ func filterBuildOrder(dag *resolve.DAG, fullOrder []string, names []string) ([]s
 	return filtered, nil
 }
 
-func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[string]string, opts Options) error {
+func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[string]string, opts Options, requested map[string]bool) error {
 	fmt.Fprintln(w, "Dry run — would build in this order:")
 	for _, name := range order {
 		recipe := proj.Recipes[name]
 		cached := ""
-		if !opts.Force && !opts.Clean && isBuildCached(opts.ProjectDir, name, hashes[name]) {
+		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
+		if !forceThis && isBuildCached(opts.ProjectDir, name, hashes[name]) {
 			cached = " [cached, skip]"
 		}
 		fmt.Fprintf(w, "  %-20s [%s] %s%s\n", name, recipe.Class, hashes[name][:12], cached)
