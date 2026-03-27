@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/user"
@@ -35,6 +36,8 @@ type ContainerRunConfig struct {
 	Env         map[string]string // environment variables
 	Interactive bool              // attach TTY (-it)
 	NoUser      bool              // run as root (for losetup/mount)
+	Stdout      io.Writer         // override stdout (default: os.Stdout)
+	Stderr      io.Writer         // override stderr (default: os.Stderr)
 }
 
 var ensureOnce sync.Once
@@ -62,11 +65,18 @@ func RunInContainer(cfg ContainerRunConfig) error {
 
 	args = append(args, cfg.Command)
 
-	fmt.Fprintf(os.Stderr, "[yoe] container: %s\n", cfg.Command)
+	stderr := cfg.Stderr
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+	fmt.Fprintf(stderr, "[yoe] container: %s\n", cfg.Command)
 
 	cmd := exec.Command(runtime, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = cfg.Stdout
+	if cmd.Stdout == nil {
+		cmd.Stdout = os.Stdout
+	}
+	cmd.Stderr = stderr
 	if cfg.Interactive {
 		cmd.Stdin = os.Stdin
 	}

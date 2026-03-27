@@ -80,7 +80,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "Commands:\n")
 	fmt.Fprintf(os.Stderr, "  init <project-dir>      Create a new Yoe-NG project\n")
 	fmt.Fprintf(os.Stderr, "  container               Manage the build container (build, status)\n")
-	fmt.Fprintf(os.Stderr, "  build [recipes...]      Build recipes (--force, --clean, --dry-run)\n")
+	fmt.Fprintf(os.Stderr, "  build [recipes...]      Build recipes (--force, --clean, --verbose, --dry-run)\n")
 	fmt.Fprintf(os.Stderr, "  dev                     Manage source modifications (extract, diff, status)\n")
 	fmt.Fprintf(os.Stderr, "  flash <device>          Write an image to a device/SD card\n")
 	fmt.Fprintf(os.Stderr, "  run                     Run an image in QEMU\n")
@@ -149,6 +149,7 @@ func cmdBuild(args []string) {
 	clean := false
 	noCache := false
 	dryRun := false
+	verbose := false
 	var recipes []string
 
 	for i := 0; i < len(args); i++ {
@@ -161,6 +162,8 @@ func cmdBuild(args []string) {
 			noCache = true
 		case "--dry-run":
 			dryRun = true
+		case "--verbose", "-v":
+			verbose = true
 		case "--all":
 			// build all — recipes stays empty
 		default:
@@ -174,6 +177,7 @@ func cmdBuild(args []string) {
 		Clean:      clean,
 		NoCache:    noCache,
 		DryRun:     dryRun,
+		Verbose:    verbose,
 		ProjectDir: projectDir(),
 		Arch:       build.Arch(),
 	}
