@@ -171,6 +171,9 @@ func TestFilterBuildOrder(t *testing.T) {
 }
 
 func TestBuildRecipes_WithDeps(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("requires --privileged container with user namespace support")
+	}
 	if _, err := exec.LookPath("docker"); err != nil {
 		if _, err := exec.LookPath("podman"); err != nil {
 			t.Skip("docker/podman not available")
