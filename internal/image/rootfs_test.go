@@ -12,7 +12,7 @@ import (
 
 func TestAssemble(t *testing.T) {
 	projectDir := t.TempDir()
-	outputDir := filepath.Join(t.TempDir(), "output")
+	outputDir := filepath.Join(projectDir, "build", "output")
 
 	// Create a fake local repo with nothing (apk won't be available in tests)
 	os.MkdirAll(filepath.Join(projectDir, "build", "repo"), 0755)
