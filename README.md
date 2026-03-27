@@ -24,7 +24,7 @@ yoe init yoe-test
 cd yoe-test
 
 # Fetch layers (downloads recipes-core)
-yoe layers sync
+yoe layer sync
 
 # Build the base image (builds all required packages, then assembles the image)
 yoe build base-image
