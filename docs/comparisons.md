@@ -284,6 +284,129 @@ GN is not an alternative to Yoe-NG — they solve different problems. But GN's
 approach to graph resolution, config propagation, and introspection are
 well-proven patterns that Yoe-NG applies to the embedded Linux domain.
 
+## Value Proposition and Strategic Positioning
+
+### The Core Thesis
+
+Yocto's model of wrapping every dependency in a recipe made sense when C/C++ was
+the only game in town and there was no dependency management beyond "whatever
+headers are on the system." Modern languages have solved this:
+
+- **Go**: `go.sum` is a cryptographic lock file. Builds are already
+  reproducible.
+- **Rust**: `Cargo.lock` pins every transitive dependency.
+- **Zig**: Hash-pinned dependencies.
+- **Node/Python**: Lock files are standard practice.
+
+Yocto's response is to re-declare every dependency the language toolchain
+already knows about — `SRC_URI` with checksums for each crate,
+`LIC_FILES_CHKSUM` for each module. This is busywork that duplicates what
+`Cargo.lock` and `go.sum` already guarantee.
+
+Yoe-NG's position: **let the language package manager do its job.** A Go recipe
+should declare _what_ to build, not _how to resolve every transitive
+dependency_. Content-addressed caching hashes the output — if inputs haven't
+changed, the output is the same. You get reproducibility without micromanaging
+the build.
+
+### Where Yoe-NG Cannot Compete (Yet)
+
+Be honest about the gaps:
+
+**Vendor BSP support is Yocto's real moat.** Every major SoC vendor (NXP, TI,
+Qualcomm, Intel, Renesas, MediaTek) ships Yocto BSP layers and supports them.
+This is not a technology problem — it's an ecosystem problem that Linux
+Foundation backing solves. No amount of technical superiority overcomes "the
+silicon vendor gives us a Yocto BSP and supports it."
+
+**Package count.** Yocto has thousands of recipes, Buildroot has ~2800. Yoe-NG
+has a handful. Need curl, dbus, python3, or ffmpeg? You have to write the
+recipe.
+
+**Configuration UX.** Buildroot's `make menuconfig` is a killer feature —
+visual, discoverable, searchable. You can explore what's available without
+reading recipe files. Yoe-NG requires editing Starlark by hand.
+
+**Documentation and community.** Yocto has comprehensive manuals, Bootlin
+training materials, and years of mailing list archives. Buildroot has a
+well-maintained manual and active list. Problems are googleable. Yoe-NG has
+design docs and a small team.
+
+**Legal compliance tooling.** Yocto's `do_populate_lic` and Buildroot's
+`make legal-info` generate license manifests and source archives. This is
+required for shipping products in many industries. Yoe-NG has nothing here yet.
+
+**Proven production track record.** Thousands of products ship with Yocto.
+Buildroot runs on millions of devices. Yoe-NG is a prototype.
+
+### Where Yoe-NG Can Win
+
+**Target audience:** Teams building Go/Rust/Zig services for embedded Linux —
+edge computing, IoT gateways, network appliances. Teams where the application
+_is_ the product, not the base OS. Teams that want "Alpine + my app on custom
+hardware" not "custom Linux distro with 200 hand-tuned recipes."
+
+These teams currently use Buildroot, hack together Docker-based builds, or
+cross-compile manually. They would never adopt Yocto because the overhead is
+absurd for their use case.
+
+**First-class modern language support.** Go/Rust/Zig recipe classes should be
+trivial to use. The build system should get out of the way and let `go build`,
+`cargo build`, and `zig build` do their jobs. This is where Yocto is most out of
+touch.
+
+**Custom hardware without desktop distro limitations.** Desktop distros (Debian,
+Fedora, Alpine) have great package management but no story for custom kernels,
+device trees, bootloaders, board-specific firmware, or flash/deploy workflows.
+This is the entire reason Yocto and Buildroot exist. Yoe-NG should provide BSP
+tooling (machine definitions, kernel recipes, `yoe flash`, `yoe run`) that is
+simpler than Yocto's but more capable than anything desktop distros offer.
+
+**Incremental builds and shared caching.** Buildroot rebuilds everything from
+scratch. Yocto's sstate is powerful but complex to set up. Yoe-NG's
+content-addressed `.apk` cache in S3-compatible storage is conceptually simpler:
+push packages to a bucket, pull them on other machines. CI builds once,
+developers reuse the output.
+
+**AI-assisted recipe generation.** If an AI can generate a working Starlark
+recipe from a project URL faster than porting a Yocto recipe, the small package
+count stops mattering. Starlark is far more tractable for AI than BitBake's
+metadata format.
+
+### The Alpine Linux Precedent
+
+Alpine didn't supplant Debian — it became the default for containers because it
+was radically smaller and simpler for that specific use case. Yoe-NG doesn't
+need to replace Yocto for automotive or aerospace. It needs to be the obvious
+choice for a specific class of embedded product where Yocto is overkill and
+Buildroot is too limited.
+
+### What to Focus On
+
+1. **Modern language recipe classes** — Go, Rust, Zig should be first-class, not
+   afterthoughts. These are the differentiator. A Go developer should go from "I
+   have a binary" to "I have a bootable image on custom hardware" in minutes.
+
+2. **BSP tooling** — machine definitions, kernel/bootloader recipes,
+   `yoe flash`, `yoe run`. This is what desktop distros lack and what justifies
+   Yoe-NG's existence as a build system rather than just another distro.
+
+3. **Shared build cache** — the S3-backed package cache is a major advantage
+   over Buildroot. Make it trivial to set up so teams see the value immediately.
+
+4. **AI recipe generation** — lean into the AI-native angle. If generating a new
+   recipe is a conversation rather than a manual porting exercise, the package
+   count gap closes fast.
+
+5. **Board support** — start with popular, accessible boards (Raspberry Pi,
+   BeagleBone, common QEMU targets). Every board that works out of the box is a
+   potential user who doesn't need Yocto.
+
+6. **Don't chase Yocto's tail** — resist the urge to add Yocto-like features
+   (task-level DAGs, recipe splitting, bbappend equivalents) to win over Yocto
+   users. Instead, make the simple path so good that teams choose Yoe-NG because
+   it fits their workflow, not because it replicates Yocto's.
+
 ## Summary Matrix
 
 | Feature                 | Yocto    | Buildroot | Alpine   | Arch     | NixOS   | **Yoe-NG** |
