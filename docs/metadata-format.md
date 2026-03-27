@@ -351,6 +351,43 @@ busybox(extra_patches=["patches/vendor-busybox-audit.patch"])
 - **Overlay files** — for config file changes on the target, the `overlays/`
   directory is simpler than patching source.
 
+### Per-Recipe Build Containers (planned)
+
+Recipes can optionally specify a Docker container image for their build. When
+set, build steps run inside that container instead of the bwrap sandbox. This
+allows different recipes to use different toolchains without modifying the base
+build container.
+
+```python
+# Go app builds inside the official golang image
+go_binary(
+    name = "myapp",
+    source = "https://github.com/example/myapp.git",
+    container = "golang:1.22-alpine",
+)
+
+# Rust app with its own container
+package(
+    name = "custom-tool",
+    container = "rust:1.78-alpine",
+    build = [
+        "cargo build --release",
+        "install -D target/release/tool $DESTDIR/usr/bin/tool",
+    ],
+)
+
+# C/C++ recipes use bwrap (no container field = current behavior)
+autotools(name = "zlib", ...)
+```
+
+Classes can set default containers — `go_binary()` defaults to
+`golang:1.22-alpine`, while `autotools()` and `cmake()` use bwrap. Users can
+override at recipe level. The sysroot, source, and destdir mounts are identical
+regardless of execution method.
+
+See [per-recipe containers plan](superpowers/plans/per-recipe-containers.md) for
+the full design.
+
 ### Application Recipe (`recipes/<name>.star`)
 
 Applications built with language-native build systems use language-specific
