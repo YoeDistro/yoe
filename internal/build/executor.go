@@ -110,13 +110,19 @@ func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts O
 		return nil
 	}
 
-	// Build environment
+	// Build environment.
+	// The sysroot at /build/sysroot contains headers/libs from built deps.
+	sysroot := SysrootDir(opts.ProjectDir)
 	env := map[string]string{
-		"PREFIX":  "/usr",
-		"DESTDIR": "/build/destdir",
-		"NPROC":   NProc(),
-		"ARCH":    opts.Arch,
-		"HOME":    "/tmp",
+		"PREFIX":          "/usr",
+		"DESTDIR":         "/build/destdir",
+		"NPROC":           NProc(),
+		"ARCH":            opts.Arch,
+		"HOME":            "/tmp",
+		"PKG_CONFIG_PATH": "/build/sysroot/usr/lib/pkgconfig:/usr/lib/pkgconfig",
+		"CFLAGS":          "-I/build/sysroot/usr/include",
+		"CPPFLAGS":        "-I/build/sysroot/usr/include",
+		"LDFLAGS":         "-L/build/sysroot/usr/lib",
 	}
 
 	// Execute each build step
@@ -127,13 +133,13 @@ func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts O
 			cfg := &SandboxConfig{
 				SrcDir:  srcDir,
 				DestDir: destDir,
+				Sysroot: sysroot,
 				Env:     env,
 			}
 			if err := RunInSandbox(cfg, cmd); err != nil {
 				return err
 			}
 		} else {
-			// Set DESTDIR to actual path when not sandboxed
 			env["DESTDIR"] = destDir
 			if err := RunSimple(srcDir, destDir, env, cmd); err != nil {
 				return err
@@ -152,6 +158,12 @@ func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts O
 		repoDir := repo.RepoDir(nil, opts.ProjectDir)
 		if err := repo.Publish(apkPath, repoDir); err != nil {
 			return fmt.Errorf("publishing to repo: %w", err)
+		}
+
+		// Install into the shared sysroot so subsequent builds can find
+		// this package's headers, libraries, and pkg-config files.
+		if err := InstallToSysroot(destDir, sysroot); err != nil {
+			fmt.Fprintf(w, "  (warning: sysroot install failed: %v)\n", err)
 		}
 	}
 

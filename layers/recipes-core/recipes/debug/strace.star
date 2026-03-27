@@ -1,10 +1,14 @@
-load("//classes/autotools.star", "autotools")
-
-autotools(
+package(
     name = "strace",
-    version = "6.12",
+    version = "6.9",
     source = "https://github.com/strace/strace.git",
-    tag = "v6.12",
+    tag = "v6.9",
     license = "LGPL-2.1-or-later",
     description = "System call tracer for Linux",
+    build = [
+        "./bootstrap",
+        "./configure --prefix=$PREFIX --enable-mpers=no",
+        "make -j$NPROC",
+        "make DESTDIR=$DESTDIR install",
+    ],
 )

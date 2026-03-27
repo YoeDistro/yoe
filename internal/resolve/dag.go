@@ -24,11 +24,17 @@ type Node struct {
 func BuildDAG(proj *yoestar.Project) (*DAG, error) {
 	dag := &DAG{Nodes: make(map[string]*Node)}
 
-	// Add all recipes as nodes
+	// Add all recipes as nodes.
+	// For image recipes, Packages are also dependencies (they must be built
+	// before the image can be assembled).
 	for name, recipe := range proj.Recipes {
+		deps := recipe.Deps
+		if recipe.Class == "image" {
+			deps = append(append([]string{}, deps...), recipe.Packages...)
+		}
 		dag.Nodes[name] = &Node{
 			Recipe: recipe,
-			Deps:   recipe.Deps,
+			Deps:   deps,
 		}
 	}
 
