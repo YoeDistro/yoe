@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-03-27
+
 ### Added
 
 - **Layer `path` field** — layers can live in a subdirectory of a repo via
