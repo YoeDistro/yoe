@@ -4,7 +4,9 @@
 OE_BASE=$(readlink -f $(dirname ${BASH_SOURCE[0]:-$0}))
 
 yoe_build() {
-  CGO_ENABLED=0 go build -o "${OE_BASE}/yoe" "${OE_BASE}/cmd/yoe" || return 1
+  local version
+  version=$(cd "${OE_BASE}" && git describe --tags --always --dirty 2>/dev/null || echo "dev")
+  CGO_ENABLED=0 go build -ldflags "-X main.version=${version}" -o "${OE_BASE}/yoe" "${OE_BASE}/cmd/yoe" || return 1
 }
 
 yoe_test() {
