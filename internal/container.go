@@ -65,17 +65,18 @@ func RunInContainer(cfg ContainerRunConfig) error {
 
 	args = append(args, cfg.Command)
 
-	fmt.Fprintf(os.Stderr, "[yoe] container: %s\n", cfg.Command)
+	stderr := cfg.Stderr
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+	fmt.Fprintf(stderr, "[yoe] container: %s\n", cfg.Command)
 
 	cmd := exec.Command(runtime, args...)
 	cmd.Stdout = cfg.Stdout
 	if cmd.Stdout == nil {
 		cmd.Stdout = os.Stdout
 	}
-	cmd.Stderr = cfg.Stderr
-	if cmd.Stderr == nil {
-		cmd.Stderr = os.Stderr
-	}
+	cmd.Stderr = stderr
 	if cfg.Interactive {
 		cmd.Stdin = os.Stdin
 	}

@@ -20,6 +20,7 @@ type Options struct {
 	Clean      bool   // delete build dir before rebuilding (implies Force)
 	NoCache    bool   // skip all caches
 	DryRun     bool   // show what would be built
+	Verbose    bool   // show build output in console (default: log only)
 	ProjectDir string // project root
 	Arch       string // target architecture
 }
@@ -93,19 +94,32 @@ func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts O
 	buildDir := RecipeBuildDir(opts.ProjectDir, recipe.Name)
 	EnsureDir(buildDir)
 
-	// Open build log — tee output to both terminal and log file
+	// Open build log. In verbose mode, tee to terminal + log file.
+	// In normal mode, log only — on error, print the log path.
 	logPath := filepath.Join(buildDir, "build.log")
 	logFile, err := os.Create(logPath)
 	if err != nil {
 		return fmt.Errorf("creating build log: %w", err)
 	}
 	defer logFile.Close()
-	logW := io.MultiWriter(w, logFile)
+
+	var logW io.Writer
+	if opts.Verbose {
+		logW = io.MultiWriter(w, logFile)
+	} else {
+		logW = logFile
+	}
 
 	// Image recipes go through a different path — assemble rootfs
 	if recipe.Class == "image" {
 		outputDir := filepath.Join(buildDir, "output")
-		return image.Assemble(recipe, proj, opts.ProjectDir, outputDir, logW)
+		if err := image.Assemble(recipe, proj, opts.ProjectDir, outputDir, logW); err != nil {
+			if !opts.Verbose {
+				fmt.Fprintf(w, "  build log: %s\n", logPath)
+			}
+			return err
+		}
+		return nil
 	}
 
 	srcDir := filepath.Join(buildDir, "src")
@@ -167,6 +181,9 @@ func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts O
 			Stderr:     logW,
 		}
 		if err := RunInSandbox(cfg, cmd); err != nil {
+			if !opts.Verbose {
+				fmt.Fprintf(w, "  build log: %s\n", logPath)
+			}
 			return err
 		}
 	}

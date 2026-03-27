@@ -8,9 +8,9 @@ and this project adheres to
 
 ## [Unreleased]
 
-- **Per-recipe build logs** — build output is tee'd to
-  `build/<recipe>/build.log` alongside terminal output. Useful for reviewing
-  failed builds after the fact.
+- **Per-recipe build logs** — build output written to
+  `build/<recipe>/build.log`. Console is quiet by default; on error the log path
+  is printed. Use `--verbose` / `-v` to stream build output to the console.
 
 ## [0.2.6] - 2026-03-27
 
