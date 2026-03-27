@@ -171,16 +171,6 @@ func findGitRoot(dir string) string {
 	}
 }
 
-// Deprecated: InContainer is a temporary stub kept so cmd/yoe/main.go
-// compiles until Task 4 removes the call. Always returns false.
-func InContainer() bool { return false }
-
-// Deprecated: ExecInContainer is a temporary stub kept so cmd/yoe/main.go
-// compiles until Task 4 removes the call. Always returns an error.
-func ExecInContainer(args []string) error {
-	return fmt.Errorf("ExecInContainer removed — use RunInContainer")
-}
-
 func detectRuntime() (string, error) {
 	for _, rt := range []string{"docker", "podman"} {
 		if _, err := exec.LookPath(rt); err == nil {
