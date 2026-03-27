@@ -158,19 +158,6 @@ func ContainerVersion() string {
 	return containerVersion
 }
 
-func findGitRoot(dir string) string {
-	for {
-		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return ""
-		}
-		dir = parent
-	}
-}
-
 func detectRuntime() (string, error) {
 	for _, rt := range []string{"docker", "podman"} {
 		if _, err := exec.LookPath(rt); err == nil {
