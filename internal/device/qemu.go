@@ -5,7 +5,10 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 
+	yoe "github.com/YoeDistro/yoe-ng/internal"
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
@@ -43,43 +46,60 @@ func RunQEMU(proj *yoestar.Project, recipeName, machineName, projectDir string, 
 		return fmt.Errorf("no built image for %q — run yoe build %s first", recipeName, recipeName)
 	}
 
-	// Build QEMU command
 	qemuBin := qemuBinary(machine.Arch)
-	args := baseQEMUArgs(machine, opts)
 
-	// Attach the image as the root disk
-	args = append(args, "-drive", fmt.Sprintf("file=%s,format=raw,if=virtio", imgPath))
-
-	// Port forwarding
-	for _, port := range opts.Ports {
-		args = append(args, "-netdev", fmt.Sprintf("user,id=net0,hostfwd=tcp::%s", port))
-		args = append(args, "-device", "virtio-net-pci,netdev=net0")
-	}
-
-	if len(opts.Ports) == 0 {
-		args = append(args, "-netdev", "user,id=net0")
-		args = append(args, "-device", "virtio-net-pci,netdev=net0")
-	}
-
-	fmt.Fprintf(w, "Starting QEMU: %s %s\n", qemuBin, machine.Arch)
-
-	cmd := exec.Command(qemuBin, args...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if opts.Daemon {
-		cmd.Stdin = nil
-		cmd.Stdout = nil
-		cmd.Stderr = nil
-		if err := cmd.Start(); err != nil {
-			return fmt.Errorf("starting QEMU: %w", err)
+	// Build common QEMU args (without image path — that differs host vs container)
+	buildArgs := func(imgFile string) []string {
+		a := baseQEMUArgs(machine, opts)
+		a = append(a, "-drive", fmt.Sprintf("file=%s,format=raw,if=virtio", imgFile))
+		for _, port := range opts.Ports {
+			a = append(a, "-netdev", fmt.Sprintf("user,id=net0,hostfwd=tcp::%s", port))
+			a = append(a, "-device", "virtio-net-pci,netdev=net0")
 		}
-		fmt.Fprintf(w, "QEMU running in background (PID %d)\n", cmd.Process.Pid)
-		return nil
+		if len(opts.Ports) == 0 {
+			a = append(a, "-netdev", "user,id=net0")
+			a = append(a, "-device", "virtio-net-pci,netdev=net0")
+		}
+		return a
 	}
 
-	return cmd.Run()
+	// Try host QEMU first
+	if _, err := exec.LookPath(qemuBin); err == nil {
+		fmt.Fprintf(w, "Starting QEMU (host): %s %s\n", qemuBin, machine.Arch)
+		args := buildArgs(imgPath)
+		cmd := exec.Command(qemuBin, args...)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if opts.Daemon {
+			cmd.Stdin = nil
+			cmd.Stdout = nil
+			cmd.Stderr = nil
+			if err := cmd.Start(); err != nil {
+				return fmt.Errorf("starting QEMU: %w", err)
+			}
+			fmt.Fprintf(w, "QEMU running in background (PID %d)\n", cmd.Process.Pid)
+			return nil
+		}
+		return cmd.Run()
+	}
+
+	// Fall back to container
+	fmt.Fprintf(w, "Starting QEMU (container): %s %s\n", qemuBin, machine.Arch)
+	rel, err := filepath.Rel(projectDir, imgPath)
+	if err != nil {
+		return fmt.Errorf("image path not under project: %w", err)
+	}
+	containerImgPath := filepath.Join("/project", rel)
+	args := buildArgs(containerImgPath)
+	fullCmd := qemuBin + " " + strings.Join(args, " ")
+
+	return yoe.RunInContainer(yoe.ContainerRunConfig{
+		Command:     fullCmd,
+		ProjectDir:  projectDir,
+		Interactive: !opts.Daemon,
+		NoUser:      true,
+	})
 }
 
 func qemuBinary(arch string) string {
