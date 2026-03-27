@@ -2,9 +2,18 @@
 
 ## Context
 
-Files created inside the Docker container are owned by root because the container runs as root with `--privileged`. The existing design docs (`docs/build-environment.md` lines 269-336) already plan for bwrap user namespaces as the pseudo-root mechanism for image assembly. This plan implements that design — a stepping stone toward the long-term goal of running all builds on the host via bwrap + Tier 1 build root, with Docker only for bootstrapping/onboarding.
+Files created inside the Docker container are owned by root because the
+container runs as root with `--privileged`. The existing design docs
+(`docs/build-environment.md` lines 269-336) already plan for bwrap user
+namespaces as the pseudo-root mechanism for image assembly. This plan implements
+that design — a stepping stone toward the long-term goal of running all builds
+on the host via bwrap + Tier 1 build root, with Docker only for
+bootstrapping/onboarding.
 
-**Goal**: Recipe compilation stays in the container (for now). Image assembly moves to the host, running inside a bwrap user namespace (`--unshare-user --uid 0 --gid 0`) so files are owned by the real user on the host filesystem.
+**Goal**: Recipe compilation stays in the container (for now). Image assembly
+moves to the host, running inside a bwrap user namespace
+(`--unshare-user --uid 0 --gid 0`) so files are owned by the real user on the
+host filesystem.
 
 ## Approach: Two-Phase Build
 
@@ -22,11 +31,13 @@ Phase 2 (host):  yoe assembles image recipes on host
 
 ## Host Requirements Change
 
-| Before | After |
-|--------|-------|
+| Before           | After                      |
+| ---------------- | -------------------------- |
 | `yoe` + `docker` | `yoe` + `docker` + `bwrap` |
 
-bwrap is in every major distro's package manager. Same class of requirement as Docker. Falls back to container-based image building with a warning if bwrap is unavailable.
+bwrap is in every major distro's package manager. Same class of requirement as
+Docker. Falls back to container-based image building with a warning if bwrap is
+unavailable.
 
 ## Implementation Steps
 
@@ -35,12 +46,15 @@ bwrap is in every major distro's package manager. Same class of requirement as D
 **File: `internal/container.go`**
 
 Add `ExportContainerRootfs(cacheDir string) (string, error)`:
+
 - Checks if `<cacheDir>/rootfs-<version>/` exists
-- If not: `docker create yoe-ng:<version>` + `docker export` + extract to cache dir
+- If not: `docker create yoe-ng:<version>` + `docker export` + extract to cache
+  dir
 - Returns path to extracted rootfs
 - Cache is invalidated when container version bumps
 
-This gives bwrap access to all container tools (sfdisk, mkfs.ext4, etc.) without requiring them on the host.
+This gives bwrap access to all container tools (sfdisk, mkfs.ext4, etc.) without
+requiring them on the host.
 
 ### Step 2: Add bwrap user namespace wrapper
 
@@ -61,6 +75,7 @@ type Bind struct {
 ```
 
 Builds a bwrap command:
+
 ```
 bwrap --unshare-user --uid 0 --gid 0 \
     --ro-bind <container-rootfs> / \
@@ -71,7 +86,8 @@ bwrap --unshare-user --uid 0 --gid 0 \
     -- sh -c '<command>'
 ```
 
-The `--unshare-user --uid 0 --gid 0` maps the real user to uid 0 inside the namespace. Files created appear owned by the invoking user on the host.
+The `--unshare-user --uid 0 --gid 0` maps the real user to uid 0 inside the
+namespace. Files created appear owned by the invoking user on the host.
 
 ### Step 3: Split build dispatch for image recipes
 
@@ -105,15 +121,18 @@ func BuildRecipes(proj, names, opts, w) error {
 ```
 
 Add `buildImageOnHost()` that:
+
 1. Exports container rootfs (Step 1)
 2. Calls `image.Assemble` via `RunInUserNamespace` (Step 2)
-3. Uses a `yoe image-assemble` internal sub-command (Step 4) inside the namespace
+3. Uses a `yoe image-assemble` internal sub-command (Step 4) inside the
+   namespace
 
 ### Step 4: Internal `image-assemble` sub-command
 
 **File: `cmd/yoe/main.go`**
 
-Add `image-assemble` as an internal command that runs **before** the container gate (lines 33-49):
+Add `image-assemble` as an internal command that runs **before** the container
+gate (lines 33-49):
 
 ```go
 case "image-assemble":
@@ -123,6 +142,7 @@ case "image-assemble":
 ```
 
 This command:
+
 - Accepts recipe name, project dir, output dir as args
 - Loads project, finds recipe, calls `image.Assemble` directly
 - Runs inside bwrap namespace with pseudo-root
@@ -131,11 +151,14 @@ This command:
 
 **File: `cmd/yoe/main.go`**
 
-Modify the container gate (lines 51-65) so that when `yoe build` is invoked on the host:
+Modify the container gate (lines 51-65) so that when `yoe build` is invoked on
+the host:
 
-1. Load project config on host (pure Go, no tools needed - `loadProject()` already works)
+1. Load project config on host (pure Go, no tools needed - `loadProject()`
+   already works)
 2. Determine if any targets are image recipes
-3. Enter container for non-image recipe deps only: `ExecInContainer(["build", "--skip-images", ...])`
+3. Enter container for non-image recipe deps only:
+   `ExecInContainer(["build", "--skip-images", ...])`
 4. After container returns, run image assembly on host via bwrap
 
 Add `--skip-images` flag to `cmdBuild` to support this.
@@ -144,13 +167,18 @@ Add `--skip-images` flag to `cmdBuild` to support this.
 
 **File: `internal/container.go`**
 
-Replace `--privileged` (line 81) with `--security-opt seccomp=unconfined` (needed for bwrap inside Docker). The container no longer needs losetup/mount since image building moved to the host.
+Replace `--privileged` (line 81) with `--security-opt seccomp=unconfined`
+(needed for bwrap inside Docker). The container no longer needs losetup/mount
+since image building moved to the host.
 
 ### Step 7: Drop losetup/mount bootloader path
 
 **File: `internal/image/disk.go`**
 
-Remove the `installBootloader` losetup/mount/extlinux path (lines 238-291). Keep only the MBR boot code write (lines 210-236) which works without root. The VBR/ldlinux.sys files are already in the rootfs and get included via `mkfs.ext4 -d`.
+Remove the `installBootloader` losetup/mount/extlinux path (lines 238-291). Keep
+only the MBR boot code write (lines 210-236) which works without root. The
+VBR/ldlinux.sys files are already in the rootfs and get included via
+`mkfs.ext4 -d`.
 
 ### Step 8: Update docs
 
@@ -162,14 +190,14 @@ Remove the `installBootloader` losetup/mount/extlinux path (lines 238-291). Keep
 
 ## Critical Files
 
-| File | Change |
-|------|--------|
-| `internal/container.go` | Add `ExportContainerRootfs()`, remove `--privileged` |
-| `internal/build/sandbox.go` | Add `RunInUserNamespace()`, `ImageSandboxConfig` |
-| `internal/build/executor.go` | Split image/non-image build paths |
-| `cmd/yoe/main.go` | Add `image-assemble` sub-command, two-phase build dispatch |
-| `internal/image/disk.go` | Remove losetup/mount bootloader path |
-| `docs/build-environment.md` | Update host requirements and architecture |
+| File                         | Change                                                     |
+| ---------------------------- | ---------------------------------------------------------- |
+| `internal/container.go`      | Add `ExportContainerRootfs()`, remove `--privileged`       |
+| `internal/build/sandbox.go`  | Add `RunInUserNamespace()`, `ImageSandboxConfig`           |
+| `internal/build/executor.go` | Split image/non-image build paths                          |
+| `cmd/yoe/main.go`            | Add `image-assemble` sub-command, two-phase build dispatch |
+| `internal/image/disk.go`     | Remove losetup/mount bootloader path                       |
+| `docs/build-environment.md`  | Update host requirements and architecture                  |
 
 ## Verification
 
@@ -184,6 +212,9 @@ Remove the `installBootloader` losetup/mount/extlinux path (lines 238-291). Keep
 
 ## Decisions
 
-1. **Recipe build file ownership**: Deferred. Image assembly is the immediate pain point. Recipe builds stay in the container as-is. Long-term, all builds move to host via bwrap + Tier 1 build root.
+1. **Recipe build file ownership**: Deferred. Image assembly is the immediate
+   pain point. Recipe builds stay in the container as-is. Long-term, all builds
+   move to host via bwrap + Tier 1 build root.
 
-2. **bwrap availability**: Fall back to container-based image building with a warning if bwrap is not on the host. Keeps backward compat.
+2. **bwrap availability**: Fall back to container-based image building with a
+   warning if bwrap is not on the host. Keeps backward compat.

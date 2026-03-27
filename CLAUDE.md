@@ -123,6 +123,17 @@ Implementation plans live in `docs/superpowers/plans/`. After completing work
 that corresponds to plan tasks, update the relevant checkboxes (`- [ ]` →
 `- [x]`) and phase status in those plans.
 
+## Commit Hygiene
+
+When committing changes, update related documentation and the changelog:
+
+- **CHANGELOG.md** — add an entry describing the change under the appropriate
+  section (Added, Changed, Fixed, etc.)
+- **Docs** — if the change affects CLI behavior, recipe format, build process,
+  or architecture, update the relevant file(s) in `docs/` and/or `README.md`
+
+Do this as part of the same commit, not as a follow-up.
+
 ## Key Design Decisions
 
 - **Container-only builds** — host provides only `yoe` + Docker; all tools live
