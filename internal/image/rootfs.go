@@ -135,10 +135,21 @@ func applyConfig(rootfs string, recipe *yoestar.Recipe, w io.Writer) error {
 	extlinuxConf := `DEFAULT yoe
 LABEL yoe
     LINUX /boot/vmlinuz
-    APPEND console=ttyS0 root=/dev/vda1 rw init=/bin/sh
+    APPEND console=ttyS0 root=/dev/vda1 rw
 `
 	os.WriteFile(filepath.Join(bootDir, "extlinux.conf"), []byte(extlinuxConf), 0644)
 	fmt.Fprintln(w, "  Installed boot configuration (extlinux)")
+
+	// Install minimal inittab for busybox init
+	inittab := `::sysinit:/bin/mount -t proc proc /proc
+::sysinit:/bin/mount -t sysfs sys /sys
+::sysinit:/bin/mount -t devtmpfs dev /dev
+::sysinit:/bin/hostname -F /etc/hostname
+ttyS0::respawn:/bin/sh
+::ctrlaltdel:/sbin/reboot
+::shutdown:/bin/umount -a -r
+`
+	os.WriteFile(filepath.Join(rootfs, "etc", "inittab"), []byte(inittab), 0644)
 
 	return nil
 }
