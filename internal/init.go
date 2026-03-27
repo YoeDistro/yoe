@@ -67,24 +67,24 @@ func createMachineFile(projectDir, name string) error {
 		content = fmt.Sprintf(`machine(
     name = %q,
     arch = "x86_64",
-    kernel = kernel(recipe = "linux-qemu", cmdline = "console=ttyS0 root=/dev/vda2 rw"),
-    qemu = qemu_config(machine = "q35", cpu = "host", memory = "1G", firmware = "ovmf", display = "none"),
+    kernel = kernel(recipe = "linux-qemu", cmdline = "console=ttyS0 root=/dev/vda1 rw"),
+    qemu = qemu_config(machine = "q35", cpu = "host", memory = "1G", display = "none"),
 )
 `, name)
 	case name == "qemu-arm64" || name == "aarch64":
 		content = fmt.Sprintf(`machine(
     name = %q,
     arch = "arm64",
-    kernel = kernel(recipe = "linux-qemu", cmdline = "console=ttyAMA0 root=/dev/vda2 rw"),
-    qemu = qemu_config(machine = "virt", cpu = "host", memory = "1G", firmware = "aavmf", display = "none"),
+    kernel = kernel(recipe = "linux-qemu", cmdline = "console=ttyAMA0 root=/dev/vda1 rw"),
+    qemu = qemu_config(machine = "virt", cpu = "host", memory = "1G", display = "none"),
 )
 `, name)
 	case name == "qemu-riscv64" || name == "riscv64":
 		content = fmt.Sprintf(`machine(
     name = %q,
     arch = "riscv64",
-    kernel = kernel(recipe = "linux-qemu", cmdline = "console=ttyS0 root=/dev/vda2 rw"),
-    qemu = qemu_config(machine = "virt", cpu = "host", memory = "1G", firmware = "opensbi", display = "none"),
+    kernel = kernel(recipe = "linux-qemu", cmdline = "console=ttyS0 root=/dev/vda1 rw"),
+    qemu = qemu_config(machine = "virt", cpu = "host", memory = "1G", display = "none"),
 )
 `, name)
 	default:
