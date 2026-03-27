@@ -97,15 +97,12 @@ func ExecInContainer(args []string) error {
 		runArgs = append(runArgs, "-e", "YOE_PROJECT="+yp)
 	}
 
-	// Pass through cache directory
+	// Pass through YOE_CACHE if set (overrides default cache/ in project dir).
+	// The project dir is already mounted, so cache/ is accessible at
+	// /project/.../cache/ without a separate mount.
 	if cacheDir := os.Getenv("YOE_CACHE"); cacheDir != "" {
 		abs, _ := filepath.Abs(cacheDir)
 		runArgs = append(runArgs, "-v", abs+":/cache", "-e", "YOE_CACHE=/cache")
-	} else {
-		home, _ := os.UserHomeDir()
-		cacheDir := filepath.Join(home, ".cache", "yoe-ng")
-		os.MkdirAll(cacheDir, 0755)
-		runArgs = append(runArgs, "-v", cacheDir+":/cache", "-e", "YOE_CACHE=/cache")
 	}
 
 	// Note: running as root inside the container (needed for losetup/mount

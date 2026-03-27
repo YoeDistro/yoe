@@ -28,14 +28,25 @@ func RunInit(projectDir string, machine string) error {
     name = %q,
     version = "0.1.0",
     defaults = defaults(machine = %q, image = "base-image"),
-    repository = repository(path = "/var/cache/yoe-ng/repo"),
-    cache = cache(path = "/var/cache/yoe-ng/build"),
+    repository = repository(path = "build/repo"),
+    cache = cache(path = "build/cache"),
     sources = sources(go_proxy = "https://proxy.golang.org"),
+    layers = [
+        layer("git@github.com:YoeDistro/yoe-ng.git",
+              ref = "main",
+              path = "layers/recipes-core"),
+    ],
 )
 `, name, defaultMachine)
 
 	if err := os.WriteFile(filepath.Join(projectDir, "PROJECT.star"), []byte(projectContent), 0644); err != nil {
 		return fmt.Errorf("writing PROJECT.star: %w", err)
+	}
+
+	// Create .gitignore
+	gitignore := "/build\n/cache\n"
+	if err := os.WriteFile(filepath.Join(projectDir, ".gitignore"), []byte(gitignore), 0644); err != nil {
+		return fmt.Errorf("writing .gitignore: %w", err)
 	}
 
 	if machine != "" {

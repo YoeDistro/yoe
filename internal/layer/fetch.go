@@ -12,14 +12,11 @@ import (
 )
 
 // CacheDir returns the layer cache directory.
+// Defaults to cache/layers/ in the current working directory.
 func CacheDir() (string, error) {
 	dir := os.Getenv("YOE_CACHE")
 	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		dir = filepath.Join(home, ".cache", "yoe-ng")
+		dir = "cache"
 	}
 	dir = filepath.Join(dir, "layers")
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -41,7 +38,7 @@ func Sync(proj *yoestar.Project, w io.Writer) (map[string]string, error) {
 	result := make(map[string]string)
 
 	for _, l := range proj.Layers {
-		name := layerName(l.URL)
+		name := LayerName(l)
 
 		if l.Local != "" {
 			fmt.Fprintf(w, "  %-20s (local: %s)\n", name, l.Local)
@@ -80,8 +77,14 @@ func Sync(proj *yoestar.Project, w io.Writer) (map[string]string, error) {
 			cmd.Run() // best effort
 		}
 
-		result[name] = layerDir
-		fmt.Fprintf(w, "  %-20s → %s\n", name, layerDir)
+		// If layer specifies a subdirectory path, use that
+		layerRoot := layerDir
+		if l.Path != "" {
+			layerRoot = filepath.Join(layerDir, l.Path)
+		}
+
+		result[name] = layerRoot
+		fmt.Fprintf(w, "  %-20s → %s\n", name, layerRoot)
 	}
 
 	return result, nil
@@ -98,7 +101,7 @@ func ResolveLayerPaths(proj *yoestar.Project, projectRoot string) (map[string]st
 	result := make(map[string]string)
 
 	for _, l := range proj.Layers {
-		name := layerName(l.URL)
+		name := LayerName(l)
 
 		if l.Local != "" {
 			path := l.Local
@@ -112,7 +115,11 @@ func ResolveLayerPaths(proj *yoestar.Project, projectRoot string) (map[string]st
 		// Check cache
 		layerDir := filepath.Join(cacheDir, name)
 		if _, err := os.Stat(layerDir); err == nil {
-			result[name] = layerDir
+			layerRoot := layerDir
+			if l.Path != "" {
+				layerRoot = filepath.Join(layerDir, l.Path)
+			}
+			result[name] = layerRoot
 		}
 		// If not cached, it will be missing — yoe layer sync is needed
 	}
@@ -120,9 +127,13 @@ func ResolveLayerPaths(proj *yoestar.Project, projectRoot string) (map[string]st
 	return result, nil
 }
 
-// layerName extracts a short name from a layer URL.
-// "github.com/yoe/recipes-core" → "recipes-core"
-func layerName(url string) string {
-	url = strings.TrimSuffix(url, ".git")
+// LayerName derives the layer name from a LayerRef.
+// If Path is set, uses the last component of Path (e.g., "layers/recipes-core" → "recipes-core").
+// Otherwise uses the last component of URL (e.g., "github.com/yoe/recipes-core" → "recipes-core").
+func LayerName(l yoestar.LayerRef) string {
+	if l.Path != "" {
+		return filepath.Base(l.Path)
+	}
+	url := strings.TrimSuffix(l.URL, ".git")
 	return filepath.Base(url)
 }

@@ -15,6 +15,7 @@ func TestRunInit(t *testing.T) {
 
 	for _, path := range []string{
 		"PROJECT.star",
+		".gitignore",
 		"machines",
 		"recipes",
 		"classes",

@@ -351,6 +351,79 @@ busybox(extra_patches=["patches/vendor-busybox-audit.patch"])
 - **Overlay files** — for config file changes on the target, the `overlays/`
   directory is simpler than patching source.
 
+### Tasks and Per-Task Containers (planned)
+
+Recipes can define named build tasks via `task()`, each with an optional Docker
+container. This replaces the flat `build = [...]` string list with structured
+steps that can each run in different environments.
+
+**Container resolution order:** task `container` → package `container` → bwrap
+(default).
+
+```python
+# Simple — build list works as before (bwrap, no containers)
+autotools(name = "zlib", source = "...", ...)
+
+# Package-level container — all tasks inherit it
+go_binary(
+    name = "myapp",
+    container = "golang:1.22-alpine",
+    tasks = [
+        task("build", run="go build -o $DESTDIR/usr/bin/myapp"),
+        task("test", run="go test ./..."),
+    ],
+)
+
+# Task-level override — codegen uses a different container
+package(
+    name = "complex-app",
+    container = "golang:1.22-alpine",       # default for all tasks
+    tasks = [
+        task("codegen",
+             container="protoc:latest",     # overrides package default
+             run="protoc --go_out=. api/*.proto"),
+        task("compile",
+             run="go build -o $DESTDIR/usr/bin/app"),  # inherits golang
+        task("install",
+             run="install -D app.service $DESTDIR/usr/lib/systemd/system/"),
+    ],
+)
+
+# Mix of container and bwrap in one recipe
+package(
+    name = "hybrid-tool",
+    tasks = [
+        task("generate",
+             container="codegen-tools:latest",
+             run="generate-code --out src/"),
+        task("compile", run="make -j$NPROC"),  # no container → bwrap
+        task("install", run="make DESTDIR=$DESTDIR install"),
+    ],
+)
+```
+
+The `build = [...]` field remains for backward compatibility — internally
+converted to unnamed tasks without containers. Classes generate tasks:
+
+```python
+# classes/autotools.star generates three tasks
+def autotools(name, version, source, configure_args=[], **kwargs):
+    package(
+        name=name, version=version, source=source,
+        tasks = [
+            task("configure",
+                 run="test -f configure || autoreconf -fi && "
+                     "./configure --prefix=$PREFIX " + " ".join(configure_args)),
+            task("compile", run="make -j$NPROC"),
+            task("install", run="make DESTDIR=$DESTDIR install"),
+        ],
+        **kwargs,
+    )
+```
+
+See [per-recipe containers plan](superpowers/plans/per-recipe-containers.md) for
+the full design.
+
 ### Application Recipe (`recipes/<name>.star`)
 
 Applications built with language-native build systems use language-specific
@@ -411,8 +484,12 @@ project(
         go_proxy = "https://proxy.golang.org",
     ),
     layers = [
-        layer("github.com/yoe/recipes-core", ref = "v1.0.0"),
-        layer("github.com/vendor/bsp-recipes", ref = "main"),
+        # Layer in a subdirectory of a repo — path specifies where LAYER.star is
+        layer("git@github.com:YoeDistro/yoe-ng.git",
+              ref = "main",
+              path = "layers/recipes-core"),
+        # Layer at the root of its own repo
+        layer("git@github.com:vendor/bsp-recipes.git", ref = "main"),
     ],
 )
 ```
@@ -610,15 +687,23 @@ project(
     name = "my-product",
     version = "1.0.0",
     layers = [
-        layer("github.com/yoe/recipes-core", ref = "v1.0.0"),
-        layer("github.com/vendor/bsp-imx8", ref = "v2.1.0"),
+        # Layer in a subdirectory of a repo
+        layer("git@github.com:YoeDistro/yoe-ng.git",
+              ref = "main",
+              path = "layers/recipes-core"),
+        # Layer at the root of its own repo
+        layer("git@github.com:vendor/bsp-imx8.git", ref = "v2.1.0"),
     ],
 )
 ```
 
 Each `layer()` call declares a Git repository URL and a ref (tag, branch, or
-commit SHA). The `yoe` tool fetches and caches these repositories, making them
-available as `@layer-name` in `load()` statements.
+commit SHA). The optional `path` field specifies a subdirectory within the repo
+where `LAYER.star` lives — this allows a single repo to contain multiple layers
+or a layer to be part of a larger project. The `yoe` tool fetches and caches
+these repositories, making them available as `@layer-name` in `load()`
+statements. The layer name is derived from the last component of `path` (if set)
+or the URL.
 
 ### Layer Manifests (LAYER.star)
 
@@ -692,14 +777,18 @@ fetching from Git. The `local` parameter overrides the remote URL:
 
 ```python
 layers = [
-    layer("github.com/yoe/recipes-core", ref = "v1.0.0"),
-    # Use a local checkout during development
-    layer("github.com/vendor/bsp-imx8", local = "../bsp-imx8"),
+    # Local override — point at a checkout on disk instead of fetching
+    layer("git@github.com:YoeDistro/yoe-ng.git",
+          local = "../yoe-ng",
+          path = "layers/recipes-core"),
+    # Local override for a standalone layer
+    layer("git@github.com:vendor/bsp-imx8.git", local = "../bsp-imx8"),
 ]
 ```
 
 When `local` is set, `yoe` uses the local directory directly (no fetch, no ref
-checking). This is equivalent to Go's `replace` directive in `go.mod`.
+checking). If `path` is also set, it is appended to the local path. This is
+equivalent to Go's `replace` directive in `go.mod`.
 
 ## Label-Based References
 
