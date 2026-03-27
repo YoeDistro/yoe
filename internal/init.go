@@ -32,7 +32,7 @@ func RunInit(projectDir string, machine string) error {
     cache = cache(path = "build/cache"),
     sources = sources(go_proxy = "https://proxy.golang.org"),
     layers = [
-        layer("github.com/YoeDistro/yoe-ng",
+        layer("git@github.com:YoeDistro/yoe-ng.git",
               ref = "main",
               path = "layers/recipes-core"),
     ],
