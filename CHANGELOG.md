@@ -21,9 +21,9 @@ and this project adheres to
 - **`--force` scoped to requested recipes** — `--force` and `--clean` only
   force-rebuild the explicitly requested recipes; dependencies still use the
   cache for incremental builds.
-- **Busybox init** — images use busybox `/sbin/init` with a minimal `/etc/inittab`
-  instead of `init=/bin/sh`. Shell respawns on exit, clean shutdown via
-  `poweroff`.
+- **Busybox init** — images use busybox `/sbin/init` with a minimal
+  `/etc/inittab` instead of `init=/bin/sh`. Shell respawns on exit, clean
+  shutdown via `poweroff`.
 
 ### Fixed
 
