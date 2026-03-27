@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-03-27
+
 - **base-files recipe** — provides filesystem skeleton: `/etc/passwd` (root with
   blank password), `/etc/inittab` (busybox init + getty), `/boot/extlinux/`
   (boot config), and essential mount point dirs (`/proc`, `/sys`, `/dev`, etc.).
