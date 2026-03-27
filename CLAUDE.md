@@ -18,13 +18,14 @@ bubblewrap sandbox inside Docker. Native builds only (no cross-compilation).
 ## CRITICAL: Container-Only Build Policy
 
 **All build operations run inside the Docker/Podman container. The host provides
-ONLY the `yoe` binary and Docker. Nothing else from the host should leak into
-builds.**
+ONLY the `yoe` binary, Git, and Docker. Nothing else from the host should leak
+into builds.**
 
 - The host has NO build tools (no gcc, no bwrap, no apk, no make)
 - The container (`yoe-ng:<version>`) provides ALL build tools
 - `yoe` on the host auto-enters the container for any command that needs tools
-- Only `yoe init`, `yoe version`, `yoe tui`, and `yoe container` run on the host
+- Only `yoe init`, `yoe version`, `yoe tui`, `yoe layer`, and `yoe container`
+  run on the host
 - Everything else (`build`, `config`, `source`, `desc`, `graph`, etc.) runs in
   the container
 - The container runs with `--privileged` for bwrap namespaces, losetup/mount
@@ -34,8 +35,8 @@ builds.**
 - Never assume any tool is available on the host — if it's needed, it goes in
   `containers/Dockerfile.build`
 
-This is non-negotiable. The entire point is that developers need only Docker and
-the `yoe` binary. No host dependencies beyond that.
+This is non-negotiable. The entire point is that developers need only Git,
+Docker, and the `yoe` binary. No host dependencies beyond that.
 
 ## Repository Structure
 
@@ -94,8 +95,8 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
 
 ## Key Design Decisions
 
-- **Container-only builds** — host provides only `yoe` + Docker; all tools live
-  in the container
+- **Container-only builds** — host provides only `yoe` + Git + Docker; all tools
+  live in the container
 - **Build sysroot** — after each package builds, its output is installed into
   `build/sysroot/` so subsequent recipes can find deps' headers/libraries
 - **Starlark** for all recipes and config (Python-like, deterministic,

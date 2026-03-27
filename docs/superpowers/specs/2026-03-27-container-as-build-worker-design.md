@@ -199,8 +199,7 @@ lazily on the first `RunInContainer` invocation.
 
 `image.Assemble` orchestration stays on host:
 
-- `installPackages` -- `tar xzf` of `.apk` files runs on host (tar is
-  universal)
+- `installPackages` -- `tar xzf` of `.apk` files runs on host (tar is universal)
 - `applyConfig` -- pure file ops, runs on host
 - `applyOverlays` -- pure file ops, runs on host
 - `generateImage` -- calls `container.RunInContainer` for `mkfs.*`, `sfdisk`,
@@ -220,8 +219,8 @@ lazily on the first `RunInContainer` invocation.
 ### QEMU (`internal/device/qemu.go`)
 
 - Try host `qemu-system-*` first (`exec.LookPath`)
-- If not found, fall back to `container.RunInContainer` with
-  `Interactive: true` and `--device /dev/kvm`
+- If not found, fall back to `container.RunInContainer` with `Interactive: true`
+  and `--device /dev/kvm`
 - Flash (`dd`) runs on host -- universally available
 
 ## File Ownership
