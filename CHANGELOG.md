@@ -8,6 +8,41 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **Container as build worker** — `yoe` CLI always runs on the host. The
+  container is now a stateless build worker invoked only for commands that need
+  container tools (gcc, bwrap, mkfs, etc.). Eliminates container startup
+  overhead for read-only commands (`config`, `desc`, `refs`, `graph`, `clean`).
+- **File ownership** — build output uses `--user uid:gid` so files created by
+  the container are owned by the host user, not root.
+- **QEMU host-first** — `yoe run` tries host `qemu-system-*` first, falls back
+  to the container if not found.
+- **`--force` scoped to requested recipes** — `--force` and `--clean` only
+  force-rebuild the explicitly requested recipes; dependencies still use the
+  cache for incremental builds.
+- **Busybox init** — images use busybox `/sbin/init` with a minimal `/etc/inittab`
+  instead of `init=/bin/sh`. Shell respawns on exit, clean shutdown via
+  `poweroff`.
+
+### Fixed
+
+- Shell quoting in bwrap sandbox commands — semicolons in env exports no longer
+  split the command at the outer shell level.
+- Package installation in image assembly — always extracts `.apk` files via
+  `tar` instead of gating on `apk` binary availability.
+- Rootfs mount points (`/proc`, `/sys`, `/dev`, `/tmp`, `/run`) now included in
+  disk images via `.keep` placeholder files.
+- `devtmpfs.mount=1` added to kernel cmdline so `/dev` is populated before init.
+
+### Removed
+
+- `YOE_IN_CONTAINER` environment variable — no longer needed.
+- `ExecInContainer` / `InContainer` / `HasBwrap` APIs — replaced by
+  `RunInContainer`.
+- Container re-exec pattern — the yoe binary is no longer bind-mounted into the
+  container.
+
 ## [0.2.2] - 2026-03-27
 
 ### Added
