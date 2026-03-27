@@ -17,6 +17,7 @@ import (
 // Options controls build behavior.
 type Options struct {
 	Force      bool   // rebuild even if cached
+	Clean      bool   // delete build dir before rebuilding (implies Force)
 	NoCache    bool   // skip all caches
 	DryRun     bool   // show what would be built
 	ProjectDir string // project root
@@ -59,8 +60,8 @@ func BuildRecipes(proj *yoestar.Project, names []string, opts Options, w io.Writ
 		recipe := proj.Recipes[name]
 		hash := hashes[name]
 
-		// Check cache
-		if !opts.Force && !opts.NoCache {
+		// Check cache (--clean implies --force)
+		if !opts.Force && !opts.Clean && !opts.NoCache {
 			if isBuildCached(opts.ProjectDir, name, hash) {
 				fmt.Fprintf(w, "%-20s [cached] %s\n", name, hash[:12])
 				continue
@@ -93,7 +94,12 @@ func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts O
 	srcDir := filepath.Join(buildDir, "src")
 	destDir := filepath.Join(buildDir, "destdir")
 
-	// Clean destdir
+	if opts.Clean {
+		os.RemoveAll(srcDir)
+		os.RemoveAll(destDir)
+	}
+
+	// Always start with an empty destdir
 	os.RemoveAll(destDir)
 	EnsureDir(destDir)
 
@@ -244,7 +250,7 @@ func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[strin
 	for _, name := range order {
 		recipe := proj.Recipes[name]
 		cached := ""
-		if !opts.Force && isBuildCached(opts.ProjectDir, name, hashes[name]) {
+		if !opts.Force && !opts.Clean && isBuildCached(opts.ProjectDir, name, hashes[name]) {
 			cached = " [cached, skip]"
 		}
 		fmt.Fprintf(w, "  %-20s [%s] %s%s\n", name, recipe.Class, hashes[name][:12], cached)

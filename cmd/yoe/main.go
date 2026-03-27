@@ -80,7 +80,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "Commands:\n")
 	fmt.Fprintf(os.Stderr, "  init <project-dir>      Create a new Yoe-NG project\n")
 	fmt.Fprintf(os.Stderr, "  container               Manage the build container (build, status)\n")
-	fmt.Fprintf(os.Stderr, "  build [recipes...]      Build recipes (packages and images)\n")
+	fmt.Fprintf(os.Stderr, "  build [recipes...]      Build recipes (--force, --clean, --dry-run)\n")
 	fmt.Fprintf(os.Stderr, "  dev                     Manage source modifications (extract, diff, status)\n")
 	fmt.Fprintf(os.Stderr, "  flash <device>          Write an image to a device/SD card\n")
 	fmt.Fprintf(os.Stderr, "  run                     Run an image in QEMU\n")
@@ -146,6 +146,7 @@ func cmdLayer(args []string) {
 
 func cmdBuild(args []string) {
 	force := false
+	clean := false
 	noCache := false
 	dryRun := false
 	var recipes []string
@@ -154,6 +155,8 @@ func cmdBuild(args []string) {
 		switch args[i] {
 		case "--force", "-force":
 			force = true
+		case "--clean":
+			clean = true
 		case "--no-cache":
 			noCache = true
 		case "--dry-run":
@@ -168,6 +171,7 @@ func cmdBuild(args []string) {
 	proj := loadProject()
 	opts := build.Options{
 		Force:      force,
+		Clean:      clean,
 		NoCache:    noCache,
 		DryRun:     dryRun,
 		ProjectDir: projectDir(),
