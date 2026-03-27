@@ -32,6 +32,8 @@ yoe build base-image
 # Boot it in QEMU
 yoe run base-image
 
+# Log in a user: root, no password
+
 # Power off when finished (inside running image)
 poweroff
 ```
