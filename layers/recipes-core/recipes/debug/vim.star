@@ -8,7 +8,8 @@ package(
     deps = ["ncurses"],
     runtime_deps = ["ncurses"],
     build = [
-        "./configure --prefix=$PREFIX --with-features=normal --disable-gui --without-x",
+        # Point directly at the sysroot ncurses and use static linking
+        "vim_cv_tgetent=zero ./configure --prefix=$PREFIX --with-features=normal --disable-gui --without-x --with-tlib=ncurses LDFLAGS=\"$LDFLAGS -static\"",
         "make -j$NPROC",
         "make DESTDIR=$DESTDIR install",
     ],

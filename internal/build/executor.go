@@ -113,6 +113,7 @@ func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts O
 	// Build environment.
 	// The sysroot at /build/sysroot contains headers/libs from built deps.
 	sysroot := SysrootDir(opts.ProjectDir)
+	EnsureDir(sysroot)
 	env := map[string]string{
 		"PREFIX":          "/usr",
 		"DESTDIR":         "/build/destdir",

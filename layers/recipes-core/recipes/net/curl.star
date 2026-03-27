@@ -9,5 +9,5 @@ autotools(
     description = "Command-line tool and library for transferring data with URLs",
     deps = ["openssl", "zlib"],
     runtime_deps = ["openssl", "zlib"],
-    configure_args = ["--with-openssl"],
+    configure_args = ["--with-openssl", "--without-libpsl"],
 )

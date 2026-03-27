@@ -2,6 +2,8 @@ def autotools(name, version, source, sha256="", deps=[], runtime_deps=[],
               configure_args=[], patches=[], services=[], conffiles=[],
               license="", description="", **kwargs):
     build = [
+        # Run autoreconf if configure doesn't exist (git sources)
+        "test -f configure || autoreconf -fi",
         "./configure --prefix=$PREFIX " + " ".join(configure_args),
         "make -j$NPROC",
         "make DESTDIR=$DESTDIR install",

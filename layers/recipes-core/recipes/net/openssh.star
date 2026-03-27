@@ -9,5 +9,8 @@ autotools(
     description = "OpenSSH secure shell client and server",
     deps = ["openssl", "zlib"],
     runtime_deps = ["openssl", "zlib"],
-    configure_args = ["--sysconfdir=/etc/ssh"],
+    configure_args = [
+        "--sysconfdir=/etc/ssh",
+        "--without-openssl-header-check",
+    ],
 )
