@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-03-27
+
 ### Added
 
 - **musl libc recipe** — copies the musl dynamic linker from the build container
