@@ -411,8 +411,12 @@ project(
         go_proxy = "https://proxy.golang.org",
     ),
     layers = [
-        layer("github.com/yoe/recipes-core", ref = "v1.0.0"),
-        layer("github.com/vendor/bsp-recipes", ref = "main"),
+        # Layer in a subdirectory of a repo — path specifies where LAYER.star is
+        layer("git@github.com:YoeDistro/yoe-ng.git",
+              ref = "main",
+              path = "layers/recipes-core"),
+        # Layer at the root of its own repo
+        layer("git@github.com:vendor/bsp-recipes.git", ref = "main"),
     ],
 )
 ```
@@ -610,15 +614,23 @@ project(
     name = "my-product",
     version = "1.0.0",
     layers = [
-        layer("github.com/yoe/recipes-core", ref = "v1.0.0"),
-        layer("github.com/vendor/bsp-imx8", ref = "v2.1.0"),
+        # Layer in a subdirectory of a repo
+        layer("git@github.com:YoeDistro/yoe-ng.git",
+              ref = "main",
+              path = "layers/recipes-core"),
+        # Layer at the root of its own repo
+        layer("git@github.com:vendor/bsp-imx8.git", ref = "v2.1.0"),
     ],
 )
 ```
 
 Each `layer()` call declares a Git repository URL and a ref (tag, branch, or
-commit SHA). The `yoe` tool fetches and caches these repositories, making them
-available as `@layer-name` in `load()` statements.
+commit SHA). The optional `path` field specifies a subdirectory within the repo
+where `LAYER.star` lives — this allows a single repo to contain multiple layers
+or a layer to be part of a larger project. The `yoe` tool fetches and caches
+these repositories, making them available as `@layer-name` in `load()`
+statements. The layer name is derived from the last component of `path` (if set)
+or the URL.
 
 ### Layer Manifests (LAYER.star)
 
@@ -692,14 +704,18 @@ fetching from Git. The `local` parameter overrides the remote URL:
 
 ```python
 layers = [
-    layer("github.com/yoe/recipes-core", ref = "v1.0.0"),
-    # Use a local checkout during development
-    layer("github.com/vendor/bsp-imx8", local = "../bsp-imx8"),
+    # Local override — point at a checkout on disk instead of fetching
+    layer("git@github.com:YoeDistro/yoe-ng.git",
+          local = "../yoe-ng",
+          path = "layers/recipes-core"),
+    # Local override for a standalone layer
+    layer("git@github.com:vendor/bsp-imx8.git", local = "../bsp-imx8"),
 ]
 ```
 
 When `local` is set, `yoe` uses the local directory directly (no fetch, no ref
-checking). This is equivalent to Go's `replace` directive in `go.mod`.
+checking). If `path` is also set, it is appended to the local path. This is
+equivalent to Go's `replace` directive in `go.mod`.
 
 ## Label-Based References
 
