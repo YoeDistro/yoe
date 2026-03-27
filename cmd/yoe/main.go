@@ -133,7 +133,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "Environment Variables:\n")
 	fmt.Fprintf(os.Stderr, "  YOE_PROJECT             Project directory (default: cwd)\n")
-	fmt.Fprintf(os.Stderr, "  YOE_CACHE               Cache directory (default: ~/.cache/yoe-ng)\n")
+	fmt.Fprintf(os.Stderr, "  YOE_CACHE               Cache directory (default: cache/ in project dir)\n")
 	fmt.Fprintf(os.Stderr, "  YOE_LOG                 Log level: debug, info, warn, error (default: info)\n")
 	fmt.Fprintf(os.Stderr, "\n")
 }
