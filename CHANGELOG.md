@@ -16,21 +16,9 @@ and this project adheres to
   project directory instead of `~/.cache/yoe-ng/`
 - **`.gitignore` in `yoe init`** — new projects get a `.gitignore` with `/build`
   and `/cache`
-- **Build sysroot** — after each package builds, its output is installed into
-  `build/sysroot/` so subsequent recipes can find deps' headers/libraries via
-  `CFLAGS`, `LDFLAGS`, and `PKG_CONFIG_PATH`
-- **Image deps in DAG** — image recipes' `packages` list is treated as
-  dependencies so `yoe build dev-image` automatically builds all required
-  packages first
-- **Dev-image with 10+ packages** — busybox, linux, syslinux, ncurses, strace,
-  vim, zlib, openssl, curl, openssh — all built from git sources
-- **Remote layer fetching** — `yoe layer sync` clones/fetches layers declared in
-  `PROJECT.star` into the local cache
 - **Autotools `autoreconf`** — autotools class auto-runs `autoreconf -fi` when
   `./configure` is missing (common with git sources)
 - SSH URL support for source fetching (`git@host:user/repo.git`)
-- `yoe layer` runs on the host (no container required)
-- `yoe_sloc` — source lines of code counter using `scc`
 
 ### Changed
 
@@ -40,15 +28,6 @@ and this project adheres to
   through the project mount
 - Container runs with `--privileged` (needed for losetup/mount during disk image
   creation and /dev/kvm for QEMU)
-- Moved design docs into `docs/` directory
-
-### Fixed
-
-- Correct partition size for `losetup` (match ext4 fs to partition boundaries)
-- Recipe fixes: ncurses v6.4, strace v6.9 with `./bootstrap`, vim static
-  ncurses, curl `--without-libpsl`, openssh `--without-openssl-header-check`
-- ext4 partition size matches filesystem (add 1MB for MBR overhead)
-- Attach TTY to container when stdin is a terminal (needed for `yoe run`)
 
 ## [0.2.1] - 2026-03-27
 
