@@ -110,9 +110,14 @@ func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts O
 	os.RemoveAll(destDir)
 	EnsureDir(destDir)
 
-	// Prepare source (fetch + extract + patch, or reuse dev source)
-	if _, err := source.Prepare(opts.ProjectDir, recipe); err != nil {
-		return fmt.Errorf("preparing source: %w", err)
+	// Prepare source (fetch + extract + patch, or reuse dev source).
+	// Recipes without a source field (e.g., musl) skip this step.
+	if recipe.Source != "" {
+		if _, err := source.Prepare(opts.ProjectDir, recipe); err != nil {
+			return fmt.Errorf("preparing source: %w", err)
+		}
+	} else {
+		EnsureDir(srcDir)
 	}
 
 	// Determine build commands based on class

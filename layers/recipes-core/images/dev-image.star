@@ -5,6 +5,7 @@ image(
     packages = [
         # Base
         "busybox",
+        "musl",
         "linux",
         "syslinux",
         # Networking
