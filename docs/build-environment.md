@@ -401,8 +401,8 @@ $YOE_CACHE/
   key ensures different tags/branches get separate clones.
 - **Packages are keyed by recipe input hash** — the same hash computed by
   `internal/resolve/hash.go` from recipe fields, source hash, dependency hashes,
-  and architecture. This is the Nix-like property: if the inputs haven't changed,
-  the cached output is valid.
+  and architecture. This is the Nix-like property: if the inputs haven't
+  changed, the cached output is valid.
 - **Index files** provide human-readable reverse lookups (hash → name) for
   debugging and `yoe cache list`. They are not authoritative — the object store
   is the source of truth.
@@ -514,15 +514,15 @@ S3 API, and works in air-gapped environments.
 
 ### Comparison with Nix and Yocto
 
-|                     | Nix                          | Yocto sstate              | Yoe-NG                          |
-| ------------------- | ---------------------------- | ------------------------- | ------------------------------- |
-| Cache granularity   | Per derivation output        | Per task                  | Per recipe                      |
-| Key computation     | Full derivation hash         | Task hash + signatures    | Recipe input hash (SHA256)      |
-| Object size         | Closures (can be 1GB+)       | Individual task outputs   | Single `.apk` file              |
-| Remote backend      | Cachix, nix-serve, S3        | sstate-mirror (HTTP/S3)   | Any S3-compatible               |
-| Setup complexity    | Moderate (Cachix simplifies) | High (mirrors, hashequiv) | Low (just a bucket URL)         |
-| Sharing model       | Binary cache + substituters  | sstate mirrors + hashequiv| Push/pull to S3                 |
-| Source caching      | Separate (fixed-output drv)  | DL_DIR (by filename)      | Unified object store by content |
+|                   | Nix                          | Yocto sstate               | Yoe-NG                          |
+| ----------------- | ---------------------------- | -------------------------- | ------------------------------- |
+| Cache granularity | Per derivation output        | Per task                   | Per recipe                      |
+| Key computation   | Full derivation hash         | Task hash + signatures     | Recipe input hash (SHA256)      |
+| Object size       | Closures (can be 1GB+)       | Individual task outputs    | Single `.apk` file              |
+| Remote backend    | Cachix, nix-serve, S3        | sstate-mirror (HTTP/S3)    | Any S3-compatible               |
+| Setup complexity  | Moderate (Cachix simplifies) | High (mirrors, hashequiv)  | Low (just a bucket URL)         |
+| Sharing model     | Binary cache + substituters  | sstate mirrors + hashequiv | Push/pull to S3                 |
+| Source caching    | Separate (fixed-output drv)  | DL_DIR (by filename)       | Unified object store by content |
 
 The key simplification over Yocto: no hash equivalence server, no sstate mirror
 configuration, no signing key infrastructure to get started. Point `cache.url`
