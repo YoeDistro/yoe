@@ -1,9 +1,9 @@
 # Yoe-NG build container (Tier 0)
-# Version: 9
+# Version: 10
 #
-# Tools-only container. The host yoe binary is bind-mounted at runtime,
-# not baked into the image. This means the container only rebuilds when
-# the tool set changes, not when yoe itself is recompiled.
+# Tools-only container for build execution. The yoe CLI runs on the host
+# and invokes this container only for build commands that need the
+# toolchain (gcc, bwrap, mkfs, etc.). No yoe binary inside.
 
 FROM alpine:3.21
 
@@ -50,7 +50,5 @@ RUN mkdir -p /build/src /build/destdir
 
 # Create loop device nodes (needed for losetup in --privileged mode)
 RUN for i in $(seq 0 7); do mknod -m 0660 /dev/loop$i b 7 $i 2>/dev/null || true; done
-
-ENV YOE_IN_CONTAINER=1
 
 WORKDIR /project
