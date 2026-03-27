@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **base-files recipe** — provides `/etc/passwd`, `/etc/group`, `/etc/shadow`
+  with root user (blank password), and `/root` home directory.
+- Serial console uses `getty` for proper login prompt instead of raw shell.
+
 ## [0.2.5] - 2026-03-27
 
 ### Added
@@ -33,9 +37,6 @@ and this project adheres to
 - Skip `TestBuildRecipes_WithDeps` in CI — GitHub Actions runners don't support
   user namespaces inside Docker.
 - Most stuff in `dev-image` now works.
-- **base-files recipe** — provides `/etc/passwd`, `/etc/group`, `/etc/shadow`
-  with root user (blank password), and `/root` home directory.
-- Serial console uses `getty` for proper login prompt instead of raw shell.
 
 ## [0.2.4] - 2026-03-27
 
