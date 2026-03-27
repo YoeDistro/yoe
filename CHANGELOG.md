@@ -24,6 +24,10 @@ and this project adheres to
   syslinux 6.03 so bootloader can load kernel from any partition size.
 - Image package dep resolution walks both `deps` and `runtime_deps` so shared
   libraries are included.
+- OpenSSL recipe uses `--libdir=lib` so libraries install to `/usr/lib` instead
+  of `/usr/lib64` — fixes "Error loading shared library libcrypto.so.3".
+- Inittab no longer tries to mount `/dev` (already mounted by kernel via
+  `devtmpfs.mount=1`).
 - Skip `TestBuildRecipes_WithDeps` in CI — GitHub Actions runners don't support
   user namespaces inside Docker.
 

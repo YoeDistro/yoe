@@ -189,7 +189,6 @@ LABEL yoe
 	// Install minimal inittab for busybox init
 	inittab := `::sysinit:/bin/mount -t proc proc /proc
 ::sysinit:/bin/mount -t sysfs sys /sys
-::sysinit:/bin/mount -t devtmpfs dev /dev
 ::sysinit:/bin/hostname -F /etc/hostname
 ttyS0::respawn:/bin/sh
 ::ctrlaltdel:/sbin/reboot
