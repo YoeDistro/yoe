@@ -91,11 +91,21 @@ func BuildRecipes(proj *yoestar.Project, names []string, opts Options, w io.Writ
 
 func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts Options, w io.Writer) error {
 	buildDir := RecipeBuildDir(opts.ProjectDir, recipe.Name)
+	EnsureDir(buildDir)
+
+	// Open build log — tee output to both terminal and log file
+	logPath := filepath.Join(buildDir, "build.log")
+	logFile, err := os.Create(logPath)
+	if err != nil {
+		return fmt.Errorf("creating build log: %w", err)
+	}
+	defer logFile.Close()
+	logW := io.MultiWriter(w, logFile)
 
 	// Image recipes go through a different path — assemble rootfs
 	if recipe.Class == "image" {
 		outputDir := filepath.Join(buildDir, "output")
-		return image.Assemble(recipe, proj, opts.ProjectDir, outputDir, w)
+		return image.Assemble(recipe, proj, opts.ProjectDir, outputDir, logW)
 	}
 
 	srcDir := filepath.Join(buildDir, "src")
@@ -145,7 +155,7 @@ func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts O
 
 	// Execute each build step inside the container with bwrap
 	for i, cmd := range commands {
-		fmt.Fprintf(w, "  [%d/%d] %s\n", i+1, len(commands), cmd)
+		fmt.Fprintf(logW, "  [%d/%d] %s\n", i+1, len(commands), cmd)
 
 		cfg := &SandboxConfig{
 			SrcDir:     srcDir,
@@ -153,6 +163,8 @@ func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts O
 			Sysroot:    sysroot,
 			Env:        env,
 			ProjectDir: opts.ProjectDir,
+			Stdout:     logW,
+			Stderr:     logW,
 		}
 		if err := RunInSandbox(cfg, cmd); err != nil {
 			return err

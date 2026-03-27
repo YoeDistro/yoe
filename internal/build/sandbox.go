@@ -2,6 +2,7 @@ package build
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +19,8 @@ type SandboxConfig struct {
 	Sysroot    string
 	Env        map[string]string
 	ProjectDir string
+	Stdout     io.Writer // build output (nil = os.Stdout)
+	Stderr     io.Writer // build errors (nil = os.Stderr)
 }
 
 // RunInSandbox executes a command inside a bubblewrap sandbox within the
@@ -30,6 +33,8 @@ func RunInSandbox(cfg *SandboxConfig, command string) error {
 		Command:    bwrapCmd,
 		ProjectDir: cfg.ProjectDir,
 		Mounts:     mounts,
+		Stdout:     cfg.Stdout,
+		Stderr:     cfg.Stderr,
 	})
 }
 
@@ -52,6 +57,8 @@ func RunSimple(cfg *SandboxConfig, command string) error {
 		Command:    fullCmd,
 		ProjectDir: cfg.ProjectDir,
 		Mounts:     mounts,
+		Stdout:     cfg.Stdout,
+		Stderr:     cfg.Stderr,
 	})
 }
 
