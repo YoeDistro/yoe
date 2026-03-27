@@ -113,3 +113,7 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
   layer root when inside a layer
 - **Two-phase build** — resolve DAG then execute (inspired by GN)
 - **Content-addressed caching** — input hash determines output
+- **Hardware-bootable images** — images must boot on real hardware, not just
+  QEMU. Never suggest QEMU-only shortcuts like `-kernel` direct boot that bypass
+  the bootloader. QEMU is a development convenience; the real target is always
+  physical boards.

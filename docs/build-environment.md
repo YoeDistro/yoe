@@ -59,37 +59,35 @@ Host                              Container (Alpine)
 └─────────────┘                   └──────────────────────────┘
 ```
 
-Commands that don't need build tools (`yoe init`, `yoe version`, `yoe layer`)
-run directly on the host. Everything else (`build`, `config`, `source`, `desc`,
-`graph`, etc.) runs inside the container with the project directory and cache
-mounted.
+The `yoe` CLI always runs on the host. The container is a stateless build worker
+invoked only when container-provided tools (gcc, bwrap, mkfs, etc.) are needed.
+Most commands (`config`, `desc`, `refs`, `graph`, `source`, `clean`) run
+entirely on the host with no container overhead.
 
 ```sh
-# These run on the host:
+# All commands run on the host:
 yoe init my-project
 yoe version
-yoe layer sync
+yoe config show
+yoe source fetch
+yoe desc openssh
 
-# These auto-enter the container:
-yoe build openssh          # [yoe] running in container: docker build openssh
-yoe config show            # [yoe] running in container: docker config show
-yoe source list            # [yoe] running in container: docker source list
+# Build commands invoke the container for compilation:
+yoe build openssh          # [yoe] container: bwrap ... make -j$(nproc)
 
 # Manage the container image:
 yoe container build        # rebuild the container image
-yoe container status       # show if running on host or in container
+yoe container status       # show container image status
 ```
 
-The container mounts:
+When the container is invoked, it mounts:
 
 - **Project directory** → `/project` (read-write)
-- **Cache directory** (`cache/`) → `/cache` (read-write, persists across builds)
-- **User/group ID** passed through so files created in the container are owned
-  by the host user
+- **Build source/dest** → `/build/src`, `/build/destdir` (per-recipe mounts)
+- **Sysroot** → `/build/sysroot` (read-only, deps' headers/libraries)
 
-The `yoe` CLI always runs on the host and invokes the container only for build
-commands that need container-provided tools (gcc, bwrap, mkfs, etc.). This is
-transparent — developers run `yoe build` and it works.
+Build output uses `--user uid:gid` so files created by the container are owned
+by the host user, not root.
 
 ### External Dependencies
 
