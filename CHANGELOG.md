@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-03-27
+
 - **Per-recipe build logs** — build output written to
   `build/<recipe>/build.log`. Console is quiet by default; on error the log path
   is printed. Use `--verbose` / `-v` to stream build output to the console.
