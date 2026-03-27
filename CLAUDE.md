@@ -25,8 +25,8 @@ needed.**
   fetch, APK packaging, cache management, all query commands
 - The container runs: bwrap-sandboxed compilation, image disk tool operations
   (mkfs, sfdisk, bootloader install), Stage 0 bootstrap
-- `RunInContainer()` is the single entry point -- called from the build executor,
-  image assembly, and bootstrap
+- `RunInContainer()` is the single entry point -- called from the build
+  executor, image assembly, and bootstrap
 - The container runs with `--privileged` for bwrap namespaces and disk tools
 - Build output uses `--user uid:gid` so files are owned by the host user
 - The container image is built lazily on first build command

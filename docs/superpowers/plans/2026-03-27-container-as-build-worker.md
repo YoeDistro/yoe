@@ -10,9 +10,9 @@
 commands.
 
 **Architecture:** Replace `ExecInContainer` (re-execs entire yoe binary) with
-`RunInContainer` (runs a single shell command). The container becomes a stateless
-worker. All CLI logic, Starlark eval, DAG resolution, source fetch, and
-packaging run on the host.
+`RunInContainer` (runs a single shell command). The container becomes a
+stateless worker. All CLI logic, Starlark eval, DAG resolution, source fetch,
+and packaging run on the host.
 
 **Tech Stack:** Go, Docker/Podman, bubblewrap
 
@@ -20,20 +20,20 @@ packaging run on the host.
 
 ## File Map
 
-| File                             | Action | Responsibility                              |
-| -------------------------------- | ------ | ------------------------------------------- |
-| `internal/container.go`          | Modify | Replace re-exec API with RunInContainer API |
-| `internal/container_test.go`     | Create | Unit tests for container API                |
-| `internal/build/sandbox.go`      | Modify | Route bwrap/simple through RunInContainer   |
-| `internal/build/sandbox_test.go` | Create | Unit tests for bwrap command construction   |
-| `internal/build/executor.go`     | Modify | Remove UseSandbox option, always use bwrap  |
-| `internal/build/executor_test.go`| Modify | Update tests for new sandbox API            |
-| `cmd/yoe/main.go`               | Modify | Flatten dispatch, remove container re-exec  |
-| `internal/bootstrap/bootstrap.go`| Modify | Route build commands through container API  |
-| `internal/image/disk.go`         | Modify | Route mkfs/sfdisk/bootloader via container  |
-| `internal/device/qemu.go`        | Modify | Try host QEMU first, fall back to container |
-| `containers/Dockerfile.build`    | Modify | Remove YOE_IN_CONTAINER, update comments    |
-| `CLAUDE.md`                      | Modify | Update container policy section             |
+| File                              | Action | Responsibility                              |
+| --------------------------------- | ------ | ------------------------------------------- |
+| `internal/container.go`           | Modify | Replace re-exec API with RunInContainer API |
+| `internal/container_test.go`      | Create | Unit tests for container API                |
+| `internal/build/sandbox.go`       | Modify | Route bwrap/simple through RunInContainer   |
+| `internal/build/sandbox_test.go`  | Create | Unit tests for bwrap command construction   |
+| `internal/build/executor.go`      | Modify | Remove UseSandbox option, always use bwrap  |
+| `internal/build/executor_test.go` | Modify | Update tests for new sandbox API            |
+| `cmd/yoe/main.go`                 | Modify | Flatten dispatch, remove container re-exec  |
+| `internal/bootstrap/bootstrap.go` | Modify | Route build commands through container API  |
+| `internal/image/disk.go`          | Modify | Route mkfs/sfdisk/bootloader via container  |
+| `internal/device/qemu.go`         | Modify | Try host QEMU first, fall back to container |
+| `containers/Dockerfile.build`     | Modify | Remove YOE_IN_CONTAINER, update comments    |
+| `CLAUDE.md`                       | Modify | Update container policy section             |
 
 ---
 
@@ -497,7 +497,8 @@ func TestContainerMountsForBuild(t *testing.T) {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /scratch4/yoe/yoe-ng && go test ./internal/build/ -run "TestBwrapCommand|TestContainerMounts" -v`
+Run:
+`cd /scratch4/yoe/yoe-ng && go test ./internal/build/ -run "TestBwrapCommand|TestContainerMounts" -v`
 
 Expected: compilation errors -- `bwrapCommand` and `containerMountsForBuild` not
 defined.
@@ -684,7 +685,8 @@ func RecipeBuildDir(projectDir, recipeName string) string {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /scratch4/yoe/yoe-ng && go test ./internal/build/ -run "TestBwrapCommand|TestContainerMounts" -v`
+Run:
+`cd /scratch4/yoe/yoe-ng && go test ./internal/build/ -run "TestBwrapCommand|TestContainerMounts" -v`
 
 Expected: all 3 tests pass.
 
@@ -769,7 +771,8 @@ Update opts:
 
 - [ ] **Step 3: Run tests to verify they compile and pass**
 
-Run: `cd /scratch4/yoe/yoe-ng && go test ./internal/build/ -run "TestBuildCommands|TestDryRun|TestCacheMarker|TestFilterBuildOrder" -v`
+Run:
+`cd /scratch4/yoe/yoe-ng && go test ./internal/build/ -run "TestBuildCommands|TestDryRun|TestCacheMarker|TestFilterBuildOrder" -v`
 
 Expected: existing unit tests pass (they don't need Docker).
 
@@ -794,8 +797,8 @@ test."
 
 - [ ] **Step 1: Remove container re-exec and flatten dispatch**
 
-Replace the `main()` function (lines 23-104). Remove the `InContainer` check
-and `ExecInContainer` call. Merge the two switch blocks into one:
+Replace the `main()` function (lines 23-104). Remove the `InContainer` check and
+`ExecInContainer` call. Merge the two switch blocks into one:
 
 ```go
 func main() {
@@ -1284,7 +1287,8 @@ needed.**
 
 - [ ] **Step 3: Verify build**
 
-Run: `cd /scratch4/yoe/yoe-ng && go build ./cmd/yoe/ && go test ./... 2>&1 | head -40`
+Run:
+`cd /scratch4/yoe/yoe-ng && go build ./cmd/yoe/ && go test ./... 2>&1 | head -40`
 
 Expected: compiles and tests pass.
 
