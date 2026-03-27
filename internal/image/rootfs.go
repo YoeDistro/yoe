@@ -129,9 +129,13 @@ func applyConfig(rootfs string, recipe *yoestar.Recipe, w io.Writer) error {
 		os.Symlink(target, link)
 	}
 
-	// Create essential directories for virtual filesystem mount points
+	// Create essential directories for virtual filesystem mount points.
+	// mkfs.ext4 -d only copies non-empty directories, so we add a
+	// .keep file to ensure they exist in the image.
 	for _, dir := range []string{"proc", "sys", "dev", "tmp", "run"} {
-		os.MkdirAll(filepath.Join(rootfs, dir), 0755)
+		dirPath := filepath.Join(rootfs, dir)
+		os.MkdirAll(dirPath, 0755)
+		os.WriteFile(filepath.Join(dirPath, ".keep"), nil, 0644)
 	}
 
 	// Install boot configuration (extlinux for QEMU serial console)
