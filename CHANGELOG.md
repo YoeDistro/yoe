@@ -10,8 +10,8 @@ and this project adheres to
 
 ### Added
 
-- **musl libc recipe** — copies the musl dynamic linker from the build
-  container into the image so dynamically linked packages work at runtime.
+- **musl libc recipe** — copies the musl dynamic linker from the build container
+  into the image so dynamically linked packages work at runtime.
 - **Automatic package dep resolution** — image assembly now resolves transitive
   build and runtime deps from recipe metadata. e.g., openssh automatically pulls
   in openssl and zlib without listing them in the image recipe.

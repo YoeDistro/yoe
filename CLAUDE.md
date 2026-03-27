@@ -126,6 +126,6 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
 - **Understand before changing.** Read the relevant code paths end-to-end before
   proposing changes. Build failures often have non-obvious root causes — trace
   the actual problem rather than patching symptoms.
-- **Silent failures are bugs.** If something can fail, it should fail loudly with
-  a clear error. Never swallow errors or degrade silently in ways that make
+- **Silent failures are bugs.** If something can fail, it should fail loudly
+  with a clear error. Never swallow errors or degrade silently in ways that make
   debugging harder later.
