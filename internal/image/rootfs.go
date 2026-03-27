@@ -20,9 +20,11 @@ func Assemble(recipe *yoestar.Recipe, proj *yoestar.Project, projectDir, outputD
 		return fmt.Errorf("creating rootfs dir: %w", err)
 	}
 
-	// Step 1: Install packages into rootfs via apk
+	// Step 1: Install packages into rootfs — resolve deps so libraries
+	// are included automatically (e.g., openssh pulls in openssl, zlib).
 	repoDir := repo.RepoBaseDir(proj, projectDir)
-	if err := installPackages(rootfs, repoDir, recipe.Packages, w); err != nil {
+	allPackages := resolvePackageDeps(recipe.Packages, proj)
+	if err := installPackages(rootfs, repoDir, allPackages, w); err != nil {
 		return fmt.Errorf("installing packages: %w", err)
 	}
 
@@ -47,6 +49,33 @@ func Assemble(recipe *yoestar.Recipe, proj *yoestar.Project, projectDir, outputD
 
 	fmt.Fprintf(w, "  → %s\n", imgPath)
 	return nil
+}
+
+// resolvePackageDeps expands a list of package names to include all transitive
+// dependencies. The returned list is in dependency order (deps before dependents).
+func resolvePackageDeps(packages []string, proj *yoestar.Project) []string {
+	seen := make(map[string]bool)
+	var result []string
+
+	var walk func(name string)
+	walk = func(name string) {
+		if seen[name] {
+			return
+		}
+		seen[name] = true
+
+		if recipe, ok := proj.Recipes[name]; ok {
+			for _, dep := range recipe.Deps {
+				walk(dep)
+			}
+		}
+		result = append(result, name)
+	}
+
+	for _, pkg := range packages {
+		walk(pkg)
+	}
+	return result
 }
 
 func installPackages(rootfs, repoDir string, packages []string, w io.Writer) error {
