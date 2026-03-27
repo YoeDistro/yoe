@@ -242,10 +242,15 @@ func installBootloader(imgPath, rootfs string, recipe *yoestar.Recipe, w io.Writ
 		return nil
 	}
 
-	// Find the root partition offset
+	// Find the root partition offset and size
 	offsetBytes := int64(1024 * 1024) // 1MB default (after MBR)
+	var rootSizeMB int
 	for _, p := range recipe.Partitions {
 		if p.Root {
+			rootSizeMB = parseSizeMB(p.Size)
+			if rootSizeMB == 0 {
+				rootSizeMB = 512
+			}
 			break
 		}
 		sizeMB := parseSizeMB(p.Size)
@@ -257,7 +262,7 @@ func installBootloader(imgPath, rootfs string, recipe *yoestar.Recipe, w io.Writ
 	// Set up loop device for the partition
 	out, err := exec.Command("losetup", "--find", "--show",
 		"--offset", fmt.Sprintf("%d", offsetBytes),
-		"--sizelimit", fmt.Sprintf("%d", 512*1024*1024),
+		"--sizelimit", fmt.Sprintf("%d", int64(rootSizeMB)*1024*1024),
 		imgPath).CombinedOutput()
 	if err != nil {
 		fmt.Fprintf(w, "  (losetup failed: %v: %s — skipping extlinux install)\n", err, strings.TrimSpace(string(out)))
@@ -273,8 +278,9 @@ func installBootloader(imgPath, rootfs string, recipe *yoestar.Recipe, w io.Writ
 	}
 	defer os.RemoveAll(mountDir)
 
-	if err := exec.Command("mount", loopDev, mountDir).Run(); err != nil {
-		fmt.Fprintf(w, "  (mount failed: %v — skipping extlinux install)\n", err)
+	mountOut, mountErr := exec.Command("mount", "-t", "ext4", loopDev, mountDir).CombinedOutput()
+	if mountErr != nil {
+		fmt.Fprintf(w, "  (mount failed: %v: %s — skipping extlinux install)\n", mountErr, strings.TrimSpace(string(mountOut)))
 		return nil
 	}
 	defer exec.Command("umount", mountDir).Run()
