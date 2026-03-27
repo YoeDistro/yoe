@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
+	yoe "github.com/YoeDistro/yoe-ng/internal"
 	"github.com/YoeDistro/yoe-ng/internal/build"
 	"github.com/YoeDistro/yoe-ng/internal/packaging"
 	"github.com/YoeDistro/yoe-ng/internal/repo"
@@ -79,7 +79,13 @@ func Stage0(proj *yoestar.Project, projectDir string, w io.Writer) error {
 
 		for i, cmd := range commands {
 			fmt.Fprintf(w, "  [%d/%d] %s\n", i+1, len(commands), cmd)
-			if err := build.RunSimple(buildDir, destDir, env, cmd); err != nil {
+			cfg := &build.SandboxConfig{
+				SrcDir:     buildDir,
+				DestDir:    destDir,
+				Env:        env,
+				ProjectDir: projectDir,
+			}
+			if err := build.RunSimple(cfg, cmd); err != nil {
 				return fmt.Errorf("stage0 %s step %d: %w", recipe.Name, i+1, err)
 			}
 		}
@@ -119,7 +125,7 @@ func Stage1(proj *yoestar.Project, projectDir string, w io.Writer) error {
 
 	// Create a Yoe-NG build root from Stage 0 packages
 	buildRoot := filepath.Join(projectDir, "build", "bootstrap", "buildroot")
-	if err := createBuildRoot(buildRoot, repoDir, w); err != nil {
+	if err := createBuildRoot(buildRoot, repoDir, projectDir, w); err != nil {
 		return fmt.Errorf("creating build root: %w", err)
 	}
 
@@ -151,21 +157,15 @@ func Stage1(proj *yoestar.Project, projectDir string, w io.Writer) error {
 		for i, cmd := range commands {
 			fmt.Fprintf(w, "  [%d/%d] %s\n", i+1, len(commands), cmd)
 
-			if build.HasBwrap() {
-				cfg := &build.SandboxConfig{
-					BuildRoot: buildRoot,
-					SrcDir:    buildDir,
-					DestDir:   destDir,
-					Env:       env,
-				}
-				if err := build.RunInSandbox(cfg, cmd); err != nil {
-					return fmt.Errorf("stage1 %s step %d: %w", recipe.Name, i+1, err)
-				}
-			} else {
-				env["DESTDIR"] = destDir
-				if err := build.RunSimple(buildDir, destDir, env, cmd); err != nil {
-					return fmt.Errorf("stage1 %s step %d: %w", recipe.Name, i+1, err)
-				}
+			cfg := &build.SandboxConfig{
+				BuildRoot:  buildRoot,
+				SrcDir:     buildDir,
+				DestDir:    destDir,
+				Env:        env,
+				ProjectDir: projectDir,
+			}
+			if err := build.RunInSandbox(cfg, cmd); err != nil {
+				return fmt.Errorf("stage1 %s step %d: %w", recipe.Name, i+1, err)
 			}
 		}
 
@@ -272,53 +272,31 @@ func verifyStage0(repoDir string) error {
 	return nil
 }
 
-func createBuildRoot(buildRoot, repoDir string, w io.Writer) error {
+func createBuildRoot(buildRoot, repoDir, projectDir string, w io.Writer) error {
 	fmt.Fprintf(w, "Creating build root at %s...\n", buildRoot)
 
 	os.RemoveAll(buildRoot)
 	os.MkdirAll(buildRoot, 0755)
 
-	// Check if apk is available
-	if _, err := exec.LookPath("apk"); err != nil {
-		// Fallback: just extract packages into the build root
-		fmt.Fprintln(w, "  (apk not available — extracting packages manually)")
-		return extractPackages(buildRoot, repoDir)
-	}
-
-	// Use apk to install base packages into the build root
+	// Use apk inside the container to install base packages
 	args := []string{
-		"--root", buildRoot,
+		"apk",
+		"--root", "/build/buildroot",
 		"--initdb",
 		"--no-scripts",
 		"--no-cache",
-		"--repository", repoDir,
+		"--repository", "/build/repo",
 		"add",
 	}
 	args = append(args, bootstrapRecipes...)
+	cmd := strings.Join(args, " ")
 
-	cmd := exec.Command("apk", args...)
-	cmd.Stdout = w
-	cmd.Stderr = os.Stderr
-
-	return cmd.Run()
-}
-
-func extractPackages(buildRoot, repoDir string) error {
-	entries, err := os.ReadDir(repoDir)
-	if err != nil {
-		return err
-	}
-
-	for _, e := range entries {
-		if !strings.HasSuffix(e.Name(), ".apk") {
-			continue
-		}
-		apkPath := filepath.Join(repoDir, e.Name())
-		cmd := exec.Command("tar", "xzf", apkPath, "-C", buildRoot)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("extracting %s: %s\n%s", e.Name(), err, out)
-		}
-	}
-
-	return nil
+	return yoe.RunInContainer(yoe.ContainerRunConfig{
+		Command:    cmd,
+		ProjectDir: projectDir,
+		Mounts: []yoe.Mount{
+			{Host: buildRoot, Container: "/build/buildroot"},
+			{Host: repoDir, Container: "/build/repo", ReadOnly: true},
+		},
+	})
 }

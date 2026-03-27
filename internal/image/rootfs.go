@@ -41,7 +41,7 @@ func Assemble(recipe *yoestar.Recipe, proj *yoestar.Project, projectDir, outputD
 
 	// Step 4: Generate disk image
 	imgPath := filepath.Join(outputDir, recipe.Name+".img")
-	if err := generateImage(rootfs, imgPath, recipe, w); err != nil {
+	if err := generateImage(rootfs, imgPath, recipe, projectDir, w); err != nil {
 		return fmt.Errorf("generating image: %w", err)
 	}
 
@@ -57,32 +57,12 @@ func installPackages(rootfs, repoDir string, packages []string, w io.Writer) err
 
 	fmt.Fprintf(w, "  Installing %d packages into rootfs...\n", len(packages))
 
-	// Check if apk is available
-	if _, err := exec.LookPath("apk"); err != nil {
-		// Fallback: just create the directory structure
-		fmt.Fprintln(w, "  (apk not available — creating minimal rootfs structure)")
-		for _, dir := range []string{"usr/bin", "usr/lib", "etc", "var", "tmp"} {
-			os.MkdirAll(filepath.Join(rootfs, dir), 0755)
-		}
-
-		// Copy .apk files from repo into rootfs as a manifest
-		for _, pkg := range packages {
-			fmt.Fprintf(w, "    %s\n", pkg)
-		}
-		// Write package list for reference
-		os.WriteFile(filepath.Join(rootfs, "etc", "yoe-packages"),
-			[]byte(strings.Join(packages, "\n")+"\n"), 0644)
-		return nil
-	}
-
 	// Install packages by extracting .apk files directly into the rootfs.
 	// Our packages are single-stream gzip'd tars with .PKGINFO + files.
-	// This avoids apk signature verification issues with our unsigned packages.
-	// When we add package signing, we can switch to using apk directly.
+	// tar is available on the host — no container needed.
 	absRepo, _ := filepath.Abs(repoDir)
 
 	for _, pkg := range packages {
-		// Find the .apk file for this package
 		apkFile := findAPK(absRepo, pkg)
 		if apkFile == "" {
 			return fmt.Errorf("package %q not found in %s", pkg, absRepo)
@@ -90,7 +70,6 @@ func installPackages(rootfs, repoDir string, packages []string, w io.Writer) err
 
 		fmt.Fprintf(w, "    %s\n", filepath.Base(apkFile))
 
-		// Extract tar.gz into rootfs, skipping .PKGINFO
 		cmd := exec.Command("tar", "xzf", apkFile, "-C", rootfs, "--exclude=.PKGINFO")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("extracting %s: %s\n%s", pkg, err, out)
@@ -150,16 +129,36 @@ func applyConfig(rootfs string, recipe *yoestar.Recipe, w io.Writer) error {
 		os.Symlink(target, link)
 	}
 
+	// Create essential directories for virtual filesystem mount points.
+	// mkfs.ext4 -d only copies non-empty directories, so we add a
+	// .keep file to ensure they exist in the image.
+	for _, dir := range []string{"proc", "sys", "dev", "tmp", "run"} {
+		dirPath := filepath.Join(rootfs, dir)
+		os.MkdirAll(dirPath, 0755)
+		os.WriteFile(filepath.Join(dirPath, ".keep"), nil, 0644)
+	}
+
 	// Install boot configuration (extlinux for QEMU serial console)
 	bootDir := filepath.Join(rootfs, "boot", "extlinux")
 	os.MkdirAll(bootDir, 0755)
 	extlinuxConf := `DEFAULT yoe
 LABEL yoe
     LINUX /boot/vmlinuz
-    APPEND console=ttyS0 root=/dev/vda1 rw init=/bin/sh
+    APPEND console=ttyS0 root=/dev/vda1 rw devtmpfs.mount=1
 `
 	os.WriteFile(filepath.Join(bootDir, "extlinux.conf"), []byte(extlinuxConf), 0644)
 	fmt.Fprintln(w, "  Installed boot configuration (extlinux)")
+
+	// Install minimal inittab for busybox init
+	inittab := `::sysinit:/bin/mount -t proc proc /proc
+::sysinit:/bin/mount -t sysfs sys /sys
+::sysinit:/bin/mount -t devtmpfs dev /dev
+::sysinit:/bin/hostname -F /etc/hostname
+ttyS0::respawn:/bin/sh
+::ctrlaltdel:/sbin/reboot
+::shutdown:/bin/umount -a -r
+`
+	os.WriteFile(filepath.Join(rootfs, "etc", "inittab"), []byte(inittab), 0644)
 
 	return nil
 }
@@ -190,7 +189,7 @@ func applyOverlays(rootfs, overlayDir string, w io.Writer) error {
 	})
 }
 
-func generateImage(rootfs, imgPath string, recipe *yoestar.Recipe, w io.Writer) error {
+func generateImage(rootfs, imgPath string, recipe *yoestar.Recipe, projectDir string, w io.Writer) error {
 	fmt.Fprintln(w, "  Generating disk image...")
-	return GenerateDiskImage(rootfs, imgPath, recipe, w)
+	return GenerateDiskImage(rootfs, imgPath, recipe, projectDir, w)
 }

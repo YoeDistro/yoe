@@ -15,28 +15,22 @@ etc.).
 Core design: Go CLI (`yoe`) + Starlark recipes/config + apk packages +
 bubblewrap sandbox inside Docker. Native builds only (no cross-compilation).
 
-## CRITICAL: Container-Only Build Policy
+## Container as Build Worker
 
-**All build operations run inside the Docker/Podman container. The host provides
-ONLY the `yoe` binary, Git, and Docker. Nothing else from the host should leak
-into builds.**
+**The `yoe` CLI always runs on the host. The container is a stateless build
+worker invoked only when container-provided tools (gcc, bwrap, mkfs, etc.) are
+needed.**
 
-- The host has NO build tools (no gcc, no bwrap, no apk, no make)
-- The container (`yoe-ng:<version>`) provides ALL build tools
-- `yoe` on the host auto-enters the container for any command that needs tools
-- Only `yoe init`, `yoe version`, `yoe tui`, `yoe layer`, and `yoe container`
-  run on the host
-- Everything else (`build`, `config`, `source`, `desc`, `graph`, etc.) runs in
-  the container
-- The container runs with `--privileged` for bwrap namespaces, losetup/mount
-  (disk image creation), and /dev/kvm (QEMU)
-- The host `yoe` binary is bind-mounted into the container
-  (`-v yoe:/usr/local/bin/yoe:ro`), not baked into the image
-- Never assume any tool is available on the host — if it's needed, it goes in
-  `containers/Dockerfile.build`
-
-This is non-negotiable. The entire point is that developers need only Git,
-Docker, and the `yoe` binary. No host dependencies beyond that.
+- The host runs: CLI dispatch, Starlark evaluation, DAG resolution, source
+  fetch, APK packaging, cache management, all query commands
+- The container runs: bwrap-sandboxed compilation, image disk tool operations
+  (mkfs, sfdisk, bootloader install), Stage 0 bootstrap
+- `RunInContainer()` is the single entry point -- called from the build
+  executor, image assembly, and bootstrap
+- The container runs with `--privileged` for bwrap namespaces and disk tools
+- Build output uses `--user uid:gid` so files are owned by the host user
+- The container image is built lazily on first build command
+- Developers need only Git, Docker/Podman, and the `yoe` binary
 
 ## Repository Structure
 

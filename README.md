@@ -8,6 +8,33 @@ conversational: describe what you need, and the AI generates recipes, configures
 machines, traces dependencies, diagnoses build failures, and audits security —
 all with full understanding of your project's dependency graph and build state.
 
+## 🚀 Getting Started
+
+Prerequisites: an x86_64 Linux host with Git and Docker (or Podman) installed.
+
+```sh
+# Download the yoe binary
+curl -L https://github.com/yoe/yoe-ng/releases/latest/download/yoe-Linux-x86_64 -o yoe
+chmod +x yoe
+sudo mv yoe /usr/local/bin/
+
+# Create a new project
+yoe init yoe-test
+cd yoe-test
+
+# Fetch layers (downloads recipes-core)
+yoe layers sync
+
+# Build the base image (builds all required packages, then assembles the image)
+yoe build base-image
+
+# Boot it in QEMU
+yoe run base-image
+
+# Power off when finished (inside running image)
+poweroff
+```
+
 ## 🤖 Why AI-Native
 
 Embedded Linux is hard not because the concepts are complex, but because there

@@ -16,12 +16,12 @@ import (
 
 // Options controls build behavior.
 type Options struct {
-	Force         bool   // rebuild even if cached
-	NoCache       bool   // skip all caches
-	DryRun        bool   // show what would be built
-	UseSandbox    bool   // use bubblewrap sandbox
-	ProjectDir    string // project root
-	Arch          string // target architecture
+	Force      bool   // rebuild even if cached
+	Clean      bool   // delete build dir before rebuilding (implies Force)
+	NoCache    bool   // skip all caches
+	DryRun     bool   // show what would be built
+	ProjectDir string // project root
+	Arch       string // target architecture
 }
 
 // BuildRecipes builds the specified recipes (or all if names is empty).
@@ -44,7 +44,11 @@ func BuildRecipes(proj *yoestar.Project, names []string, opts Options, w io.Writ
 	}
 
 	// Filter to requested recipes (and their deps)
+	requested := make(map[string]bool)
 	if len(names) > 0 {
+		for _, n := range names {
+			requested[n] = true
+		}
 		order, err = filterBuildOrder(dag, order, names)
 		if err != nil {
 			return err
@@ -52,7 +56,7 @@ func BuildRecipes(proj *yoestar.Project, names []string, opts Options, w io.Writ
 	}
 
 	if opts.DryRun {
-		return dryRun(w, proj, order, hashes, opts)
+		return dryRun(w, proj, order, hashes, opts, requested)
 	}
 
 	// Build in order
@@ -60,8 +64,11 @@ func BuildRecipes(proj *yoestar.Project, names []string, opts Options, w io.Writ
 		recipe := proj.Recipes[name]
 		hash := hashes[name]
 
-		// Check cache
-		if !opts.Force && !opts.NoCache {
+		// --force/--clean only apply to explicitly requested recipes;
+		// dependencies still use the cache.
+		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
+
+		if !forceThis && !opts.NoCache {
 			if isBuildCached(opts.ProjectDir, name, hash) {
 				fmt.Fprintf(w, "%-20s [cached] %s\n", name, hash[:12])
 				continue
@@ -94,7 +101,12 @@ func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts O
 	srcDir := filepath.Join(buildDir, "src")
 	destDir := filepath.Join(buildDir, "destdir")
 
-	// Clean destdir
+	if opts.Clean {
+		os.RemoveAll(srcDir)
+		os.RemoveAll(destDir)
+	}
+
+	// Always start with an empty destdir
 	os.RemoveAll(destDir)
 	EnsureDir(destDir)
 
@@ -126,25 +138,19 @@ func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts O
 		"LDFLAGS":         "-L/build/sysroot/usr/lib",
 	}
 
-	// Execute each build step
+	// Execute each build step inside the container with bwrap
 	for i, cmd := range commands {
 		fmt.Fprintf(w, "  [%d/%d] %s\n", i+1, len(commands), cmd)
 
-		if opts.UseSandbox && HasBwrap() {
-			cfg := &SandboxConfig{
-				SrcDir:  srcDir,
-				DestDir: destDir,
-				Sysroot: sysroot,
-				Env:     env,
-			}
-			if err := RunInSandbox(cfg, cmd); err != nil {
-				return err
-			}
-		} else {
-			env["DESTDIR"] = destDir
-			if err := RunSimple(srcDir, destDir, env, cmd); err != nil {
-				return err
-			}
+		cfg := &SandboxConfig{
+			SrcDir:     srcDir,
+			DestDir:    destDir,
+			Sysroot:    sysroot,
+			Env:        env,
+			ProjectDir: opts.ProjectDir,
+		}
+		if err := RunInSandbox(cfg, cmd); err != nil {
+			return err
 		}
 	}
 
@@ -246,12 +252,13 @@ func filterBuildOrder(dag *resolve.DAG, fullOrder []string, names []string) ([]s
 	return filtered, nil
 }
 
-func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[string]string, opts Options) error {
+func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[string]string, opts Options, requested map[string]bool) error {
 	fmt.Fprintln(w, "Dry run — would build in this order:")
 	for _, name := range order {
 		recipe := proj.Recipes[name]
 		cached := ""
-		if !opts.Force && isBuildCached(opts.ProjectDir, name, hashes[name]) {
+		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
+		if !forceThis && isBuildCached(opts.ProjectDir, name, hashes[name]) {
 			cached = " [cached, skip]"
 		}
 		fmt.Fprintf(w, "  %-20s [%s] %s%s\n", name, recipe.Class, hashes[name][:12], cached)

@@ -4,17 +4,26 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
+	yoe "github.com/YoeDistro/yoe-ng/internal"
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
+// toContainerPath converts a host path to a /project-relative container path.
+func toContainerPath(projectDir, hostPath string) (string, error) {
+	rel, err := filepath.Rel(projectDir, hostPath)
+	if err != nil {
+		return "", fmt.Errorf("converting to container path: %w", err)
+	}
+	return filepath.Join("/project", rel), nil
+}
+
 // GenerateDiskImage creates a partitioned disk image from a rootfs directory.
-// Uses raw file operations — no loop devices or mounting needed (works inside
-// Docker without --privileged).
-func GenerateDiskImage(rootfs, imgPath string, recipe *yoestar.Recipe, w io.Writer) error {
+// Disk tools (sfdisk, mkfs, dd, etc.) run inside the container via
+// RunInContainer; pure file operations stay on the host.
+func GenerateDiskImage(rootfs, imgPath string, recipe *yoestar.Recipe, projectDir string, w io.Writer) error {
 	partitions := recipe.Partitions
 	if len(partitions) == 0 {
 		partitions = []yoestar.Partition{
@@ -34,13 +43,13 @@ func GenerateDiskImage(rootfs, imgPath string, recipe *yoestar.Recipe, w io.Writ
 
 	fmt.Fprintf(w, "  Creating %dMB disk image...\n", totalMB)
 
-	// Create sparse image
+	// Create sparse image (pure Go — no container needed)
 	if err := createSparseImage(imgPath, totalMB); err != nil {
 		return fmt.Errorf("creating image: %w", err)
 	}
 
-	// Partition with sfdisk
-	if err := partitionImage(imgPath, partitions, w); err != nil {
+	// Partition with sfdisk via container
+	if err := partitionImage(imgPath, partitions, projectDir, w); err != nil {
 		return fmt.Errorf("partitioning: %w", err)
 	}
 
@@ -60,26 +69,31 @@ func GenerateDiskImage(rootfs, imgPath string, recipe *yoestar.Recipe, w io.Writ
 
 		switch p.Type {
 		case "vfat":
-			if err := createVfatPartition(partImg, sizeMB, rootfs, p, w); err != nil {
+			if err := createVfatPartition(partImg, sizeMB, rootfs, p, projectDir, w); err != nil {
 				return fmt.Errorf("vfat %s: %w", p.Label, err)
 			}
 		case "ext4":
-			if err := createExt4Partition(partImg, sizeMB, rootfs, p, w); err != nil {
+			if err := createExt4Partition(partImg, sizeMB, rootfs, p, projectDir, w); err != nil {
 				return fmt.Errorf("ext4 %s: %w", p.Label, err)
 			}
 		}
 
-		// DD the partition image into the disk image at the right offset
+		// DD the partition image into the disk image at the right offset via container
 		if _, err := os.Stat(partImg); err == nil {
-			cmd := exec.Command("dd",
-				"if="+partImg,
-				"of="+imgPath,
-				"bs=1M",
-				fmt.Sprintf("seek=%d", offsetMB),
-				"conv=notrunc",
-			)
-			cmd.Stderr = os.Stderr
-			if err := cmd.Run(); err != nil {
+			cPartImg, err := toContainerPath(projectDir, partImg)
+			if err != nil {
+				return err
+			}
+			cImgPath, err := toContainerPath(projectDir, imgPath)
+			if err != nil {
+				return err
+			}
+			ddCmd := fmt.Sprintf("dd if=%s of=%s bs=1M seek=%d conv=notrunc",
+				cPartImg, cImgPath, offsetMB)
+			if err := yoe.RunInContainer(yoe.ContainerRunConfig{
+				Command:    ddCmd,
+				ProjectDir: projectDir,
+			}); err != nil {
 				return fmt.Errorf("dd partition %s: %w", p.Label, err)
 			}
 		}
@@ -88,7 +102,7 @@ func GenerateDiskImage(rootfs, imgPath string, recipe *yoestar.Recipe, w io.Writ
 	}
 
 	// Install syslinux bootloader (MBR + VBR + ldlinux.sys)
-	if err := installBootloader(imgPath, rootfs, recipe, w); err != nil {
+	if err := installBootloader(imgPath, rootfs, recipe, projectDir, w); err != nil {
 		fmt.Fprintf(w, "  Warning: could not install bootloader: %v\n", err)
 	}
 
@@ -109,12 +123,7 @@ func createSparseImage(path string, sizeMB int) error {
 	return f.Truncate(int64(sizeMB) * 1024 * 1024)
 }
 
-func partitionImage(imgPath string, partitions []yoestar.Partition, w io.Writer) error {
-	if _, err := exec.LookPath("sfdisk"); err != nil {
-		fmt.Fprintln(w, "  (sfdisk not available — skipping partitioning)")
-		return nil
-	}
-
+func partitionImage(imgPath string, partitions []yoestar.Partition, projectDir string, w io.Writer) error {
 	script := "label: dos\n"
 	for i, p := range partitions {
 		size := ""
@@ -134,70 +143,103 @@ func partitionImage(imgPath string, partitions []yoestar.Partition, w io.Writer)
 		script += fmt.Sprintf("%stype=%s%s\n", size, ptype, bootable)
 	}
 
+	cImgPath, err := toContainerPath(projectDir, imgPath)
+	if err != nil {
+		return err
+	}
+
 	fmt.Fprintln(w, "  Partitioning (MBR)...")
-	cmd := exec.Command("sfdisk", "--quiet", imgPath)
-	cmd.Stdin = strings.NewReader(script)
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	// Use printf to pipe the sfdisk script via stdin inside the container
+	cmd := fmt.Sprintf("printf '%s' | sfdisk --quiet %s", strings.ReplaceAll(script, "'", "'\\''"), cImgPath)
+	return yoe.RunInContainer(yoe.ContainerRunConfig{
+		Command:    cmd,
+		ProjectDir: projectDir,
+	})
 }
 
 // createVfatPartition creates a FAT32 filesystem image and copies boot files.
-// Uses mkfs.vfat + mcopy (mtools) — no loop device or mounting needed.
-func createVfatPartition(partImg string, sizeMB int, rootfs string, p yoestar.Partition, w io.Writer) error {
-	// Create the partition image file
+// Uses mkfs.vfat + mcopy (mtools) via RunInContainer.
+func createVfatPartition(partImg string, sizeMB int, rootfs string, p yoestar.Partition, projectDir string, w io.Writer) error {
+	// Create the partition image file (pure Go — no container needed)
 	if err := createSparseImage(partImg, sizeMB); err != nil {
 		return err
 	}
 
-	// Format as FAT32
-	cmd := exec.Command("mkfs.vfat", "-n", strings.ToUpper(p.Label), partImg)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("mkfs.vfat: %s\n%s", err, out)
+	cPartImg, err := toContainerPath(projectDir, partImg)
+	if err != nil {
+		return err
 	}
 
-	// Copy boot files using mcopy if available, otherwise dd raw
-	if _, err := exec.LookPath("mcopy"); err == nil {
-		for _, pattern := range p.Contents {
-			matches, _ := filepath.Glob(filepath.Join(rootfs, "boot", pattern))
-			for _, f := range matches {
-				cmd := exec.Command("mcopy", "-i", partImg, f, "::/"+filepath.Base(f))
-				if out, err := cmd.CombinedOutput(); err != nil {
-					fmt.Fprintf(w, "    mcopy %s: %s\n", filepath.Base(f), string(out))
-				} else {
-					fmt.Fprintf(w, "    boot: %s\n", filepath.Base(f))
-				}
+	// Format as FAT32 via container
+	mkfsCmd := fmt.Sprintf("mkfs.vfat -n %s %s", strings.ToUpper(p.Label), cPartImg)
+	if err := yoe.RunInContainer(yoe.ContainerRunConfig{
+		Command:    mkfsCmd,
+		ProjectDir: projectDir,
+	}); err != nil {
+		return fmt.Errorf("mkfs.vfat: %w", err)
+	}
+
+	// Copy boot files using mcopy via container
+	for _, pattern := range p.Contents {
+		// Glob on the host to find matching files
+		matches, _ := filepath.Glob(filepath.Join(rootfs, "boot", pattern))
+		for _, f := range matches {
+			cFile, err := toContainerPath(projectDir, f)
+			if err != nil {
+				return err
+			}
+			mcopyCmd := fmt.Sprintf("mcopy -i %s %s ::/%s", cPartImg, cFile, filepath.Base(f))
+			if err := yoe.RunInContainer(yoe.ContainerRunConfig{
+				Command:    mcopyCmd,
+				ProjectDir: projectDir,
+			}); err != nil {
+				fmt.Fprintf(w, "    mcopy %s: %v\n", filepath.Base(f), err)
+			} else {
+				fmt.Fprintf(w, "    boot: %s\n", filepath.Base(f))
 			}
 		}
-	} else {
-		fmt.Fprintln(w, "    (mcopy not available — boot partition empty)")
 	}
 
 	return nil
 }
 
 // createExt4Partition creates an ext4 filesystem image populated from rootfs.
-// Uses mkfs.ext4 -d (populate from directory) — no loop device or mounting.
-func createExt4Partition(partImg string, sizeMB int, rootfs string, p yoestar.Partition, w io.Writer) error {
+// Uses mkfs.ext4 via RunInContainer.
+func createExt4Partition(partImg string, sizeMB int, rootfs string, p yoestar.Partition, projectDir string, w io.Writer) error {
+	// Create the partition image file (pure Go — no container needed)
+	if err := createSparseImage(partImg, sizeMB); err != nil {
+		return err
+	}
+
+	cPartImg, err := toContainerPath(projectDir, partImg)
+	if err != nil {
+		return err
+	}
+
 	if !p.Root {
-		// Non-root ext4 partition — just create empty
-		if err := createSparseImage(partImg, sizeMB); err != nil {
-			return err
-		}
-		cmd := exec.Command("mkfs.ext4", "-q", "-L", p.Label, partImg)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("mkfs.ext4: %s\n%s", err, out)
+		// Non-root ext4 partition — just format empty
+		mkfsCmd := fmt.Sprintf("mkfs.ext4 -q -L %s %s", p.Label, cPartImg)
+		if err := yoe.RunInContainer(yoe.ContainerRunConfig{
+			Command:    mkfsCmd,
+			ProjectDir: projectDir,
+		}); err != nil {
+			return fmt.Errorf("mkfs.ext4: %w", err)
 		}
 		return nil
 	}
 
 	// Root partition — create and populate from rootfs using mkfs.ext4 -d
-	if err := createSparseImage(partImg, sizeMB); err != nil {
+	cRootfs, err := toContainerPath(projectDir, rootfs)
+	if err != nil {
 		return err
 	}
 
-	cmd := exec.Command("mkfs.ext4", "-q", "-L", p.Label, "-d", rootfs, partImg)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("mkfs.ext4 -d: %s\n%s", err, out)
+	mkfsCmd := fmt.Sprintf("mkfs.ext4 -q -L %s -d %s %s", p.Label, cRootfs, cPartImg)
+	if err := yoe.RunInContainer(yoe.ContainerRunConfig{
+		Command:    mkfsCmd,
+		ProjectDir: projectDir,
+	}); err != nil {
+		return fmt.Errorf("mkfs.ext4 -d: %w", err)
 	}
 
 	return nil
@@ -205,15 +247,13 @@ func createExt4Partition(partImg string, sizeMB int, rootfs string, p yoestar.Pa
 
 // installBootloader writes syslinux MBR code and runs extlinux --install
 // on the root partition to set up the VBR and ldlinux.sys.
-func installBootloader(imgPath, rootfs string, recipe *yoestar.Recipe, w io.Writer) error {
-	// Write MBR boot code
-	// Try rootfs first (from syslinux recipe), then container's syslinux
+// MBR byte writing is pure Go (host); losetup/mount/extlinux run in the container.
+func installBootloader(imgPath, rootfs string, recipe *yoestar.Recipe, projectDir string, w io.Writer) error {
+	// Write MBR boot code (pure Go — reads mbr.bin from rootfs on host)
 	mbrBin := filepath.Join(rootfs, "usr", "share", "syslinux", "mbr.bin")
 	if _, err := os.Stat(mbrBin); os.IsNotExist(err) {
-		mbrBin = "/usr/share/syslinux/mbr.bin"
-		if _, err := os.Stat(mbrBin); os.IsNotExist(err) {
-			return fmt.Errorf("syslinux mbr.bin not found")
-		}
+		// mbr.bin not in rootfs — skip (container's copy not accessible from host)
+		return fmt.Errorf("syslinux mbr.bin not found in rootfs")
 	}
 
 	mbrData, err := os.ReadFile(mbrBin)
@@ -236,10 +276,10 @@ func installBootloader(imgPath, rootfs string, recipe *yoestar.Recipe, w io.Writ
 	fmt.Fprintln(w, "  Installed syslinux MBR boot code")
 
 	// Run extlinux --install on the root partition using a loop device
-	// This writes the VBR and ldlinux.sys to the right disk sectors
-	if _, err := exec.LookPath("losetup"); err != nil {
-		fmt.Fprintln(w, "  (losetup not available — skipping extlinux install)")
-		return nil
+	// inside the container (needs losetup/mount/extlinux + --privileged).
+	cImgPath, err := toContainerPath(projectDir, imgPath)
+	if err != nil {
+		return err
 	}
 
 	// Find the root partition offset and size
@@ -259,37 +299,22 @@ func installBootloader(imgPath, rootfs string, recipe *yoestar.Recipe, w io.Writ
 		}
 	}
 
-	// Set up loop device for the partition
-	out, err := exec.Command("losetup", "--find", "--show",
-		"--offset", fmt.Sprintf("%d", offsetBytes),
-		"--sizelimit", fmt.Sprintf("%d", int64(rootSizeMB)*1024*1024),
-		imgPath).CombinedOutput()
-	if err != nil {
-		fmt.Fprintf(w, "  (losetup failed: %v: %s — skipping extlinux install)\n", err, strings.TrimSpace(string(out)))
-		return nil
-	}
-	loopDev := strings.TrimSpace(string(out))
-	defer exec.Command("losetup", "-d", loopDev).Run()
+	// Run losetup + mount + extlinux as a single shell script inside the container.
+	// NoUser: true because losetup/mount require root.
+	extlinuxScript := fmt.Sprintf(`set -e
+LOOP=$(losetup --find --show --offset %d --sizelimit %d %s)
+trap 'umount /mnt/extlinux 2>/dev/null; losetup -d $LOOP 2>/dev/null' EXIT
+mkdir -p /mnt/extlinux
+mount -t ext4 $LOOP /mnt/extlinux
+extlinux --install /mnt/extlinux/boot/extlinux`,
+		offsetBytes, int64(rootSizeMB)*1024*1024, cImgPath)
 
-	// Mount the partition
-	mountDir, err := os.MkdirTemp("", "yoe-extlinux-*")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(mountDir)
-
-	mountOut, mountErr := exec.Command("mount", "-t", "ext4", loopDev, mountDir).CombinedOutput()
-	if mountErr != nil {
-		fmt.Fprintf(w, "  (mount failed: %v: %s — skipping extlinux install)\n", mountErr, strings.TrimSpace(string(mountOut)))
-		return nil
-	}
-	defer exec.Command("umount", mountDir).Run()
-
-	// Run extlinux --install
-	extlinuxDir := filepath.Join(mountDir, "boot", "extlinux")
-	cmd := exec.Command("extlinux", "--install", extlinuxDir)
-	if cmdOut, err := cmd.CombinedOutput(); err != nil {
-		fmt.Fprintf(w, "  extlinux --install failed: %s\n%s", err, cmdOut)
+	if err := yoe.RunInContainer(yoe.ContainerRunConfig{
+		Command:    extlinuxScript,
+		ProjectDir: projectDir,
+		NoUser:     true,
+	}); err != nil {
+		fmt.Fprintf(w, "  extlinux install failed: %v\n", err)
 		return nil // non-fatal — image still has the files, just no VBR
 	}
 

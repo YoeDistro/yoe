@@ -6,94 +6,119 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	yoe "github.com/YoeDistro/yoe-ng/internal"
 )
 
 // SandboxConfig defines the bubblewrap sandbox for a recipe build.
 type SandboxConfig struct {
-	// BuildRoot is the Tier 1 build root (ro-bind mounted as /)
-	BuildRoot string
-	// SrcDir is the recipe source directory (bind mounted as /build/src)
-	SrcDir string
-	// DestDir is the staging directory (bind mounted as /build/destdir)
-	DestDir string
-	// Sysroot is the shared build sysroot containing installed deps.
-	// Overlaid onto /usr so recipes can find deps' headers and libraries.
-	Sysroot string
-	// Env is the build environment variables
-	Env map[string]string
+	BuildRoot  string
+	SrcDir     string
+	DestDir    string
+	Sysroot    string
+	Env        map[string]string
+	ProjectDir string
 }
 
-// RunInSandbox executes a command inside a bubblewrap sandbox.
+// RunInSandbox executes a command inside a bubblewrap sandbox within the
+// build container.
 func RunInSandbox(cfg *SandboxConfig, command string) error {
-	args := []string{
-		"--die-with-parent",
-	}
+	bwrapCmd := bwrapCommand(cfg, command)
+	mounts := containerMountsForBuild(cfg)
 
-	// Mount the container root read-write (we're already inside Docker,
-	// which provides the isolation). Bwrap adds per-recipe PID isolation
-	// and prevents accidental host contamination.
+	return yoe.RunInContainer(yoe.ContainerRunConfig{
+		Command:    bwrapCmd,
+		ProjectDir: cfg.ProjectDir,
+		Mounts:     mounts,
+	})
+}
+
+// RunSimple executes a command directly in the container (no bwrap sandbox).
+// Used for Stage 0 bootstrap where we use the container's Alpine toolchain.
+func RunSimple(cfg *SandboxConfig, command string) error {
+	var envExports []string
+	for k, v := range cfg.Env {
+		envExports = append(envExports, fmt.Sprintf("export %s=%q", k, v))
+	}
+	fullCmd := strings.Join(envExports, "; ")
+	if fullCmd != "" {
+		fullCmd += "; "
+	}
+	fullCmd += "cd /build/src && " + command
+
+	mounts := containerMountsForBuild(cfg)
+
+	return yoe.RunInContainer(yoe.ContainerRunConfig{
+		Command:    fullCmd,
+		ProjectDir: cfg.ProjectDir,
+		Mounts:     mounts,
+	})
+}
+
+func bwrapCommand(cfg *SandboxConfig, command string) string {
+	var parts []string
+	parts = append(parts, "bwrap", "--die-with-parent")
+
 	if cfg.BuildRoot != "" {
-		args = append(args, "--bind", cfg.BuildRoot, "/")
+		parts = append(parts, "--bind", cfg.BuildRoot, "/")
 	} else {
-		args = append(args, "--bind", "/", "/")
+		parts = append(parts, "--bind", "/", "/")
 	}
 
-	// Mount sysroot at /build/sysroot — contains deps' headers/libraries.
-	// Build environment vars (CFLAGS, LDFLAGS, PKG_CONFIG_PATH) point here.
 	if cfg.Sysroot != "" {
-		args = append(args, "--ro-bind", cfg.Sysroot, "/build/sysroot")
+		parts = append(parts, "--ro-bind", "/build/sysroot", "/build/sysroot")
 	}
 
-	// Mount source and destdir into /build
-	args = append(args,
-		"--bind", cfg.SrcDir, "/build/src",
-		"--bind", cfg.DestDir, "/build/destdir",
+	parts = append(parts,
+		"--bind", "/build/src", "/build/src",
+		"--bind", "/build/destdir", "/build/destdir",
 		"--dev-bind", "/dev", "/dev",
 		"--ro-bind", "/proc", "/proc",
 		"--tmpfs", "/tmp",
+		"--chdir", "/build/src",
 	)
 
-	// Set working directory to source
-	args = append(args, "--chdir", "/build/src")
-
-	// Build the shell command with environment
 	var envExports []string
 	for k, v := range cfg.Env {
 		envExports = append(envExports, fmt.Sprintf("export %s=%q", k, v))
 	}
 	envStr := strings.Join(envExports, "; ")
-	fullCmd := envStr + "; " + command
-
-	args = append(args, "--", "sh", "-c", fullCmd)
-
-	cmd := exec.Command("bwrap", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("sandbox execution failed: %w", err)
+	fullCmd := envStr
+	if fullCmd != "" {
+		fullCmd += "; "
 	}
-	return nil
+	fullCmd += command
+
+	parts = append(parts, "--", "sh", "-c", shellQuote(fullCmd))
+	return strings.Join(parts, " ")
 }
 
-// RunSimple executes a command directly (no sandbox) for when bwrap
-// is not available (e.g., initial development, or inside the container
-// where the container itself provides isolation).
-func RunSimple(srcDir, destDir string, env map[string]string, command string) error {
-	cmd := exec.Command("sh", "-c", command)
-	cmd.Dir = srcDir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+// shellQuote wraps a string in single quotes for safe embedding in a
+// shell command. Single quotes inside the string are escaped.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+}
 
-	cmd.Env = os.Environ()
-	for k, v := range env {
-		cmd.Env = append(cmd.Env, k+"="+v)
+func containerMountsForBuild(cfg *SandboxConfig) []yoe.Mount {
+	var mounts []yoe.Mount
+
+	if cfg.SrcDir != "" {
+		mounts = append(mounts, yoe.Mount{
+			Host: cfg.SrcDir, Container: "/build/src",
+		})
+	}
+	if cfg.DestDir != "" {
+		mounts = append(mounts, yoe.Mount{
+			Host: cfg.DestDir, Container: "/build/destdir",
+		})
+	}
+	if cfg.Sysroot != "" {
+		mounts = append(mounts, yoe.Mount{
+			Host: cfg.Sysroot, Container: "/build/sysroot", ReadOnly: true,
+		})
 	}
 
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("build step failed: %w", err)
-	}
-	return nil
+	return mounts
 }
 
 // SysrootDir returns the shared build sysroot path for a project.
@@ -102,26 +127,12 @@ func SysrootDir(projectDir string) string {
 }
 
 // InstallToSysroot copies a recipe's destdir contents into the shared sysroot.
-// This makes the recipe's headers, libraries, and pkg-config files available
-// to subsequent recipe builds.
 func InstallToSysroot(destDir, sysrootDir string) error {
 	if err := os.MkdirAll(sysrootDir, 0755); err != nil {
 		return err
 	}
 	cmd := exec.Command("cp", "-a", destDir+"/.", sysrootDir+"/")
 	return cmd.Run()
-}
-
-// HasBwrap returns true if bubblewrap is available and can create namespaces.
-// Inside Docker containers, bwrap may be installed but unable to create user
-// namespaces, so we test with a trivial command.
-func HasBwrap() bool {
-	if _, err := exec.LookPath("bwrap"); err != nil {
-		return false
-	}
-	// Test if bwrap can actually create a namespace
-	cmd := exec.Command("bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "true")
-	return cmd.Run() == nil
 }
 
 // EnsureDir creates a directory if it doesn't exist.

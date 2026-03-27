@@ -3,6 +3,7 @@ package image
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -12,10 +13,14 @@ import (
 
 func TestAssemble(t *testing.T) {
 	projectDir := t.TempDir()
-	outputDir := filepath.Join(t.TempDir(), "output")
+	outputDir := filepath.Join(projectDir, "build", "output")
 
-	// Create a fake local repo with nothing (apk won't be available in tests)
-	os.MkdirAll(filepath.Join(projectDir, "build", "repo"), 0755)
+	// Create a fake local repo with minimal .apk files (tar.gz archives)
+	repoDir := filepath.Join(projectDir, "build", "repo")
+	os.MkdirAll(repoDir, 0755)
+	for _, pkg := range []string{"openssh-9.0-r0.apk", "myapp-1.0-r0.apk"} {
+		createFakeAPK(t, repoDir, pkg)
+	}
 
 	// Create an overlay
 	overlayDir := filepath.Join(projectDir, "overlays", "etc", "myapp")
@@ -84,6 +89,18 @@ func TestAssemble(t *testing.T) {
 	}
 	if !strings.Contains(output, "sshd") {
 		t.Error("output should mention sshd service")
+	}
+}
+
+// createFakeAPK creates a minimal .apk file (gzip'd tar) in repoDir.
+func createFakeAPK(t *testing.T, repoDir, name string) {
+	t.Helper()
+	apkPath := filepath.Join(repoDir, name)
+	// Create a tar.gz with a single .PKGINFO file
+	cmd := exec.Command("sh", "-c",
+		"echo 'pkgname=test' | tar czf "+apkPath+" --files-from=/dev/null")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("creating fake apk %s: %v\n%s", name, err, out)
 	}
 }
 

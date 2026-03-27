@@ -87,9 +87,9 @@ The container mounts:
 - **User/group ID** passed through so files created in the container are owned
   by the host user
 
-The `YOE_IN_CONTAINER=1` environment variable is set inside the container so
-`yoe` knows not to re-enter. This is transparent — developers don't need to
-think about containers. They run `yoe build` and it works.
+The `yoe` CLI always runs on the host and invokes the container only for build
+commands that need container-provided tools (gcc, bwrap, mkfs, etc.). This is
+transparent — developers run `yoe build` and it works.
 
 ### External Dependencies
 

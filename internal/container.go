@@ -4,45 +4,50 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
-	"strings"
+	"sync"
 
 	"github.com/YoeDistro/yoe-ng/containers"
 )
 
 const (
-	// containerVersion is bumped when the Dockerfile changes (i.e., the tool
-	// set inside the container changes). The image is tagged yoe-ng:<version>
-	// so yoe automatically rebuilds when the version doesn't match.
-	containerVersion = "9"
-
-	containerImage = "yoe-ng"
-	containerEnv   = "YOE_IN_CONTAINER"
+	containerVersion = "10"
+	containerImage   = "yoe-ng"
 )
 
 func containerTag() string {
 	return containerImage + ":" + containerVersion
 }
 
-// InContainer returns true if yoe is running inside the build container.
-func InContainer() bool {
-	return os.Getenv(containerEnv) == "1"
+// Mount describes a bind mount for the container.
+type Mount struct {
+	Host      string
+	Container string
+	ReadOnly  bool
 }
 
-// ExecInContainer re-executes the current yoe command inside the build
-// container. The host yoe binary is bind-mounted into the container so
-// the container image only contains tools, not yoe itself.
-//
-// The cwd is mounted as /project. If YOE_PROJECT is set, it's passed
-// through so the container can find the project root within the mount.
-func ExecInContainer(args []string) error {
-	hostDir, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	hostDir, err = filepath.Abs(hostDir)
-	if err != nil {
-		return err
+// ContainerRunConfig configures a single command execution inside the container.
+type ContainerRunConfig struct {
+	Command     string            // shell command to run
+	ProjectDir  string            // mounted as /project
+	Mounts      []Mount           // additional bind mounts
+	Env         map[string]string // environment variables
+	Interactive bool              // attach TTY (-it)
+	NoUser      bool              // run as root (for losetup/mount)
+}
+
+var ensureOnce sync.Once
+var ensureErr error
+
+// RunInContainer executes a shell command inside the build container.
+// The container image is built lazily on first invocation.
+func RunInContainer(cfg ContainerRunConfig) error {
+	ensureOnce.Do(func() {
+		ensureErr = EnsureImage()
+	})
+	if ensureErr != nil {
+		return fmt.Errorf("container image: %w", ensureErr)
 	}
 
 	runtime, err := detectRuntime()
@@ -50,81 +55,69 @@ func ExecInContainer(args []string) error {
 		return err
 	}
 
-	// Find the running yoe binary
-	exe, err := os.Executable()
+	args, err := containerRunArgs(cfg)
 	if err != nil {
-		return fmt.Errorf("finding yoe binary: %w", err)
-	}
-	exe, err = filepath.EvalSymlinks(exe)
-	if err != nil {
-		return fmt.Errorf("resolving yoe binary path: %w", err)
+		return err
 	}
 
-	// Determine what to mount. If there's a git repo root above cwd,
-	// mount that so relative layer paths (../../layers/...) work.
-	mountDir := findGitRoot(hostDir)
-	if mountDir == "" {
-		mountDir = hostDir
-	}
+	args = append(args, cfg.Command)
 
-	// Compute the working directory inside the container
-	containerWorkDir := "/project"
-	if mountDir != hostDir {
-		rel, _ := filepath.Rel(mountDir, hostDir)
-		containerWorkDir = filepath.Join("/project", rel)
-	}
+	fmt.Fprintf(os.Stderr, "[yoe] container: %s\n", cfg.Command)
 
-	runArgs := []string{
-		"run", "--rm",
-		// --privileged provides: bwrap namespaces, losetup/mount for disk
-		// images, /dev/kvm for QEMU. Container user is still non-root.
-		"--privileged",
-		"-v", mountDir + ":/project",
-		"-v", exe + ":/usr/local/bin/yoe:ro",
-		"-w", containerWorkDir,
-		"--entrypoint", "yoe",
-	}
-
-	// Attach TTY for interactive commands (yoe run needs QEMU serial console)
-	if fileInfo, err := os.Stdin.Stat(); err == nil {
-		if (fileInfo.Mode() & os.ModeCharDevice) != 0 {
-			runArgs = append(runArgs, "-it")
-		}
-	}
-
-	// Pass through YOE_PROJECT if set
-	if yp := os.Getenv("YOE_PROJECT"); yp != "" {
-		runArgs = append(runArgs, "-e", "YOE_PROJECT="+yp)
-	}
-
-	// Pass through YOE_CACHE if set (overrides default cache/ in project dir).
-	// The project dir is already mounted, so cache/ is accessible at
-	// /project/.../cache/ without a separate mount.
-	if cacheDir := os.Getenv("YOE_CACHE"); cacheDir != "" {
-		abs, _ := filepath.Abs(cacheDir)
-		runArgs = append(runArgs, "-v", abs+":/cache", "-e", "YOE_CACHE=/cache")
-	}
-
-	// Note: running as root inside the container (needed for losetup/mount
-	// during disk image creation). File ownership on the bind mount follows
-	// the host filesystem.
-
-	runArgs = append(runArgs, containerTag())
-	runArgs = append(runArgs, args...)
-
-	fmt.Fprintf(os.Stderr, "[yoe] running in container: %s %s\n", runtime, strings.Join(args, " "))
-
-	cmd := exec.Command(runtime, runArgs...)
-	cmd.Stdin = os.Stdin
+	cmd := exec.Command(runtime, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	if cfg.Interactive {
+		cmd.Stdin = os.Stdin
+	}
 
 	return cmd.Run()
 }
 
+// containerRunArgs builds the docker/podman run arguments (without the
+// runtime binary name and without the trailing shell command string).
+// The returned args end with "sh" "-c" so the caller only needs to
+// append the command string.
+func containerRunArgs(cfg ContainerRunConfig) ([]string, error) {
+	args := []string{"run", "--rm", "--privileged"}
+
+	if !cfg.NoUser {
+		u, err := user.Current()
+		if err != nil {
+			return nil, fmt.Errorf("getting current user: %w", err)
+		}
+		args = append(args, "--user", fmt.Sprintf("%s:%s", u.Uid, u.Gid))
+	}
+
+	if cfg.ProjectDir != "" {
+		args = append(args, "-v", cfg.ProjectDir+":/project")
+	}
+
+	for _, m := range cfg.Mounts {
+		mount := m.Host + ":" + m.Container
+		if m.ReadOnly {
+			mount += ":ro"
+		}
+		args = append(args, "-v", mount)
+	}
+
+	for k, v := range cfg.Env {
+		args = append(args, "-e", k+"="+v)
+	}
+
+	if cfg.Interactive {
+		args = append(args, "-it")
+	}
+
+	args = append(args, "-w", "/project")
+	args = append(args, containerTag())
+	args = append(args, "sh", "-c")
+
+	return args, nil
+}
+
 // EnsureImage checks if the versioned container image exists and builds it
-// if not. Since the container only contains tools (not yoe), it only needs
-// rebuilding when the tool set changes (version bump in Dockerfile).
+// if not.
 func EnsureImage() error {
 	runtime, err := detectRuntime()
 	if err != nil {
@@ -134,12 +127,11 @@ func EnsureImage() error {
 	tag := containerTag()
 	cmd := exec.Command(runtime, "image", "inspect", tag)
 	if err := cmd.Run(); err == nil {
-		return nil // correct version exists
+		return nil
 	}
 
 	fmt.Fprintf(os.Stderr, "[yoe] building container image %s...\n", tag)
 
-	// Create a temp build context with just the Dockerfile
 	tmpDir, err := os.MkdirTemp("", "yoe-container-build-*")
 	if err != nil {
 		return fmt.Errorf("creating temp dir: %w", err)
@@ -164,20 +156,6 @@ func EnsureImage() error {
 // ContainerVersion returns the container version embedded in this binary.
 func ContainerVersion() string {
 	return containerVersion
-}
-
-// findGitRoot walks up from dir to find the nearest .git directory.
-func findGitRoot(dir string) string {
-	for {
-		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return ""
-		}
-		dir = parent
-	}
 }
 
 func detectRuntime() (string, error) {
