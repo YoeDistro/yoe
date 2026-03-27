@@ -351,39 +351,75 @@ busybox(extra_patches=["patches/vendor-busybox-audit.patch"])
 - **Overlay files** — for config file changes on the target, the `overlays/`
   directory is simpler than patching source.
 
-### Per-Recipe Build Containers (planned)
+### Tasks and Per-Task Containers (planned)
 
-Recipes can optionally specify a Docker container image for their build. When
-set, build steps run inside that container instead of the bwrap sandbox. This
-allows different recipes to use different toolchains without modifying the base
-build container.
+Recipes can define named build tasks via `task()`, each with an optional Docker
+container. This replaces the flat `build = [...]` string list with structured
+steps that can each run in different environments.
+
+**Container resolution order:** task `container` → package `container` → bwrap
+(default).
 
 ```python
-# Go app builds inside the official golang image
+# Simple — build list works as before (bwrap, no containers)
+autotools(name = "zlib", source = "...", ...)
+
+# Package-level container — all tasks inherit it
 go_binary(
     name = "myapp",
-    source = "https://github.com/example/myapp.git",
     container = "golang:1.22-alpine",
-)
-
-# Rust app with its own container
-package(
-    name = "custom-tool",
-    container = "rust:1.78-alpine",
-    build = [
-        "cargo build --release",
-        "install -D target/release/tool $DESTDIR/usr/bin/tool",
+    tasks = [
+        task("build", run="go build -o $DESTDIR/usr/bin/myapp"),
+        task("test", run="go test ./..."),
     ],
 )
 
-# C/C++ recipes use bwrap (no container field = current behavior)
-autotools(name = "zlib", ...)
+# Task-level override — codegen uses a different container
+package(
+    name = "complex-app",
+    container = "golang:1.22-alpine",       # default for all tasks
+    tasks = [
+        task("codegen",
+             container="protoc:latest",     # overrides package default
+             run="protoc --go_out=. api/*.proto"),
+        task("compile",
+             run="go build -o $DESTDIR/usr/bin/app"),  # inherits golang
+        task("install",
+             run="install -D app.service $DESTDIR/usr/lib/systemd/system/"),
+    ],
+)
+
+# Mix of container and bwrap in one recipe
+package(
+    name = "hybrid-tool",
+    tasks = [
+        task("generate",
+             container="codegen-tools:latest",
+             run="generate-code --out src/"),
+        task("compile", run="make -j$NPROC"),  # no container → bwrap
+        task("install", run="make DESTDIR=$DESTDIR install"),
+    ],
+)
 ```
 
-Classes can set default containers — `go_binary()` defaults to
-`golang:1.22-alpine`, while `autotools()` and `cmake()` use bwrap. Users can
-override at recipe level. The sysroot, source, and destdir mounts are identical
-regardless of execution method.
+The `build = [...]` field remains for backward compatibility — internally
+converted to unnamed tasks without containers. Classes generate tasks:
+
+```python
+# classes/autotools.star generates three tasks
+def autotools(name, version, source, configure_args=[], **kwargs):
+    package(
+        name=name, version=version, source=source,
+        tasks = [
+            task("configure",
+                 run="test -f configure || autoreconf -fi && "
+                     "./configure --prefix=$PREFIX " + " ".join(configure_args)),
+            task("compile", run="make -j$NPROC"),
+            task("install", run="make DESTDIR=$DESTDIR install"),
+        ],
+        **kwargs,
+    )
+```
 
 See [per-recipe containers plan](superpowers/plans/per-recipe-containers.md) for
 the full design.
