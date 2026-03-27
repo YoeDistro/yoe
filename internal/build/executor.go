@@ -130,19 +130,19 @@ func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts O
 	for i, cmd := range commands {
 		fmt.Fprintf(w, "  [%d/%d] %s\n", i+1, len(commands), cmd)
 
-		if opts.UseSandbox && HasBwrap() {
-			cfg := &SandboxConfig{
-				SrcDir:  srcDir,
-				DestDir: destDir,
-				Sysroot: sysroot,
-				Env:     env,
-			}
+		cfg := &SandboxConfig{
+			SrcDir:  srcDir,
+			DestDir: destDir,
+			Sysroot: sysroot,
+			Env:     env,
+		}
+		if opts.UseSandbox {
 			if err := RunInSandbox(cfg, cmd); err != nil {
 				return err
 			}
 		} else {
 			env["DESTDIR"] = destDir
-			if err := RunSimple(srcDir, destDir, env, cmd); err != nil {
+			if err := RunSimple(cfg, cmd); err != nil {
 				return err
 			}
 		}
