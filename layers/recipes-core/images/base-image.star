@@ -3,6 +3,7 @@ image(
     version = "1.0.0",
     description = "Minimal bootable Yoe-NG system",
     packages = [
+        "base-files",
         "busybox",
         "linux",
         "syslinux",

@@ -190,7 +190,7 @@ LABEL yoe
 	inittab := `::sysinit:/bin/mount -t proc proc /proc
 ::sysinit:/bin/mount -t sysfs sys /sys
 ::sysinit:/bin/hostname -F /etc/hostname
-ttyS0::respawn:/bin/sh
+ttyS0::respawn:/sbin/getty -L ttyS0 115200 vt100
 ::ctrlaltdel:/sbin/reboot
 ::shutdown:/bin/umount -a -r
 `
