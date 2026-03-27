@@ -43,6 +43,12 @@ func RunInit(projectDir string, machine string) error {
 		return fmt.Errorf("writing PROJECT.star: %w", err)
 	}
 
+	// Create .gitignore
+	gitignore := "/build\n/cache\n"
+	if err := os.WriteFile(filepath.Join(projectDir, ".gitignore"), []byte(gitignore), 0644); err != nil {
+		return fmt.Errorf("writing .gitignore: %w", err)
+	}
+
 	if machine != "" {
 		if err := createMachineFile(projectDir, machine); err != nil {
 			return err

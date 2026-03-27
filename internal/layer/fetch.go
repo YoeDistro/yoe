@@ -12,14 +12,11 @@ import (
 )
 
 // CacheDir returns the layer cache directory.
+// Defaults to cache/layers/ in the current working directory.
 func CacheDir() (string, error) {
 	dir := os.Getenv("YOE_CACHE")
 	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		dir = filepath.Join(home, ".cache", "yoe-ng")
+		dir = "cache"
 	}
 	dir = filepath.Join(dir, "layers")
 	if err := os.MkdirAll(dir, 0755); err != nil {

@@ -79,8 +79,7 @@ func LoadProjectFromRoot(root string) (*Project, error) {
 			// Check layer cache
 			cacheDir := os.Getenv("YOE_CACHE")
 			if cacheDir == "" {
-				home, _ := os.UserHomeDir()
-				cacheDir = filepath.Join(home, ".cache", "yoe-ng")
+				cacheDir = "cache"
 			}
 			layerDir := filepath.Join(cacheDir, "layers", name)
 			if l.Path != "" {

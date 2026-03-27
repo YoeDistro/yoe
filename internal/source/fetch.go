@@ -14,14 +14,11 @@ import (
 )
 
 // CacheDir returns the source cache directory, creating it if needed.
+// Defaults to cache/sources/ in the current working directory.
 func CacheDir() (string, error) {
 	dir := os.Getenv("YOE_CACHE")
 	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		dir = filepath.Join(home, ".cache", "yoe-ng")
+		dir = "cache"
 	}
 	dir = filepath.Join(dir, "sources")
 	if err := os.MkdirAll(dir, 0755); err != nil {
