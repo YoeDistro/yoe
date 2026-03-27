@@ -8,6 +8,29 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-03-27
+
+### Added
+
+- **Dev-image with 10+ packages** — new `dev-image` builds end-to-end with
+  sysroot, including essential libraries (openssl, ncurses, readline, libffi,
+  expat, xz), networking (curl, openssh), and debug tools (strace, vim)
+- **Remote layer fetching** — fetch layers from remote sources
+- **Sysroot + image deps in DAG** — build sysroot and image dependencies
+  resolved as part of the dependency graph
+- **`yoe_sloc`** — source lines of code counter using `scc` (counts `.star` as
+  Python)
+
+### Fixed
+
+- Correct partition size for `losetup`, ensure sysroot dir exists
+- Recipe fixes for end-to-end dev-image builds
+
+### Changed
+
+- Moved design docs into `docs/` directory
+- Expanded build-environment and comparisons documentation
+
 ## [0.2.0] - 2026-03-26
 
 ### Added
