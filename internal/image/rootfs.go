@@ -129,13 +129,18 @@ func applyConfig(rootfs string, recipe *yoestar.Recipe, w io.Writer) error {
 		os.Symlink(target, link)
 	}
 
+	// Create essential directories for virtual filesystem mount points
+	for _, dir := range []string{"proc", "sys", "dev", "tmp", "run"} {
+		os.MkdirAll(filepath.Join(rootfs, dir), 0755)
+	}
+
 	// Install boot configuration (extlinux for QEMU serial console)
 	bootDir := filepath.Join(rootfs, "boot", "extlinux")
 	os.MkdirAll(bootDir, 0755)
 	extlinuxConf := `DEFAULT yoe
 LABEL yoe
     LINUX /boot/vmlinuz
-    APPEND console=ttyS0 root=/dev/vda1 rw
+    APPEND console=ttyS0 root=/dev/vda1 rw devtmpfs.mount=1
 `
 	os.WriteFile(filepath.Join(bootDir, "extlinux.conf"), []byte(extlinuxConf), 0644)
 	fmt.Fprintln(w, "  Installed boot configuration (extlinux)")
