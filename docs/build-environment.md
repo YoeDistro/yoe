@@ -59,14 +59,16 @@ Host                              Container (Alpine)
 └─────────────┘                   └──────────────────────────┘
 ```
 
-Commands that don't need build tools (`yoe init`, `yoe version`) run directly on
-the host. Everything else (`build`, `config`, `source`, `desc`, `graph`, etc.)
-runs inside the container with the project directory and cache mounted.
+Commands that don't need build tools (`yoe init`, `yoe version`, `yoe layer`)
+run directly on the host. Everything else (`build`, `config`, `source`, `desc`,
+`graph`, etc.) runs inside the container with the project directory and cache
+mounted.
 
 ```sh
 # These run on the host:
 yoe init my-project
 yoe version
+yoe layer sync
 
 # These auto-enter the container:
 yoe build openssh          # [yoe] running in container: docker build openssh
@@ -81,8 +83,7 @@ yoe container status       # show if running on host or in container
 The container mounts:
 
 - **Project directory** → `/project` (read-write)
-- **Cache directory** (`~/.cache/yoe-ng`) → `/cache` (read-write, persists
-  across builds)
+- **Cache directory** (`cache/`) → `/cache` (read-write, persists across builds)
 - **User/group ID** passed through so files created in the container are owned
   by the host user
 
@@ -338,7 +339,7 @@ assembly (partitioning, filesystem creation, writing the final `.img`).
 ## Build Environment Lifecycle
 
 ```
-First time setup (only requires yoe binary + docker/podman):
+First time setup (only requires yoe binary + git + docker/podman):
   yoe init my-project        ← runs on host, no container needed
   cd my-project
   yoe build --all            ← auto-builds container on first run, then builds
@@ -368,7 +369,7 @@ multi-level fallback chain for local and remote storage.
 
 ### Object Store Layout
 
-All cached artifacts live under `$YOE_CACHE` (default: `~/.cache/yoe-ng/`):
+All cached artifacts live under `$YOE_CACHE` (default: `cache//`):
 
 ```
 $YOE_CACHE/

@@ -8,28 +8,47 @@ and this project adheres to
 
 ## [Unreleased]
 
-## [0.2.1] - 2026-03-27
-
 ### Added
 
-- **Dev-image with 10+ packages** — new `dev-image` builds end-to-end with
-  sysroot, including essential libraries (openssl, ncurses, readline, libffi,
-  expat, xz), networking (curl, openssh), and debug tools (strace, vim)
-- **Remote layer fetching** — fetch layers from remote sources
-- **Sysroot + image deps in DAG** — build sysroot and image dependencies
-  resolved as part of the dependency graph
-- **`yoe_sloc`** — source lines of code counter using `scc` (counts `.star` as
-  Python)
-
-### Fixed
-
-- Correct partition size for `losetup`, ensure sysroot dir exists
-- Recipe fixes for end-to-end dev-image builds
+- **Layer `path` field** — layers can live in a subdirectory of a repo via
+  `path = "layers/recipes-core"`. Layer name derived from path's last component.
+- **Project-local cache** — source and layer caches default to `cache/` in the
+  project directory instead of `~/.cache/yoe-ng/`
+- **`.gitignore` in `yoe init`** — new projects get a `.gitignore` with `/build`
+  and `/cache`
+- **Build sysroot** — after each package builds, its output is installed into
+  `build/sysroot/` so subsequent recipes can find deps' headers/libraries via
+  `CFLAGS`, `LDFLAGS`, and `PKG_CONFIG_PATH`
+- **Image deps in DAG** — image recipes' `packages` list is treated as
+  dependencies so `yoe build dev-image` automatically builds all required
+  packages first
+- **Dev-image with 10+ packages** — busybox, linux, syslinux, ncurses, strace,
+  vim, zlib, openssl, curl, openssh — all built from git sources
+- **Remote layer fetching** — `yoe layer sync` clones/fetches layers declared in
+  `PROJECT.star` into the local cache
+- **Autotools `autoreconf`** — autotools class auto-runs `autoreconf -fi` when
+  `./configure` is missing (common with git sources)
+- SSH URL support for source fetching (`git@host:user/repo.git`)
+- `yoe layer` runs on the host (no container required)
+- `yoe_sloc` — source lines of code counter using `scc`
 
 ### Changed
 
+- Default layer in `yoe init` uses SSH URL
+  (`git@github.com:YoeDistro/yoe-ng.git`) with `path = "layers/recipes-core"`
+- Container no longer mounts a separate cache volume — cache/ is accessible
+  through the project mount
+- Container runs with `--privileged` (needed for losetup/mount during disk image
+  creation and /dev/kvm for QEMU)
 - Moved design docs into `docs/` directory
-- Expanded build-environment and comparisons documentation
+
+### Fixed
+
+- Correct partition size for `losetup` (match ext4 fs to partition boundaries)
+- Recipe fixes: ncurses v6.4, strace v6.9 with `./bootstrap`, vim static
+  ncurses, curl `--without-libpsl`, openssh `--without-openssl-header-check`
+- ext4 partition size matches filesystem (add 1MB for MBR overhead)
+- Attach TTY to container when stdin is a terminal (needed for `yoe run`)
 
 ## [0.2.0] - 2026-03-26
 
@@ -38,30 +57,26 @@ and this project adheres to
 - **Bootable QEMU x86_64 image** — end-to-end flow from recipes to a partitioned
   disk image that boots to a Linux kernel with busybox
 - **Starlark `load()` support** — class imports and `@layer//path` label-based
-  references across layers
+  references across layers, `//` resolves to layer root when inside a layer
 - **Recursive recipe discovery** — `recipes/**/*.star` directory traversal
-- **`recipes-core` layer** — initial layer with autotools/cmake/go/image
-  classes, busybox/zlib/syslinux recipes, base-image, and qemu-x86_64 machine
+- **`recipes-core` layer** — autotools/cmake/go/image classes, busybox/zlib/
+  syslinux/linux recipes, base-image, qemu-x86_64 machine
 - **APKINDEX generation** — `APKINDEX.tar.gz` for apk dependency resolution
-- **`yoe update`** — self-update command
-- **Bootstrap + container mount** — host `yoe` binary bind-mounted into
-  container
+- **Bootstrap framework** — `yoe bootstrap stage0/stage1/status`
+- **Container auto-enter** — host `yoe` binary bind-mounted into container,
+  Dockerfile embedded in binary, versioned image tags
 
 ### Fixed
 
-- Attach TTY to container when stdin is a terminal (needed for `yoe run`)
 - Build busybox as static binary (no shared lib dependency on rootfs)
-- ext4 partition size matches filesystem (add 1MB for MBR overhead)
 - APKINDEX uses SHA1 base64 as required by apk
-- apk format and image assembly for end-to-end builds
-- Use GitHub mirror for busybox (busybox.net unreachable)
 - Handle git sources in workspace (tag upstream without re-init)
-- bwrap sandbox inside Docker + container-only build policy
+- bwrap sandbox inside Docker with `--security-opt seccomp=unconfined`
 - Mount git root for layer resolution
 
 ### Changed
 
-- Prefer git sources with shallow clone
+- Prefer git sources with shallow clone over tarballs
 - Move build commands to `envsetup.sh` (`yoe_build`, `yoe_test`)
 
 ## [0.1.0] - 2026-03-26
@@ -77,29 +92,20 @@ builder.
   go.starlark.net with built-in functions (`project()`, `machine()`,
   `package()`, `image()`, `layer_info()`, etc.)
 - **Dependency resolution** — DAG construction, Kahn's algorithm topological
-  sort with cycle detection, transitive dep/rdep queries, `yoe desc`,
-  `yoe refs`, `yoe graph` (text and DOT output)
+  sort with cycle detection, `yoe desc`, `yoe refs`, `yoe graph`
 - **Content-addressed hashing** — SHA256 cache keys from recipe + source +
   patches + dep hashes + architecture
-- **Layer management** — `yoe layer list`, `LAYER.star` support, transitive
-  layer dependencies
 - **Source management** — `yoe source fetch/list/verify/clean` with
-  content-addressed cache, checksum verification, and patch application
-- **Build execution** — `yoe build` with bubblewrap per-recipe sandboxing, build
-  step execution, automatic container isolation via Docker/Podman
-- **Container isolation** — automatic re-execution inside Alpine-based container
-  with embedded Dockerfile, versioned image management, Docker and Podman
-  support
+  content-addressed cache and patch application
+- **Build execution** — `yoe build` with bubblewrap per-recipe sandboxing,
+  automatic container isolation via Docker/Podman
 - **Package creation** — APK package creation, `yoe repo` commands, local
   repository management
-- **Image assembly** — rootfs construction via apk, overlay application, disk
-  image generation with systemd-repart
-- **Device interaction** — `yoe flash` for writing images to devices, `yoe run`
-  for QEMU with KVM acceleration
-- **Interactive TUI** — Bubble Tea interface for browsing recipes, viewing
-  dependencies, and monitoring builds
-- **Developer workflow** — `yoe dev` for source modification workflow,
-  extensible custom commands via Starlark
-- **Patch support** — per-recipe patch directories with ordered application
-- **CI/CD** — GitHub Actions workflows for testing, building, and
-  GoReleaser-based releases
+- **Image assembly** — rootfs construction, overlay application, disk image
+  generation with syslinux MBR + extlinux
+- **Device interaction** — `yoe flash` with safety checks, `yoe run` for QEMU
+  with KVM
+- **Interactive TUI** — Bubble Tea interface for browsing recipes and machines
+- **Developer workflow** — `yoe dev extract/diff/status` for source modification
+- **Custom commands** — extensible CLI via `commands/*.star`
+- **Patch support** — per-recipe patch files applied as git commits

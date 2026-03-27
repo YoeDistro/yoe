@@ -676,17 +676,17 @@ yoe clean openssh
 
 ## Environment Variables
 
-| Variable                | Default           | Description                                     |
-| ----------------------- | ----------------- | ----------------------------------------------- |
-| `YOE_PROJECT`           | `.` (cwd)         | Path to the Yoe-NG project root                 |
-| `YOE_CACHE`             | `~/.cache/yoe-ng` | Cache directory for sources, builds, packages   |
-| `YOE_JOBS`              | nproc             | Parallel build jobs                             |
-| `YOE_LOG`               | `info`            | Log level (`debug`, `info`, `warn`, `error`)    |
-| `YOE_CACHE_SIGNING_KEY` | (none)            | Path to private key for signing cached packages |
-| `YOE_NO_REMOTE_CACHE`   | `false`           | Disable remote cache lookups                    |
-| `AWS_ACCESS_KEY_ID`     | (none)            | S3 credentials for remote cache                 |
-| `AWS_SECRET_ACCESS_KEY` | (none)            | S3 credentials for remote cache                 |
-| `AWS_ENDPOINT_URL`      | (none)            | S3 endpoint override (for MinIO / non-AWS)      |
+| Variable                | Default   | Description                                     |
+| ----------------------- | --------- | ----------------------------------------------- |
+| `YOE_PROJECT`           | `.` (cwd) | Path to the Yoe-NG project root                 |
+| `YOE_CACHE`             | `cache/`  | Cache directory for sources, builds, packages   |
+| `YOE_JOBS`              | nproc     | Parallel build jobs                             |
+| `YOE_LOG`               | `info`    | Log level (`debug`, `info`, `warn`, `error`)    |
+| `YOE_CACHE_SIGNING_KEY` | (none)    | Path to private key for signing cached packages |
+| `YOE_NO_REMOTE_CACHE`   | `false`   | Disable remote cache lookups                    |
+| `AWS_ACCESS_KEY_ID`     | (none)    | S3 credentials for remote cache                 |
+| `AWS_SECRET_ACCESS_KEY` | (none)    | S3 credentials for remote cache                 |
+| `AWS_ENDPOINT_URL`      | (none)    | S3 endpoint override (for MinIO / non-AWS)      |
 
 ## Dependency Resolution
 
