@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-03-27
+
+- update BL config
+
 ## [0.2.3] - 2026-03-27
 
 ### Changed
