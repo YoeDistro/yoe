@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Autotools class respects explicit `build` steps — no longer prepends default
+  autoreconf/configure when a recipe provides its own build commands.
 - **Per-recipe build logs** — build output written to
   `build/<recipe>/build.log`. Console is quiet by default; on error the log path
   is printed. Use `--verbose` / `-v` to stream build output to the console.
