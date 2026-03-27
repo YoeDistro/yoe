@@ -5,7 +5,8 @@ project(
     repository = repository(path = "build/repo"),
     cache = cache(path = "build/cache"),
     layers = [
-        layer("github.com/yoe/recipes-core",
-              local = "../../layers/recipes-core"),
+        layer("github.com/YoeDistro/yoe-ng",
+              local = "../..",
+              path = "layers/recipes-core"),
     ],
 )

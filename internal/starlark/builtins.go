@@ -257,6 +257,7 @@ func (e *Engine) fnProject(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 						p.Layers = append(p.Layers, LayerRef{
 							URL:   structString(s, "url"),
 							Ref:   structString(s, "ref"),
+							Path:  structString(s, "path"),
 							Local: structString(s, "local"),
 						})
 					}

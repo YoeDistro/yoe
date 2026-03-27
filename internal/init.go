@@ -28,9 +28,14 @@ func RunInit(projectDir string, machine string) error {
     name = %q,
     version = "0.1.0",
     defaults = defaults(machine = %q, image = "base-image"),
-    repository = repository(path = "/var/cache/yoe-ng/repo"),
-    cache = cache(path = "/var/cache/yoe-ng/build"),
+    repository = repository(path = "build/repo"),
+    cache = cache(path = "build/cache"),
     sources = sources(go_proxy = "https://proxy.golang.org"),
+    layers = [
+        layer("github.com/YoeDistro/yoe-ng",
+              ref = "main",
+              path = "layers/recipes-core"),
+    ],
 )
 `, name, defaultMachine)
 

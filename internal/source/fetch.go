@@ -184,6 +184,7 @@ func Verify(recipe *yoestar.Recipe) error {
 func isGitURL(url string) bool {
 	return strings.HasSuffix(url, ".git") ||
 		strings.HasPrefix(url, "git://") ||
+		strings.HasPrefix(url, "git@") ||
 		(strings.Contains(url, "github.com/") && !strings.Contains(url, "/archive/") && !strings.Contains(url, "/releases/"))
 }
 

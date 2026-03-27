@@ -47,6 +47,7 @@ type SourcesConfig struct {
 type LayerRef struct {
 	URL   string
 	Ref   string
+	Path  string // subdirectory within the repo containing LAYER.star
 	Local string // local path override (like Go's replace directive)
 }
 
