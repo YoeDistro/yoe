@@ -171,6 +171,12 @@ func TestFilterBuildOrder(t *testing.T) {
 }
 
 func TestBuildRecipes_WithDeps(t *testing.T) {
+	if _, err := exec.LookPath("docker"); err != nil {
+		if _, err := exec.LookPath("podman"); err != nil {
+			t.Skip("docker/podman not available")
+		}
+	}
+
 	// Create a project with recipes that have trivial build steps
 	projectDir := t.TempDir()
 
@@ -207,7 +213,6 @@ func TestBuildRecipes_WithDeps(t *testing.T) {
 	opts := Options{
 		ProjectDir: projectDir,
 		Arch:       "x86_64",
-		UseSandbox: false, // no bwrap in test
 	}
 
 	if err := BuildRecipes(proj, []string{"hello"}, opts, &buf); err != nil {

@@ -3,14 +3,13 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	yoe "github.com/YoeDistro/yoe-ng/internal"
 	"github.com/YoeDistro/yoe-ng/internal/bootstrap"
 	"github.com/YoeDistro/yoe-ng/internal/build"
-	"github.com/YoeDistro/yoe-ng/internal/layer"
 	"github.com/YoeDistro/yoe-ng/internal/device"
+	"github.com/YoeDistro/yoe-ng/internal/layer"
 	"github.com/YoeDistro/yoe-ng/internal/repo"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
 	"github.com/YoeDistro/yoe-ng/internal/source"
@@ -29,46 +28,19 @@ func main() {
 	command := os.Args[1]
 	args := os.Args[2:]
 
-	// Commands that run on the host without a container
 	switch command {
 	case "version":
 		fmt.Println(version)
-		return
 	case "update":
 		cmdUpdate()
-		return
 	case "init":
 		cmdInit(args)
-		return
 	case "container":
 		cmdContainer(args)
-		return
 	case "tui":
 		cmdTUI(args)
-		return
 	case "layer":
 		cmdLayer(args)
-		return
-	}
-
-	// Everything else runs inside the container
-	if !yoe.InContainer() {
-		if err := yoe.EnsureImage(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		if err := yoe.ExecInContainer(os.Args[1:]); err != nil {
-			if exitErr, ok := err.(*exec.ExitError); ok {
-				os.Exit(exitErr.ExitCode())
-			}
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		return
-	}
-
-	// Inside container — dispatch commands
-	switch command {
 	case "build":
 		cmdBuild(args)
 	case "bootstrap":
@@ -94,7 +66,6 @@ func main() {
 	case "clean":
 		cmdClean(args)
 	default:
-		// Check for custom commands from commands/*.star
 		if !tryCustomCommand(command, args) {
 			fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
 			printUsage()
@@ -199,7 +170,6 @@ func cmdBuild(args []string) {
 		Force:      force,
 		NoCache:    noCache,
 		DryRun:     dryRun,
-		UseSandbox: build.HasBwrap(),
 		ProjectDir: projectDir(),
 		Arch:       build.Arch(),
 	}
@@ -237,10 +207,10 @@ func cmdContainer(args []string) {
 		fmt.Printf("Container image yoe-ng:%s built successfully\n", yoe.ContainerVersion())
 	case "status":
 		fmt.Printf("Container version: %s (image: yoe-ng:%s)\n", yoe.ContainerVersion(), yoe.ContainerVersion())
-		if yoe.InContainer() {
-			fmt.Println("Currently running inside the yoe-ng container")
+		if err := yoe.EnsureImage(); err != nil {
+			fmt.Println("Container image: not built")
 		} else {
-			fmt.Println("Running on host — commands will auto-enter container")
+			fmt.Println("Container image: ready")
 		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown container subcommand: %s\n", args[0])

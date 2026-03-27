@@ -16,12 +16,11 @@ import (
 
 // Options controls build behavior.
 type Options struct {
-	Force         bool   // rebuild even if cached
-	NoCache       bool   // skip all caches
-	DryRun        bool   // show what would be built
-	UseSandbox    bool   // use bubblewrap sandbox
-	ProjectDir    string // project root
-	Arch          string // target architecture
+	Force      bool   // rebuild even if cached
+	NoCache    bool   // skip all caches
+	DryRun     bool   // show what would be built
+	ProjectDir string // project root
+	Arch       string // target architecture
 }
 
 // BuildRecipes builds the specified recipes (or all if names is empty).
@@ -126,25 +125,19 @@ func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts O
 		"LDFLAGS":         "-L/build/sysroot/usr/lib",
 	}
 
-	// Execute each build step
+	// Execute each build step inside the container with bwrap
 	for i, cmd := range commands {
 		fmt.Fprintf(w, "  [%d/%d] %s\n", i+1, len(commands), cmd)
 
 		cfg := &SandboxConfig{
-			SrcDir:  srcDir,
-			DestDir: destDir,
-			Sysroot: sysroot,
-			Env:     env,
+			SrcDir:     srcDir,
+			DestDir:    destDir,
+			Sysroot:    sysroot,
+			Env:        env,
+			ProjectDir: opts.ProjectDir,
 		}
-		if opts.UseSandbox {
-			if err := RunInSandbox(cfg, cmd); err != nil {
-				return err
-			}
-		} else {
-			env["DESTDIR"] = destDir
-			if err := RunSimple(cfg, cmd); err != nil {
-				return err
-			}
+		if err := RunInSandbox(cfg, cmd); err != nil {
+			return err
 		}
 	}
 
