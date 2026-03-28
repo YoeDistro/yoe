@@ -1,5 +1,5 @@
 # Yoe-NG build container (Tier 0)
-# Version: 10
+# Version: 11
 #
 # Tools-only container for build execution. The yoe CLI runs on the host
 # and invokes this container only for build commands that need the
@@ -43,7 +43,9 @@ RUN apk add --no-cache \
     openssl-dev \
     diffutils \
     findutils \
-    sed
+    sed \
+    python3 \
+    py3-setuptools
 
 # Create /build for bwrap bind mounts
 RUN mkdir -p /build/src /build/destdir

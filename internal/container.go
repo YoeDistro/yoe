@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	containerVersion = "10"
+	containerVersion = "11"
 	containerImage   = "yoe-ng"
 )
 

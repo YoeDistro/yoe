@@ -166,6 +166,7 @@ func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts O
 		"CFLAGS":          "-I/build/sysroot/usr/include",
 		"CPPFLAGS":        "-I/build/sysroot/usr/include",
 		"LDFLAGS":         "-L/build/sysroot/usr/lib",
+		"PYTHONPATH":      "/build/sysroot/usr/lib/python3.12/site-packages",
 	}
 
 	// Execute each build step inside the container with bwrap

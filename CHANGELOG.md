@@ -8,6 +8,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **meson build system support** — added samurai (ninja-compatible build tool),
+  meson, and kmod recipes. Container updated to v11 with python3 and
+  py3-setuptools for meson. Build environment now sets `PYTHONPATH` to the
+  sysroot so Python packages installed by recipes are discoverable.
+- **Container versioning note** — CLAUDE.md now documents that both
+  `Dockerfile.build` and `internal/container.go` must be bumped together.
 - **gettext recipe** — builds GNU gettext from source as a recipe instead of
   relying on the container. Provides `autopoint` needed by packages like xz that
   use gettext macros in their autotools build.
