@@ -57,15 +57,24 @@ Common failure categories in order of likelihood:
 
 1. **Missing dependency** — compiler error for a missing header or library.
    Check if the required package is in the recipe's `deps` list. Check if the
-   dep is built and installed to `build/sysroot/`.
-2. **Configure flag issue** — `./configure` or `cmake` can't find a feature or
+   dep is built and installed to `build/sysroot/`. If the dep has no recipe
+   yet, **create one** — do not install it in the Dockerfile via `apk add`.
+   Every library the system needs must be built from source as a recipe.
+2. **Missing build tool** — a tool required during the build (e.g., `makeinfo`,
+   `help2man`, `bison`) is not in the container. The fix is **never** to install
+   it in the Dockerfile. Instead, either disable the feature that needs it
+   (e.g., `--disable-docs`) if it's non-essential, or write a new recipe that
+   builds the tool from source and add it as a `deps` entry so it lands in the
+   sysroot before this recipe builds. The Dockerfile provides only the minimal
+   bootstrap toolchain.
+3. **Configure flag issue** — `./configure` or `cmake` can't find a feature or
    path. Check `configure_args` in the recipe and verify paths reference
    `/build/sysroot`.
-3. **Source/patch conflict** — patch doesn't apply, or source version changed.
+4. **Source/patch conflict** — patch doesn't apply, or source version changed.
    Check `build/<recipe>/src/` for `.rej` files or git errors in the log.
-4. **Toolchain mismatch** — wrong compiler flags, missing tools. Check the
+5. **Toolchain mismatch** — wrong compiler flags, missing tools. Check the
    build environment and Dockerfile.
-5. **Parallel build race** — intermittent failure in `make -j`. Look for
+6. **Parallel build race** — intermittent failure in `make -j`. Look for
    "No rule to make target" or missing generated files. Retry with
    `make -j1` as a diagnostic step.
 
@@ -73,7 +82,12 @@ Common failure categories in order of likelihood:
 
 Based on the root cause, apply the appropriate fix:
 
-- **Missing dep**: Add to the recipe's `deps` list in the `.star` file
+- **Missing dep**: Add to the recipe's `deps` list in the `.star` file. If no
+  recipe exists for the dependency, create one first. Never install the missing
+  library in the Dockerfile.
+- **Missing build tool**: If non-essential (docs, man pages), disable via
+  configure flags. If essential, create a new recipe for the tool and add it
+  as a dep. **Never modify the Dockerfile to install packages.**
 - **Configure flag**: Adjust `configure_args` in the recipe
 - **Patch conflict**: Update or remove the conflicting patch
 - **Source issue**: Check if the source needs updating or the extraction failed
@@ -131,3 +145,6 @@ again, go back to Step 2 with the new log — the next error may be different
 - Do not take shortcuts to make the build pass (e.g., disabling features,
   removing configure checks) without explaining the trade-off and getting
   user approval.
+- Do not install missing tools or libraries in the Dockerfile. The container
+  provides only the minimal bootstrap toolchain. If a recipe needs a tool,
+  create a recipe for it.

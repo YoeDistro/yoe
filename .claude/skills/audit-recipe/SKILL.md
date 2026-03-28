@@ -42,6 +42,11 @@ Verify the recipe's dependency lists:
   library via `pkg-config` or `find_package`, it should be in `deps`.
 - **Missing runtime deps** — if the built binary links against a shared
   library, that library's recipe should be in `runtime_deps`.
+- **Dep has no recipe** — every dependency must be built from source as a
+  recipe. If a dep is listed but has no corresponding `.star` recipe file,
+  flag it. If a dep is satisfied only because it happens to be in the
+  container's base image (Alpine packages), that is a bug — it needs its own
+  recipe. Never rely on `apk add` in the Dockerfile for library dependencies.
 - **Unnecessary deps** — check if any listed deps are actually unused by
   the build.
 - **Circular deps** — verify no dependency cycles exist via `yoe graph`.
@@ -115,3 +120,5 @@ For each finding, explain what the issue is, why it matters, and how to fix it.
   all recipes omit description periods, don't flag that).
 - Do not recommend changes without checking how other distributions handle
   the same package — there may be good reasons for the current configuration.
+- Do not recommend installing missing dependencies in the Dockerfile — every
+  library and build tool must be a recipe built from source.

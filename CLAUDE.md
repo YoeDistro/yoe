@@ -91,6 +91,14 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
 
 - **Container-only builds** — host provides only `yoe` + Git + Docker; all tools
   live in the container
+- **No installing packages in the container** — if a build fails because a tool
+  or library is missing from the container, the fix is to write a recipe that
+  builds it from source (and add it as a `deps` entry), not to install it via
+  `apk add` in the Dockerfile. This applies to both build tools (makeinfo,
+  bison, help2man) and libraries (zlib, ncurses, libffi). The Dockerfile
+  provides only the minimal bootstrap toolchain (gcc, binutils, make, etc.);
+  everything else is a recipe. For non-essential features (docs, man pages),
+  disabling via configure flags is also acceptable.
 - **Build sysroot** — after each package builds, its output is installed into
   `build/sysroot/` so subsequent recipes can find deps' headers/libraries
 - **Starlark** for all recipes and config (Python-like, deterministic,

@@ -188,6 +188,19 @@ If the build fails, use the diagnose workflow to fix it iteratively.
 - **license** — use SPDX identifiers. Check the upstream project carefully.
 - **description** — one sentence, lowercase start, no trailing period
 
+## Dependency Policy
+
+**Never install missing dependencies in the Dockerfile.** The container provides
+only the minimal bootstrap toolchain (gcc, binutils, make, etc.). Every library
+and build tool the recipe needs must exist as a recipe:
+
+- If a dependency already has a recipe, add it to `deps` (and `runtime_deps`
+  if it's a shared library needed at runtime).
+- If no recipe exists for the dependency, **create one first** before writing
+  the recipe that depends on it. Use this same workflow recursively.
+- For non-essential build-time features (doc generation, man pages, GUI
+  bindings), prefer disabling them via configure flags over adding deps.
+
 ## What NOT to Do
 
 - Do not guess dependencies — inspect the build system files and reference
@@ -197,3 +210,5 @@ If the build fails, use the diagnose workflow to fix it iteratively.
 - Do not add a recipe to `recipes-core` unless it's truly a core system
   component. Project-specific recipes go in the project's own layer.
 - Do not skip the test build step.
+- Do not install missing tools or libraries in the Dockerfile — create recipes
+  for them instead.
