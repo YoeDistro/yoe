@@ -119,6 +119,8 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
   Alpine, Arch, and NixOS
 - [Build Languages](docs/build-languages.md) — analysis of Starlark, CUE, Nix,
   and other embeddable languages for recipe definitions
+- [Recipes Roadmap](docs/recipes-roadmap.md) — existing recipes and what's needed
+  for a complete base system
 
 ## 💡 Inspirations
 
