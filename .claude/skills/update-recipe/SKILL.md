@@ -1,10 +1,10 @@
 ---
 name: update-recipe
 description: >
-  This skill should be used when the user asks to "update a recipe",
-  "bump a recipe", "upgrade a package", "update to latest version",
-  "/update-recipe", or mentions that a recipe needs a version bump.
-  Bumps a recipe to the latest upstream version with a test build.
+  This skill should be used when the user asks to "update a recipe", "bump a
+  recipe", "upgrade a package", "update to latest version", "/update-recipe", or
+  mentions that a recipe needs a version bump. Bumps a recipe to the latest
+  upstream version with a test build.
 ---
 
 # Update a Recipe
@@ -38,17 +38,17 @@ the same convention like `V_9_9_P2`).
 
 ### Step 3: Research Changes
 
-Check how other distributions have handled the version bump. This helps
-identify new dependencies, removed features, or required patch updates:
+Check how other distributions have handled the version bump. This helps identify
+new dependencies, removed features, or required patch updates:
 
 - **Alpine Linux** — check if their APKBUILD has been updated for the new
   version, and note any new `makedepends` or configure flag changes
-- **Yocto/OpenEmbedded** — check if the OE-Core recipe has been updated,
-  noting any new patches or dependency changes
+- **Yocto/OpenEmbedded** — check if the OE-Core recipe has been updated, noting
+  any new patches or dependency changes
 - **Buildroot** — check for configure flag or dependency changes
 
-Also review the upstream changelog/release notes for breaking changes,
-new dependencies, or removed features that might affect the build.
+Also review the upstream changelog/release notes for breaking changes, new
+dependencies, or removed features that might affect the build.
 
 ### Step 4: Update the Recipe
 
@@ -61,9 +61,9 @@ Modify the `.star` file:
 
 ### Step 5: Check Patches
 
-If the recipe has `patches`, verify they still apply to the new version.
-Check `build/<recipe>/src/` after source preparation for `.rej` files.
-If patches conflict:
+If the recipe has `patches`, verify they still apply to the new version. Check
+`build/<recipe>/src/` after source preparation for `.rej` files. If patches
+conflict:
 
 - Determine if the patch is still needed (the fix may be upstream now)
 - If still needed, regenerate the patch against the new version
@@ -97,6 +97,7 @@ yoe build --force <dependent-recipe>
 ### Step 8: Report Changes
 
 Summarize what changed:
+
 - Version bump (old → new)
 - Any dependency changes
 - Any configure flag changes

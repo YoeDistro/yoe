@@ -1,10 +1,10 @@
 ---
 name: audit-recipe
 description: >
-  This skill should be used when the user asks to "audit a recipe",
-  "review a recipe", "check a recipe", "/audit-recipe", or wants to
-  verify that a recipe follows best practices and has no common issues.
-  Reviews a recipe for correctness, completeness, and quality.
+  This skill should be used when the user asks to "audit a recipe", "review a
+  recipe", "check a recipe", "/audit-recipe", or wants to verify that a recipe
+  follows best practices and has no common issues. Reviews a recipe for
+  correctness, completeness, and quality.
 ---
 
 # Audit a Recipe
@@ -27,8 +27,8 @@ Glob: layers/**/recipes/**/<name>.star
 
 Check how Alpine, Yocto, and Buildroot package the same software. Compare:
 
-- **Dependencies** — are any build or runtime deps missing? Are any listed
-  deps unnecessary?
+- **Dependencies** — are any build or runtime deps missing? Are any listed deps
+  unnecessary?
 - **Configure flags** — are there important flags that other distros use that
   this recipe is missing? Are there flags enabled here that are unusual?
 - **Patches** — do other distros carry patches that might be needed here?
@@ -40,15 +40,15 @@ Verify the recipe's dependency lists:
 
 - **Missing build deps** — if `configure.ac` or `CMakeLists.txt` requires a
   library via `pkg-config` or `find_package`, it should be in `deps`.
-- **Missing runtime deps** — if the built binary links against a shared
-  library, that library's recipe should be in `runtime_deps`.
+- **Missing runtime deps** — if the built binary links against a shared library,
+  that library's recipe should be in `runtime_deps`.
 - **Dep has no recipe** — every dependency must be built from source as a
-  recipe. If a dep is listed but has no corresponding `.star` recipe file,
-  flag it. If a dep is satisfied only because it happens to be in the
-  container's base image (Alpine packages), that is a bug — it needs its own
-  recipe. Never rely on `apk add` in the Dockerfile for library dependencies.
-- **Unnecessary deps** — check if any listed deps are actually unused by
-  the build.
+  recipe. If a dep is listed but has no corresponding `.star` recipe file, flag
+  it. If a dep is satisfied only because it happens to be in the container's
+  base image (Alpine packages), that is a bug — it needs its own recipe. Never
+  rely on `apk add` in the Dockerfile for library dependencies.
+- **Unnecessary deps** — check if any listed deps are actually unused by the
+  build.
 - **Circular deps** — verify no dependency cycles exist via `yoe graph`.
 
 To check linked libraries after a successful build:
@@ -62,14 +62,14 @@ find build/<recipe>/destdir -type f -executable | head -5
 
 Review configure flags and build steps:
 
-- **Security flags** — for network-facing software, ensure TLS/crypto is
-  enabled and linked against openssl (not a bundled copy).
-- **Unnecessary features** — for embedded targets, disable features that
-  add bloat (e.g., GUI support, test suites, documentation generation).
+- **Security flags** — for network-facing software, ensure TLS/crypto is enabled
+  and linked against openssl (not a bundled copy).
+- **Unnecessary features** — for embedded targets, disable features that add
+  bloat (e.g., GUI support, test suites, documentation generation).
 - **Hardcoded paths** — build commands should use `$PREFIX`, `$DESTDIR`,
   `$NPROC`, not hardcoded values.
-- **Parallel build** — verify `make -j$NPROC` is used (the classes handle
-  this, but custom `build` steps might not).
+- **Parallel build** — verify `make -j$NPROC` is used (the classes handle this,
+  but custom `build` steps might not).
 
 ### Step 5: Check Metadata
 
@@ -79,33 +79,36 @@ Verify recipe metadata:
   upstream `LICENSE`/`COPYING` file.
 - **description** — should be a clear, concise one-liner.
 - **version** — check if a newer stable version exists upstream.
-- **source** — prefer git URLs over tarballs. If using git, verify `tag`
-  matches the version.
+- **source** — prefer git URLs over tarballs. If using git, verify `tag` matches
+  the version.
 
 ### Step 6: Check for Known Issues
 
-- **Version staleness** — is the recipe significantly behind upstream?
-  Note any known CVEs in the current version.
-- **Patch applicability** — if patches exist, are they still needed or
-  have they been merged upstream?
-- **Build reproducibility** — are there any non-deterministic elements
-  (embedded timestamps, random ordering)?
+- **Version staleness** — is the recipe significantly behind upstream? Note any
+  known CVEs in the current version.
+- **Patch applicability** — if patches exist, are they still needed or have they
+  been merged upstream?
+- **Build reproducibility** — are there any non-deterministic elements (embedded
+  timestamps, random ordering)?
 
 ### Step 7: Report Findings
 
 Present findings organized by severity:
 
 **Errors** (must fix):
+
 - Missing runtime dependencies (will cause runtime failures)
 - Incorrect license
 - Security issues (e.g., using bundled crypto instead of system openssl)
 
 **Warnings** (should fix):
+
 - Missing build dependencies (build may work by accident via sysroot)
 - Stale version with known CVEs
 - Suboptimal configure flags
 
 **Suggestions** (nice to have):
+
 - Version bump available
 - Patches that could be dropped
 - Configure flags to reduce image size
@@ -116,9 +119,9 @@ For each finding, explain what the issue is, why it matters, and how to fix it.
 
 - Do not modify the recipe during an audit — only report findings. The user
   decides what to fix.
-- Do not flag style issues that match existing project conventions (e.g., if
-  all recipes omit description periods, don't flag that).
-- Do not recommend changes without checking how other distributions handle
-  the same package — there may be good reasons for the current configuration.
+- Do not flag style issues that match existing project conventions (e.g., if all
+  recipes omit description periods, don't flag that).
+- Do not recommend changes without checking how other distributions handle the
+  same package — there may be good reasons for the current configuration.
 - Do not recommend installing missing dependencies in the Dockerfile — every
   library and build tool must be a recipe built from source.

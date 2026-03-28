@@ -2,8 +2,8 @@
 name: diagnose
 description: >
   This skill should be used when the user asks to "diagnose a build failure",
-  "debug a recipe", "fix a build", "why did the build fail", "/diagnose",
-  or mentions a recipe that failed to build. Iteratively analyzes build logs,
+  "debug a recipe", "fix a build", "why did the build fail", "/diagnose", or
+  mentions a recipe that failed to build. Iteratively analyzes build logs,
   identifies root causes, applies fixes, and rebuilds until the recipe succeeds.
 ---
 
@@ -57,9 +57,9 @@ Common failure categories in order of likelihood:
 
 1. **Missing dependency** — compiler error for a missing header or library.
    Check if the required package is in the recipe's `deps` list. Check if the
-   dep is built and installed to `build/sysroot/`. If the dep has no recipe
-   yet, **create one** — do not install it in the Dockerfile via `apk add`.
-   Every library the system needs must be built from source as a recipe.
+   dep is built and installed to `build/sysroot/`. If the dep has no recipe yet,
+   **create one** — do not install it in the Dockerfile via `apk add`. Every
+   library the system needs must be built from source as a recipe.
 2. **Missing build tool** — a tool required during the build (e.g., `makeinfo`,
    `help2man`, `bison`) is not in the container. The fix is **never** to install
    it in the Dockerfile. Instead, either disable the feature that needs it
@@ -72,11 +72,11 @@ Common failure categories in order of likelihood:
    `/build/sysroot`.
 4. **Source/patch conflict** — patch doesn't apply, or source version changed.
    Check `build/<recipe>/src/` for `.rej` files or git errors in the log.
-5. **Toolchain mismatch** — wrong compiler flags, missing tools. Check the
-   build environment and Dockerfile.
-6. **Parallel build race** — intermittent failure in `make -j`. Look for
-   "No rule to make target" or missing generated files. Retry with
-   `make -j1` as a diagnostic step.
+5. **Toolchain mismatch** — wrong compiler flags, missing tools. Check the build
+   environment and Dockerfile.
+6. **Parallel build race** — intermittent failure in `make -j`. Look for "No
+   rule to make target" or missing generated files. Retry with `make -j1` as a
+   diagnostic step.
 
 ### Step 5: Apply the Fix
 
@@ -86,8 +86,8 @@ Based on the root cause, apply the appropriate fix:
   recipe exists for the dependency, create one first. Never install the missing
   library in the Dockerfile.
 - **Missing build tool**: If non-essential (docs, man pages), disable via
-  configure flags. If essential, create a new recipe for the tool and add it
-  as a dep. **Never modify the Dockerfile to install packages.**
+  configure flags. If essential, create a new recipe for the tool and add it as
+  a dep. **Never modify the Dockerfile to install packages.**
 - **Configure flag**: Adjust `configure_args` in the recipe
 - **Patch conflict**: Update or remove the conflicting patch
 - **Source issue**: Check if the source needs updating or the extraction failed
@@ -108,32 +108,32 @@ extract.
 
 ### Step 7: Check the Result
 
-Read the build output. If the build succeeds, report the fix. If it fails
-again, go back to Step 2 with the new log — the next error may be different
-(e.g., fixing a missing header reveals a missing library).
+Read the build output. If the build succeeds, report the fix. If it fails again,
+go back to Step 2 with the new log — the next error may be different (e.g.,
+fixing a missing header reveals a missing library).
 
 ## Iteration Rules
 
 - **Maximum 5 iterations** before stopping to reassess with the user. If a
-  recipe fails 5 times with different errors, there may be a deeper issue
-  (wrong source version, fundamentally incompatible configuration).
+  recipe fails 5 times with different errors, there may be a deeper issue (wrong
+  source version, fundamentally incompatible configuration).
 - **Never apply the same fix twice.** If an attempted fix didn't resolve the
   error, revert it and try a different approach.
 - **Read the actual error, not just the exit code.** Build systems often print
-  the real error hundreds of lines before the final "make: *** Error 1".
+  the real error hundreds of lines before the final "make: \*\*\* Error 1".
 - **Check dependencies first.** Most build failures in this system are missing
-  deps — a package needs a header or library that hasn't been built or isn't
-  in the sysroot.
+  deps — a package needs a header or library that hasn't been built or isn't in
+  the sysroot.
 
 ## Key Paths
 
-| Path | Contents |
-|------|----------|
-| `build/<recipe>/build.log` | Full build output |
-| `build/<recipe>/src/` | Extracted source tree |
-| `build/<recipe>/destdir/` | Install staging directory |
-| `build/sysroot/` | Shared sysroot (deps' headers/libs) |
-| `layers/**/recipes/**/<recipe>.star` | Recipe definition |
+| Path                                 | Contents                            |
+| ------------------------------------ | ----------------------------------- |
+| `build/<recipe>/build.log`           | Full build output                   |
+| `build/<recipe>/src/`                | Extracted source tree               |
+| `build/<recipe>/destdir/`            | Install staging directory           |
+| `build/sysroot/`                     | Shared sysroot (deps' headers/libs) |
+| `layers/**/recipes/**/<recipe>.star` | Recipe definition                   |
 
 ## What NOT to Do
 
@@ -143,8 +143,8 @@ again, go back to Step 2 with the new log — the next error may be different
   changes there are lost on rebuild. Instead, create a patch in the recipe.
 - Do not skip the build log. Always read it before proposing a fix.
 - Do not take shortcuts to make the build pass (e.g., disabling features,
-  removing configure checks) without explaining the trade-off and getting
-  user approval.
+  removing configure checks) without explaining the trade-off and getting user
+  approval.
 - Do not install missing tools or libraries in the Dockerfile. The container
   provides only the minimal bootstrap toolchain. If a recipe needs a tool,
   create a recipe for it.
