@@ -10,12 +10,25 @@ and this project adheres to
 
 - Autotools class respects explicit `build` steps — no longer prepends default
   autoreconf/configure when a recipe provides its own build commands.
+- **Claude Code plugin** — added `.claude/` plugin with AI skills for recipe
+  development: `diagnose` (iterative build failure analysis), `new-recipe`
+  (generate recipes from URLs/descriptions), `update-recipe` (version bumps),
+  `audit-recipe` (review against best practices and other distros).
+- **`--clean` build flag** — deletes source and destdir before rebuilding.
+  `--force` now only skips the cache check without cleaning.
+- **`--force`/`--clean` scoped to requested recipes** — dependency recipes still
+  use the cache, only explicitly named recipes are force-rebuilt.
+- Fixed `YOE_CACHE` help text — was `~/.cache/yoe-ng`, actually defaults to
+  `cache/` in the project directory.
 
 ## [0.2.7] - 2026-03-27
 
 - **Per-recipe build logs** — build output written to
   `build/<recipe>/build.log`. Console is quiet by default; on error the log path
   is printed. Use `--verbose` / `-v` to stream build output to the console.
+- Fixed QEMU machine templates — removed UEFI firmware (`ovmf`/`aavmf`/
+  `opensbi`) incompatible with MBR+syslinux boot, fixed root device `vda2` →
+  `vda1`.
 
 ## [0.2.6] - 2026-03-27
 
