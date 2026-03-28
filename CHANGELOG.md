@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **gettext recipe** — builds GNU gettext from source as a recipe instead of
+  relying on the container. Provides `autopoint` needed by packages like xz that
+  use gettext macros in their autotools build.
+- **Sysroot binaries on PATH** — `/build/sysroot/usr/bin` is now prepended to
+  `PATH` during builds, so executables from dependency recipes are discoverable.
 - Autotools class respects explicit `build` steps — no longer prepends default
   autoreconf/configure when a recipe provides its own build commands.
 - **Claude Code plugin** — added `.claude/` plugin with AI skills for recipe
