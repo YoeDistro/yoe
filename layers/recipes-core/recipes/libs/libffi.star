@@ -7,4 +7,11 @@ autotools(
     tag = "v3.4.6",
     license = "MIT",
     description = "Foreign function interface library",
+    configure_args = ["--disable-docs"],
+    build = [
+        "test -f configure || autoreconf -fi",
+        "./configure --prefix=$PREFIX --disable-docs",
+        "make -j$NPROC all",
+        "make DESTDIR=$DESTDIR install",
+    ],
 )
