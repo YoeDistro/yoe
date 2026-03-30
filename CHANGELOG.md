@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-03-30
+
+**ALL UNITS ARE NOW BUILDING**
+
 - **Per-unit sysroots** — each unit's build sysroot is assembled from only its
   transitive `deps`, not every previously built unit. Fixes busybox symlinks
   shadowing container tools (e.g., musl-linked `expr` breaking autoconf).
@@ -27,10 +31,9 @@ and this project adheres to
   downstream units blocked by the failure. The TUI shows cached units in blue
   and displays the full build queue (waiting/cached) before work begins.
 - **dev-image** — added `kmod` and `util-linux` to the development image.
-- **Image rootfs dep fix** — image assembly now follows only `runtime_deps`
-  when resolving packages, not build-time `deps`. Fixes build-only packages
-  (e.g., gettext via xz) being installed into the rootfs and overflowing the
-  partition.
+- **Image rootfs dep fix** — image assembly now follows only `runtime_deps` when
+  resolving packages, not build-time `deps`. Fixes build-only packages (e.g.,
+  gettext via xz) being installed into the rootfs and overflowing the partition.
 
 ## [0.3.0] - 2026-03-30
 
