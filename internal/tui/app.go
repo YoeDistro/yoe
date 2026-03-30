@@ -224,10 +224,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
-		// Cancel all running builds before quitting
-		for name, cancel := range m.cancels {
-			cancel()
-			delete(m.cancels, name)
+		if len(m.cancels) > 0 {
+			m.confirm = "quit"
+			m.message = "Builds are running. Quit and cancel them? (y/n)"
+			return m, nil
 		}
 		return m, tea.Quit
 
@@ -499,6 +499,12 @@ func (m model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.statuses[name] = statusNone
 				m.message = fmt.Sprintf("Cleaned %s", name)
 			}
+		} else if action == "quit" {
+			for name, cancel := range m.cancels {
+				cancel()
+				delete(m.cancels, name)
+			}
+			return m, tea.Quit
 		} else if action == "clean-all" {
 			buildDir := filepath.Join(m.projectDir, "build")
 			if err := os.RemoveAll(buildDir); err != nil {
@@ -527,6 +533,11 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "q", "ctrl+c":
+		if len(m.cancels) > 0 {
+			m.confirm = "quit"
+			m.message = "Builds are running. Quit and cancel them? (y/n)"
+			return m, nil
+		}
 		return m, tea.Quit
 
 	case "up", "k":
