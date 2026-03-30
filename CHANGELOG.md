@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-30
+
+**THIS RELEASE DOES NOT WORK** - this release is only to capture rename and TUI
+updates. Wait for a future one to do any work.
+
 **BREAKING CHANGE** - due to rename, recommend deleting any external projects
 and starting over.
 
@@ -19,9 +24,9 @@ and starting over.
 - **`yoe log`** — view build logs from the command line. Shows the most recent
   build log by default, or a specific unit's log with `yoe log <unit>`. Use `-e`
   to open the log in `$EDITOR`.
-- **`yoe diagnose`** — launch Claude Code with the `/diagnose` skill to
-  analyze a build failure. Uses the most recent build log by default, or a
-  specific unit's log with `yoe diagnose <unit>`.
+- **`yoe diagnose`** — launch Claude Code with the `/diagnose` skill to analyze
+  a build failure. Uses the most recent build log by default, or a specific
+  unit's log with `yoe diagnose <unit>`.
 - **TUI rewrite** — `yoe` with no args launches an interactive unit list with
   inline build status (cached/waiting/building/failed). Builds run in-process
   via `build.BuildUnits()` with real-time status events — dependencies show as
