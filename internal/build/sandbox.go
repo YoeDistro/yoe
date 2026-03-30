@@ -1,6 +1,7 @@
 package build
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -14,6 +15,7 @@ import (
 
 // SandboxConfig defines the bubblewrap sandbox for a unit build.
 type SandboxConfig struct {
+	Ctx        context.Context
 	BuildRoot  string
 	SrcDir     string
 	DestDir    string
@@ -31,6 +33,7 @@ func RunInSandbox(cfg *SandboxConfig, command string) error {
 	mounts := containerMountsForBuild(cfg)
 
 	return yoe.RunInContainer(yoe.ContainerRunConfig{
+		Ctx:        cfg.Ctx,
 		Command:    bwrapCmd,
 		ProjectDir: cfg.ProjectDir,
 		Mounts:     mounts,
@@ -55,6 +58,7 @@ func RunSimple(cfg *SandboxConfig, command string) error {
 	mounts := containerMountsForBuild(cfg)
 
 	return yoe.RunInContainer(yoe.ContainerRunConfig{
+		Ctx:        cfg.Ctx,
 		Command:    fullCmd,
 		ProjectDir: cfg.ProjectDir,
 		Mounts:     mounts,

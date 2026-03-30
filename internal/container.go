@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -30,6 +31,7 @@ type Mount struct {
 
 // ContainerRunConfig configures a single command execution inside the container.
 type ContainerRunConfig struct {
+	Ctx         context.Context   // optional; nil means background
 	Command     string            // shell command to run
 	ProjectDir  string            // mounted as /project
 	Mounts      []Mount           // additional bind mounts
@@ -46,8 +48,14 @@ var ensureErr error
 // RunInContainer executes a shell command inside the build container.
 // The container image is built lazily on first invocation.
 func RunInContainer(cfg ContainerRunConfig) error {
+	// Use the configured stderr for image build progress, falling back
+	// to os.Stderr when no writer is set (CLI mode).
 	ensureOnce.Do(func() {
-		ensureErr = EnsureImage()
+		w := cfg.Stderr
+		if w == nil {
+			w = os.Stderr
+		}
+		ensureErr = EnsureImage(w)
 	})
 	if ensureErr != nil {
 		return fmt.Errorf("container image: %w", ensureErr)
@@ -71,7 +79,11 @@ func RunInContainer(cfg ContainerRunConfig) error {
 	}
 	fmt.Fprintf(stderr, "[yoe] container: %s\n", cfg.Command)
 
-	cmd := exec.Command(runtime, args...)
+	ctx := cfg.Ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	cmd := exec.CommandContext(ctx, runtime, args...)
 	cmd.Stdout = cfg.Stdout
 	if cmd.Stdout == nil {
 		cmd.Stdout = os.Stdout
@@ -127,8 +139,9 @@ func containerRunArgs(cfg ContainerRunConfig) ([]string, error) {
 }
 
 // EnsureImage checks if the versioned container image exists and builds it
-// if not.
-func EnsureImage() error {
+// if not. The optional writer receives build progress; if nil, output is
+// discarded (safe for TUI mode).
+func EnsureImage(w io.Writer) error {
 	runtime, err := detectRuntime()
 	if err != nil {
 		return err
@@ -140,7 +153,10 @@ func EnsureImage() error {
 		return nil
 	}
 
-	fmt.Fprintf(os.Stderr, "[yoe] building container image %s...\n", tag)
+	if w == nil {
+		w = io.Discard
+	}
+	fmt.Fprintf(w, "[yoe] building container image %s...\n", tag)
 
 	tmpDir, err := os.MkdirTemp("", "yoe-container-build-*")
 	if err != nil {
@@ -154,8 +170,8 @@ func EnsureImage() error {
 	}
 
 	cmd = exec.Command(runtime, "build", "-t", tag, tmpDir)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = w
+	cmd.Stderr = w
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("building container image: %w", err)
 	}

@@ -3,6 +3,7 @@ package tui
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -88,6 +89,7 @@ type model struct {
 	height     int
 	message    string
 	building   map[string]bool
+	cancels    map[string]context.CancelFunc // cancel funcs for active builds
 	confirm    string // non-empty = waiting for y/n confirmation
 	searching  bool   // true = search input active
 	searchText string // current search query
@@ -125,6 +127,7 @@ func Run(proj *yoestar.Project, projectDir string) error {
 		hashes:     hashes,
 		statuses:   statuses,
 		building:   make(map[string]bool),
+		cancels:    make(map[string]context.CancelFunc),
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
@@ -174,9 +177,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case buildDoneMsg:
 		delete(m.building, msg.unit)
+		delete(m.cancels, msg.unit)
 		if msg.err != nil {
-			m.statuses[msg.unit] = statusFailed
-			m.message = fmt.Sprintf("Build failed: %s", msg.unit)
+			if msg.err.Error() == "build cancelled" || strings.Contains(msg.err.Error(), "signal: killed") {
+				m.statuses[msg.unit] = statusNone
+				m.message = fmt.Sprintf("Build cancelled: %s", msg.unit)
+			} else {
+				m.statuses[msg.unit] = statusFailed
+				m.message = fmt.Sprintf("Build failed: %s", msg.unit)
+			}
 		} else {
 			m.statuses[msg.unit] = statusCached
 			m.message = fmt.Sprintf("Build complete: %s", msg.unit)
@@ -235,6 +244,17 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.cursor < len(m.units) {
 			name := m.units[m.cursor]
 			return m, m.startBuild(name)
+		}
+		return m, nil
+
+	case "x":
+		if m.cursor < len(m.units) {
+			name := m.units[m.cursor]
+			if cancel, ok := m.cancels[name]; ok {
+				cancel()
+				delete(m.cancels, name)
+				m.message = fmt.Sprintf("Cancelling build: %s", name)
+			}
 		}
 		return m, nil
 
@@ -658,6 +678,9 @@ func (m *model) startBuild(name string) tea.Cmd {
 	m.statuses[name] = statusWaiting
 	m.building[name] = true
 
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancels[name] = cancel
+
 	proj := m.proj
 	projectDir := m.projectDir
 	unitName := name
@@ -667,6 +690,7 @@ func (m *model) startBuild(name string) tea.Cmd {
 	build.EnsureDir(filepath.Dir(outputPath))
 
 	return func() tea.Msg {
+		defer cancel()
 		f, err := os.Create(outputPath)
 		if err != nil {
 			return buildDoneMsg{unit: unitName, err: err}
@@ -674,6 +698,7 @@ func (m *model) startBuild(name string) tea.Cmd {
 		defer f.Close()
 
 		err = build.BuildUnits(proj, []string{unitName}, build.Options{
+			Ctx:        ctx,
 			Force:      true,
 			ProjectDir: projectDir,
 			Arch:       build.Arch(),
