@@ -86,7 +86,7 @@ func RunInContainer(cfg ContainerRunConfig) error {
 
 // containerRunArgs builds the docker/podman run arguments (without the
 // runtime binary name and without the trailing shell command string).
-// The returned args end with "sh" "-c" so the caller only needs to
+// The returned args end with "bash" "-c" so the caller only needs to
 // append the command string.
 func containerRunArgs(cfg ContainerRunConfig) ([]string, error) {
 	args := []string{"run", "--rm", "--privileged"}
@@ -121,7 +121,7 @@ func containerRunArgs(cfg ContainerRunConfig) ([]string, error) {
 
 	args = append(args, "-w", "/project")
 	args = append(args, containerTag())
-	args = append(args, "sh", "-c")
+	args = append(args, "bash", "-c")
 
 	return args, nil
 }

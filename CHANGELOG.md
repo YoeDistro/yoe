@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Bash for build commands** — switched build shell from busybox sh to bash.
+  Avoids autoconf compatibility issues (e.g., `AS_LINENO_PREPARE` infinite loop)
+  and matches what upstream build scripts expect. Removed per-recipe bash
+  workaround from util-linux.
+
 ## [0.2.8] - 2026-03-30
 
 - **meson build system support** — added samurai (ninja-compatible build tool),

@@ -105,7 +105,7 @@ That's it. Everything else is inside the container.
 | Tool    | Package    | Used by                        | Purpose                                                            |
 | ------- | ---------- | ------------------------------ | ------------------------------------------------------------------ |
 | `bwrap` | bubblewrap | `internal/build/sandbox.go`    | Per-recipe build isolation (namespace sandbox)                     |
-| `sh`    | busybox    | `internal/build/sandbox.go`    | Execute recipe build step shell commands                           |
+| `bash`  | bash       | `internal/build/sandbox.go`    | Execute recipe build step shell commands                           |
 | `git`   | git        | `internal/source/`, `dev.go`   | Clone/fetch repos, manage workspaces, apply/extract patches        |
 | `tar`   | tar        | `internal/source/workspace.go` | Extract `.tar.xz` archives (`.tar.gz`/`.bz2` handled by Go stdlib) |
 | `nproc` | coreutils  | `internal/build/sandbox.go`    | Detect CPU count for `$NPROC` build variable                       |
@@ -159,7 +159,7 @@ bwrap \
     --bind /tmp/destdir/$RECIPE /destdir \
     --dev /dev \
     --proc /proc \
-    -- sh -c "$BUILD_STEPS"
+    -- bash -c "$BUILD_STEPS"
 ```
 
 Bubblewrap provides:
