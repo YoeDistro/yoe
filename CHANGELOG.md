@@ -18,6 +18,9 @@ and this project adheres to
   container-build pattern. Existing cached layers are not fetched/updated, so
   there is no added latency on subsequent runs. Explicit `yoe layer sync` is
   still available to update layers.
+- **Fix TUI quit not cancelling builds** — quitting the TUI with `q` or
+  `ctrl+c` now cancels all active builds before exiting, preventing orphaned
+  container processes.
 
 ## [0.3.1] - 2026-03-30
 
