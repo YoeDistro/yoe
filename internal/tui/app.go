@@ -287,6 +287,20 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return execDoneMsg{err: err}
 		})
 
+	case "r":
+		if m.cursor < len(m.units) {
+			name := m.units[m.cursor]
+			if u, ok := m.proj.Units[name]; ok && u.Class == "image" {
+				c := exec.Command(os.Args[0], "run", name)
+				c.Dir = m.projectDir
+				return m, tea.ExecProcess(c, func(err error) tea.Msg {
+					return execDoneMsg{err: err}
+				})
+			}
+			m.message = fmt.Sprintf("%s is not an image unit", name)
+		}
+		return m, nil
+
 	case "c":
 		if m.cursor < len(m.units) {
 			name := m.units[m.cursor]
@@ -446,6 +460,17 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return execDoneMsg{err: err}
 		})
 
+	case "r":
+		if u, ok := m.proj.Units[m.detailUnit]; ok && u.Class == "image" {
+			c := exec.Command(os.Args[0], "run", m.detailUnit)
+			c.Dir = m.projectDir
+			return m, tea.ExecProcess(c, func(err error) tea.Msg {
+				return execDoneMsg{err: err}
+			})
+		}
+		m.message = fmt.Sprintf("%s is not an image unit", m.detailUnit)
+		return m, nil
+
 	case "l":
 		logPath := filepath.Join(m.projectDir, "build", m.detailUnit, "build.log")
 		if _, err := os.Stat(logPath); err == nil {
@@ -526,7 +551,13 @@ func (m model) viewUnits() string {
 	if m.searching {
 		b.WriteString(fmt.Sprintf("  /%s▌", m.searchText))
 	} else {
-		b.WriteString(helpStyle.Render("  b build  e edit  d diagnose  l log  c clean  / search  q quit"))
+		help := "  b build  e edit  d diagnose  l log  c clean  / search  q quit"
+		if m.cursor < len(m.units) {
+			if u, ok := m.proj.Units[m.units[m.cursor]]; ok && u.Class == "image" {
+				help = "  b build  r run  e edit  d diagnose  l log  c clean  / search  q quit"
+			}
+		}
+		b.WriteString(helpStyle.Render(help))
 	}
 	b.WriteString("\n")
 
@@ -581,7 +612,11 @@ func (m model) viewDetail() string {
 
 	// Help bar
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("  esc back  b build  d diagnose  l log"))
+	help := "  esc back  b build  d diagnose  l log"
+	if u, ok := m.proj.Units[m.detailUnit]; ok && u.Class == "image" {
+		help = "  esc back  b build  r run  d diagnose  l log"
+	}
+	b.WriteString(helpStyle.Render(help))
 	b.WriteString("\n")
 
 	if m.message != "" {

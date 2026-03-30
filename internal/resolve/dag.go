@@ -146,6 +146,34 @@ func (d *DAG) DepsOf(name string) ([]string, error) {
 	return result, nil
 }
 
+// TransitiveDeps returns all transitive dependencies of a node
+// in topological order (deepest deps first). This is used to assemble
+// per-unit sysroots from declared dependencies.
+func (d *DAG) TransitiveDeps(name string) []string {
+	visited := map[string]bool{}
+	var result []string
+	var walk func(n string)
+	walk = func(n string) {
+		if visited[n] {
+			return
+		}
+		visited[n] = true
+		if node, ok := d.Nodes[n]; ok {
+			for _, dep := range node.Deps {
+				walk(dep)
+			}
+		}
+		result = append(result, n)
+	}
+	// Walk deps of the target, not the target itself
+	if node, ok := d.Nodes[name]; ok {
+		for _, dep := range node.Deps {
+			walk(dep)
+		}
+	}
+	return result
+}
+
 // RdepsOf returns the transitive reverse dependencies (what depends on name).
 func (d *DAG) RdepsOf(name string) ([]string, error) {
 	if _, ok := d.Nodes[name]; !ok {

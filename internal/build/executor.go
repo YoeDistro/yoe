@@ -93,7 +93,7 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		fmt.Fprintf(w, "%-20s [building]\n", name)
 		notify(name, "building")
 
-		if err := buildOne(proj, unit, hash, opts, w); err != nil {
+		if err := buildOne(proj, dag, unit, hash, opts, w); err != nil {
 			notify(name, "failed")
 			return fmt.Errorf("building %s: %w", name, err)
 		}
@@ -107,7 +107,7 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 	return nil
 }
 
-func buildOne(proj *yoestar.Project, unit *yoestar.Unit, hash string, opts Options, w io.Writer) error {
+func buildOne(proj *yoestar.Project, dag *resolve.DAG, unit *yoestar.Unit, hash string, opts Options, w io.Writer) error {
 	buildDir := UnitBuildDir(opts.ProjectDir, unit.Name)
 	EnsureDir(buildDir)
 
@@ -168,10 +168,11 @@ func buildOne(proj *yoestar.Project, unit *yoestar.Unit, hash string, opts Optio
 		return nil
 	}
 
-	// Build environment.
-	// The sysroot at /build/sysroot contains headers/libs from built deps.
-	sysroot := SysrootDir(opts.ProjectDir)
-	EnsureDir(sysroot)
+	// Assemble per-unit sysroot from transitive deps
+	sysroot := filepath.Join(buildDir, "sysroot")
+	if err := AssembleSysroot(sysroot, dag, unit.Name, opts.ProjectDir); err != nil {
+		return fmt.Errorf("assembling sysroot: %w", err)
+	}
 	env := map[string]string{
 		"PREFIX":          "/usr",
 		"DESTDIR":         "/build/destdir",
@@ -221,10 +222,9 @@ func buildOne(proj *yoestar.Project, unit *yoestar.Unit, hash string, opts Optio
 			return fmt.Errorf("publishing to repo: %w", err)
 		}
 
-		// Install into the shared sysroot so subsequent builds can find
-		// this package's headers, libraries, and pkg-config files.
-		if err := InstallToSysroot(destDir, sysroot); err != nil {
-			fmt.Fprintf(w, "  (warning: sysroot install failed: %v)\n", err)
+		// Stage destdir for downstream units' per-unit sysroots
+		if err := StageSysroot(destDir, buildDir); err != nil {
+			fmt.Fprintf(w, "  (warning: sysroot staging failed: %v)\n", err)
 		}
 	}
 

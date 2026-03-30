@@ -236,7 +236,7 @@ func cmdContainer(args []string) {
 
 func cmdContainerShell() {
 	projectDir := projectDir()
-	sysroot := build.SysrootDir(projectDir)
+	sysroot := filepath.Join(projectDir, "build", "shell", "sysroot")
 	build.EnsureDir(sysroot)
 
 	// Use a temp dir for src/destdir so the sandbox mounts are valid

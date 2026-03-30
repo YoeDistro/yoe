@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	yoe "github.com/YoeDistro/yoe-ng/internal"
+	"github.com/YoeDistro/yoe-ng/internal/resolve"
 )
 
 // SandboxConfig defines the bubblewrap sandbox for a unit build.
@@ -168,18 +169,45 @@ func containerMountsForBuild(cfg *SandboxConfig) []yoe.Mount {
 	return mounts
 }
 
-// SysrootDir returns the shared build sysroot path for a project.
-func SysrootDir(projectDir string) string {
-	return filepath.Join(projectDir, "build", "sysroot")
+// StageSysroot hardlinks a unit's destdir into its sysroot staging area
+// so downstream units can include it in their per-unit sysroots.
+func StageSysroot(destDir, buildDir string) error {
+	stageDir := filepath.Join(buildDir, "sysroot-stage")
+	os.RemoveAll(stageDir)
+	if err := os.MkdirAll(stageDir, 0755); err != nil {
+		return err
+	}
+	cmd := exec.Command("cp", "-al", destDir+"/.", stageDir+"/")
+	if err := cmd.Run(); err != nil {
+		// Fall back to regular copy if hardlinks fail (e.g., cross-device)
+		cmd = exec.Command("cp", "-a", destDir+"/.", stageDir+"/")
+		return cmd.Run()
+	}
+	return nil
 }
 
-// InstallToSysroot copies a unit's destdir contents into the shared sysroot.
-func InstallToSysroot(destDir, sysrootDir string) error {
+// AssembleSysroot merges the sysroot-stage dirs of all transitive deps
+// into a unit's private sysroot.
+func AssembleSysroot(sysrootDir string, dag *resolve.DAG, unit string, projectDir string) error {
+	os.RemoveAll(sysrootDir)
 	if err := os.MkdirAll(sysrootDir, 0755); err != nil {
 		return err
 	}
-	cmd := exec.Command("cp", "-a", destDir+"/.", sysrootDir+"/")
-	return cmd.Run()
+	for _, dep := range dag.TransitiveDeps(unit) {
+		stageDir := filepath.Join(UnitBuildDir(projectDir, dep), "sysroot-stage")
+		if _, err := os.Stat(stageDir); err != nil {
+			continue // dep has no staged output (e.g., image)
+		}
+		cmd := exec.Command("cp", "-al", stageDir+"/.", sysrootDir+"/")
+		if err := cmd.Run(); err != nil {
+			// Fall back to regular copy
+			cmd = exec.Command("cp", "-a", stageDir+"/.", sysrootDir+"/")
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf("merging sysroot from %s: %w", dep, err)
+			}
+		}
+	}
+	return nil
 }
 
 // EnsureDir creates a directory if it doesn't exist.

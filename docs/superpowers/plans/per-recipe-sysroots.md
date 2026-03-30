@@ -10,8 +10,39 @@ build container. When a unit like util-linux builds, autoconf's `expr` calls
 resolve to the sysroot's broken busybox symlink instead of the container's GNU
 coreutils `expr`, causing an infinite loop and fd exhaustion.
 
+The busybox build itself also breaks on a second run: `gen_build_files.sh` uses
+`find` to locate `Config.src` files, but the sysroot's broken busybox `find`
+symlink (first on `PATH`) shadows the container's GNU find. The `Config.in`
+files never get generated and `make defconfig` fails with
+`can't open file "libbb/Config.in"`.
+
 The root cause is architectural: the sysroot should only contain artifacts from
 a unit's declared `deps`, not from every previously-built unit.
+
+## Prior art
+
+**Yocto/OE** switched from a shared sysroot to per-recipe sysroots in version
+2.4 (Rocko, 2017) for exactly these reasons. Each recipe gets two private
+sysroots (`recipe-sysroot/` for target headers/libs, `recipe-sysroot-native/`
+for host tools), populated via hardlinks from each dep's `sysroot-destdir/`. A
+manifest tracks which files came from which dep, so rebuilding a dep only
+replaces its files. Yocto also filters what enters the sysroot via
+`SYSROOT_DIRS` — target recipes export only headers, libraries, and data files;
+native recipes also export binaries.
+
+**Buildroot** uses a shared staging directory but avoids contamination through a
+three-directory split: `HOST_DIR` (build tools, on `PATH`), `STAGING_DIR`
+(target headers/libs, only via `--sysroot`/`-I`/`-L`, never on `PATH`), and
+`TARGET_DIR` (final rootfs). Busybox only installs to `TARGET_DIR`, never to
+`STAGING_DIR`. This works by convention but doesn't enforce correct dependency
+declarations.
+
+**Nix/Guix and Bazel** are the strictest — every derivation/action gets an
+isolated environment with only declared inputs visible.
+
+The per-unit sysroot approach gives yoe-ng Yocto-level isolation with less
+complexity (no `SYSROOT_DIRS` filtering needed — the unit's `deps` list is the
+filter).
 
 ## Design
 
@@ -167,13 +198,22 @@ func (d *DAG) TransitiveDeps(name string) []string {
 ## Performance consideration
 
 Assembling per-unit sysroots via `cp -a` for each unit adds I/O. For units with
-many transitive deps, this could be noticeable. Mitigations (implement later if
-needed):
+many transitive deps, this could be noticeable. Options in order of preference:
 
-- Use hardlinks (`cp -al`) instead of copies (same filesystem)
-- Use overlayfs to layer deps (avoids copying entirely)
+1. **Hardlinks (`cp -al`)** — same filesystem, zero copy, fast to create. This
+   is what Yocto uses. Preferred first implementation since it's simple and
+   handles the common case well. Requires same filesystem for build dirs (already
+   true).
+2. **Overlayfs** — layer deps without copying. Would require root or user
+   namespaces. More complex but zero disk overhead.
+3. **Bind mounts via bwrap** — compose the sysroot inside the sandbox by
+   bind-mounting each dep's staged output into the right path. Zero copies, zero
+   disk overhead, and bwrap already supports `--ro-bind`. However, this
+   complicates the bwrap invocation when there are many deps and doesn't give us
+   a sysroot on the host for debugging.
 
-Start with `cp -a` for correctness; optimize if profiling shows it matters.
+Start with hardlinks (`cp -al`) for correctness and simplicity; optimize later
+if profiling shows it matters.
 
 ## Verification
 
