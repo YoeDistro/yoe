@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"os/exec"
 	"os/user"
@@ -71,6 +72,13 @@ func RunInContainer(cfg ContainerRunConfig) error {
 		return err
 	}
 
+	// Assign a unique container name so we can stop it on cancellation.
+	// docker run --rm + docker stop is safe: --rm removes the container
+	// after it exits, and docker stop gracefully terminates it.
+	name := fmt.Sprintf("yoe-%d", rand.Int())
+	// Insert --name after "run" (args[0])
+	args = append(args[:1], append([]string{"--name", name}, args[1:]...)...)
+
 	args = append(args, cfg.Command)
 
 	stderr := cfg.Stderr
@@ -83,7 +91,23 @@ func RunInContainer(cfg ContainerRunConfig) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	cmd := exec.CommandContext(ctx, runtime, args...)
+
+	// When the context is cancelled, stop the container explicitly.
+	// exec.CommandContext only kills the docker CLI client, not the
+	// container itself.
+	done := make(chan struct{})
+	if ctx != context.Background() {
+		go func() {
+			select {
+			case <-ctx.Done():
+				//nolint:gosec // best-effort cleanup
+				exec.Command(runtime, "stop", "-t", "3", name).Run()
+			case <-done:
+			}
+		}()
+	}
+
+	cmd := exec.Command(runtime, args...)
 	cmd.Stdout = cfg.Stdout
 	if cmd.Stdout == nil {
 		cmd.Stdout = os.Stdout
@@ -93,7 +117,14 @@ func RunInContainer(cfg ContainerRunConfig) error {
 		cmd.Stdin = os.Stdin
 	}
 
-	return cmd.Run()
+	err = cmd.Run()
+	close(done)
+
+	// If the context was cancelled, the error is expected.
+	if ctx.Err() != nil {
+		return fmt.Errorf("build cancelled")
+	}
+	return err
 }
 
 // containerRunArgs builds the docker/podman run arguments (without the
