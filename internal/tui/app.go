@@ -81,9 +81,12 @@ type model struct {
 	statuses   map[string]unitStatus
 	cursor     int
 	view       viewKind
-	detailUnit  string
-	outputLines []string // executor output (.output.log)
-	logLines    []string // build log (build.log)
+	detailUnit   string
+	outputLines  []string // executor output (.output.log)
+	logLines     []string // build log (build.log)
+	detailScroll int      // scroll offset from top in detail view
+	autoFollow   bool     // auto-scroll to bottom during builds
+	listOffset   int      // first visible row in unit list
 	tick       bool // toggles for flashing indicator
 	width      int
 	height     int
@@ -226,17 +229,24 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "up", "k":
 		m.cursor = m.prevVisible()
+		m.adjustListOffset()
 		return m, nil
 
 	case "down", "j":
 		m.cursor = m.nextVisible()
+		m.adjustListOffset()
 		return m, nil
 
 	case "enter":
 		if m.cursor < len(m.units) {
 			m.detailUnit = m.units[m.cursor]
 			m.view = viewDetail
+			m.autoFollow = true
+			m.detailScroll = 0
 			m.refreshDetail()
+			if m.autoFollow {
+				m.scrollToBottom()
+			}
 		}
 		return m, nil
 
@@ -395,6 +405,8 @@ func (m *model) applyFilter() {
 	if len(m.filtered) > 0 {
 		m.cursor = m.filtered[0]
 	}
+	m.listOffset = 0
+	m.adjustListOffset()
 }
 
 func (m model) visibleIndices() []int {
@@ -467,12 +479,62 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.detailUnit = ""
 		m.outputLines = nil
 		m.logLines = nil
+		m.detailScroll = 0
 		return m, nil
 
 	case "q", "ctrl+c":
 		return m, tea.Quit
 
+	case "up", "k":
+		m.autoFollow = false
+		if m.detailScroll > 0 {
+			m.detailScroll--
+		}
+		return m, nil
+
+	case "down", "j":
+		maxScroll := m.detailMaxScroll()
+		if m.detailScroll < maxScroll {
+			m.detailScroll++
+		}
+		if m.detailScroll >= maxScroll {
+			m.autoFollow = true
+		}
+		return m, nil
+
+	case "pgup":
+		m.autoFollow = false
+		page := m.detailViewportHeight()
+		m.detailScroll -= page
+		if m.detailScroll < 0 {
+			m.detailScroll = 0
+		}
+		return m, nil
+
+	case "pgdown":
+		page := m.detailViewportHeight()
+		maxScroll := m.detailMaxScroll()
+		m.detailScroll += page
+		if m.detailScroll > maxScroll {
+			m.detailScroll = maxScroll
+		}
+		if m.detailScroll >= maxScroll {
+			m.autoFollow = true
+		}
+		return m, nil
+
+	case "G":
+		m.autoFollow = true
+		m.scrollToBottom()
+		return m, nil
+
+	case "g":
+		m.autoFollow = false
+		m.detailScroll = 0
+		return m, nil
+
 	case "b":
+		m.autoFollow = true
 		return m, m.startBuild(m.detailUnit)
 
 	case "d":
@@ -543,8 +605,19 @@ func (m model) viewUnits() string {
 		}
 	}
 
-	// Unit list
-	for _, i := range visible {
+	// Calculate visible window for unit list
+	maxRows := m.listViewportHeight()
+	end := m.listOffset + maxRows
+	if end > len(visible) {
+		end = len(visible)
+	}
+
+	if m.listOffset > 0 {
+		b.WriteString(dimStyle.Render(fmt.Sprintf("  ↑ %d more", m.listOffset)))
+		b.WriteString("\n")
+	}
+
+	for _, i := range visible[m.listOffset:end] {
 		name := m.units[i]
 		cursor := "  "
 		nameStyle := dimStyle
@@ -567,6 +640,11 @@ func (m model) viewUnits() string {
 			nameStyle.Render(paddedName),
 			dimStyle.Render(paddedClass),
 			status))
+	}
+
+	if end < len(visible) {
+		b.WriteString(dimStyle.Render(fmt.Sprintf("  ↓ %d more", len(visible)-end)))
+		b.WriteString("\n")
 	}
 
 	// Search bar or help bar
@@ -602,42 +680,77 @@ func (m model) viewDetail() string {
 		titleStyle.Render(m.detailUnit),
 		status))
 
-	// Top half: executor output (dep progress)
-	b.WriteString(headerStyle.Render("  BUILD OUTPUT"))
-	b.WriteString("\n")
+	// Build combined content lines for scrolling
+	var allLines []string
+
+	// Build output section
+	allLines = append(allLines, headerStyle.Render("  BUILD OUTPUT"))
 	if len(m.outputLines) == 0 {
-		b.WriteString(dimStyle.Render("  (no output yet)"))
-		b.WriteString("\n")
+		allLines = append(allLines, dimStyle.Render("  (no output yet)"))
 	} else {
 		for _, line := range m.outputLines {
-			b.WriteString("  ")
-			b.WriteString(line)
-			b.WriteString("\n")
+			allLines = append(allLines, "  "+line)
 		}
 	}
 
 	// Separator
-	b.WriteString("\n")
+	allLines = append(allLines, "")
 
-	// Bottom half: build log (compile output)
-	b.WriteString(headerStyle.Render("  BUILD LOG"))
-	b.WriteString("\n")
+	// Build log section
+	allLines = append(allLines, headerStyle.Render("  BUILD LOG"))
 	if len(m.logLines) == 0 {
-		b.WriteString(dimStyle.Render("  (no build log)"))
-		b.WriteString("\n")
+		allLines = append(allLines, dimStyle.Render("  (no build log)"))
 	} else {
 		for _, line := range m.logLines {
-			b.WriteString("  ")
-			b.WriteString(line)
-			b.WriteString("\n")
+			allLines = append(allLines, "  "+line)
 		}
 	}
 
-	// Help bar
+	// Calculate visible window
+	viewH := m.detailViewportHeight()
+	start := m.detailScroll
+	if start > len(allLines)-viewH {
+		start = len(allLines) - viewH
+	}
+	if start < 0 {
+		start = 0
+	}
+	end := start + viewH
+	if end > len(allLines) {
+		end = len(allLines)
+	}
+
+	for _, line := range allLines[start:end] {
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+
+	// Pad remaining lines so help bar stays at bottom
+	rendered := end - start
+	for i := rendered; i < viewH; i++ {
+		b.WriteString("\n")
+	}
+
+	// Scroll indicator
+	scrollInfo := ""
+	if len(allLines) > viewH {
+		pct := 100
+		if len(allLines)-viewH > 0 {
+			pct = start * 100 / (len(allLines) - viewH)
+		}
+		if m.autoFollow {
+			scrollInfo = dimStyle.Render(fmt.Sprintf("  [auto-follow] %d%%", pct))
+		} else {
+			scrollInfo = dimStyle.Render(fmt.Sprintf("  [%d/%d] %d%%", start+1, len(allLines), pct))
+		}
+	}
+	b.WriteString(scrollInfo)
 	b.WriteString("\n")
-	help := "  esc back  b build  d diagnose  l log"
+
+	// Help bar
+	help := "  esc back  j/k scroll  g top  G bottom  b build  d diagnose  l log"
 	if u, ok := m.proj.Units[m.detailUnit]; ok && u.Class == "image" {
-		help = "  esc back  b build  r run  d diagnose  l log"
+		help = "  esc back  j/k scroll  g top  G bottom  b build  r run  d diagnose  l log"
 	}
 	b.WriteString(helpStyle.Render(help))
 	b.WriteString("\n")
@@ -727,14 +840,93 @@ func (m model) execEditor(path string) tea.Cmd {
 }
 
 func (m *model) refreshDetail() {
-	half := (m.height - 6) / 2
-	if half < 5 {
-		half = 10
-	}
 	outputPath := filepath.Join(m.projectDir, "build", m.detailUnit, ".output.log")
-	m.outputLines = readFileTail(outputPath, half)
+	m.outputLines = readFileAll(outputPath)
 	logPath := filepath.Join(m.projectDir, "build", m.detailUnit, "build.log")
-	m.logLines = readFileTail(logPath, half)
+	m.logLines = readFileAll(logPath)
+	if m.autoFollow {
+		m.scrollToBottom()
+	}
+}
+
+// detailViewportHeight returns the number of content lines visible in detail view.
+// Reserves lines for: header (2) + scroll indicator (1) + help bar (1) + message (2) + padding (1).
+func (m model) detailViewportHeight() int {
+	h := m.height - 7
+	if h < 5 {
+		h = 5
+	}
+	return h
+}
+
+// detailTotalLines returns the total number of lines in the combined detail content.
+func (m model) detailTotalLines() int {
+	n := 1 // BUILD OUTPUT header
+	if len(m.outputLines) == 0 {
+		n++ // "(no output yet)"
+	} else {
+		n += len(m.outputLines)
+	}
+	n++ // separator
+	n++ // BUILD LOG header
+	if len(m.logLines) == 0 {
+		n++ // "(no build log)"
+	} else {
+		n += len(m.logLines)
+	}
+	return n
+}
+
+// detailMaxScroll returns the maximum scroll offset for the detail view.
+func (m model) detailMaxScroll() int {
+	max := m.detailTotalLines() - m.detailViewportHeight()
+	if max < 0 {
+		return 0
+	}
+	return max
+}
+
+// scrollToBottom sets the scroll position to the end of content.
+func (m *model) scrollToBottom() {
+	m.detailScroll = m.detailMaxScroll()
+}
+
+// adjustListOffset ensures the cursor is visible within the unit list viewport.
+func (m *model) adjustListOffset() {
+	visible := m.visibleIndices()
+	maxRows := m.listViewportHeight()
+
+	cursorPos := -1
+	for vi, i := range visible {
+		if i == m.cursor {
+			cursorPos = vi
+			break
+		}
+	}
+	if cursorPos < 0 {
+		return
+	}
+	if cursorPos < m.listOffset {
+		m.listOffset = cursorPos
+	}
+	if cursorPos >= m.listOffset+maxRows {
+		m.listOffset = cursorPos - maxRows + 1
+	}
+	if m.listOffset > len(visible)-maxRows {
+		m.listOffset = len(visible) - maxRows
+	}
+	if m.listOffset < 0 {
+		m.listOffset = 0
+	}
+}
+
+// listViewportHeight returns the number of unit rows that fit on screen.
+func (m model) listViewportHeight() int {
+	h := m.height - 8
+	if h < 5 {
+		h = 5
+	}
+	return h
 }
 
 func findUnitFile(projectDir, name string) string {
@@ -795,7 +987,7 @@ func findUnitFile(projectDir, name string) string {
 	return ""
 }
 
-func readFileTail(path string, n int) []string {
+func readFileAll(path string) []string {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil
@@ -804,12 +996,10 @@ func readFileTail(path string, n int) []string {
 
 	var lines []string
 	scanner := bufio.NewScanner(f)
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 1024*1024) // handle long lines up to 1MB
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())
-	}
-
-	if len(lines) > n {
-		lines = lines[len(lines)-n:]
 	}
 	return lines
 }

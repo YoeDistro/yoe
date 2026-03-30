@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **TUI scrolling** — both the unit list and detail log views are now scrollable.
+  The unit list shows `↑`/`↓` overflow indicators when there are more units than
+  fit on screen. The detail view supports `j`/`k`, `PgUp`/`PgDn`, `g`/`G`
+  navigation through the full build output and log, with auto-follow during
+  active builds.
 - **Auto-sync layers** — `yoe build` and other commands that load the project
   now automatically clone missing layers on first use, matching the lazy
   container-build pattern. Existing cached layers are not fetched/updated, so
