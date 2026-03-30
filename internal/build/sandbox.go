@@ -100,6 +100,46 @@ func bwrapCommand(cfg *SandboxConfig, command string) string {
 	return strings.Join(parts, " ")
 }
 
+// BwrapShellCommand returns a bwrap command string that launches an
+// interactive bash shell with the given sandbox config's mounts and env.
+func BwrapShellCommand(cfg *SandboxConfig) string {
+	var parts []string
+	parts = append(parts, "bwrap", "--die-with-parent")
+
+	if cfg.BuildRoot != "" {
+		parts = append(parts, "--bind", cfg.BuildRoot, "/")
+	} else {
+		parts = append(parts, "--bind", "/", "/")
+	}
+
+	if cfg.Sysroot != "" {
+		parts = append(parts, "--ro-bind", "/build/sysroot", "/build/sysroot")
+	}
+
+	parts = append(parts,
+		"--bind", "/build/src", "/build/src",
+		"--bind", "/build/destdir", "/build/destdir",
+		"--dev-bind", "/dev", "/dev",
+		"--ro-bind", "/proc", "/proc",
+		"--tmpfs", "/tmp",
+		"--chdir", "/build/src",
+	)
+
+	// Export env vars then exec interactive bash
+	var envExports []string
+	for k, v := range cfg.Env {
+		envExports = append(envExports, fmt.Sprintf("export %s=%q", k, v))
+	}
+	envStr := strings.Join(envExports, "; ")
+	if envStr != "" {
+		envStr += "; "
+	}
+	envStr += "exec bash"
+
+	parts = append(parts, "--", "bash", "-c", shellQuote(envStr))
+	return strings.Join(parts, " ")
+}
+
 // shellQuote wraps a string in single quotes for safe embedding in a
 // shell command. Single quotes inside the string are escaped.
 func shellQuote(s string) string {

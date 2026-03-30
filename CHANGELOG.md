@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **`yoe container shell`** — interactive bash shell inside the build container
+  with bwrap sandbox, sysroot mounts, and the same environment variables recipes
+  see during builds. Useful for debugging build failures and sandbox issues.
+
 ## [0.2.9] - 2026-03-30
 
 - **Bash for build commands** — switched build shell from busybox sh to bash.
