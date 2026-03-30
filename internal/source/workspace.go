@@ -21,12 +21,12 @@ import (
 //
 // If the source directory already exists with local commits beyond upstream,
 // it is left untouched (yoe dev workflow).
-func Prepare(projectDir string, unit *yoestar.Unit) (string, error) {
+func Prepare(projectDir string, unit *yoestar.Unit, w io.Writer) (string, error) {
 	srcDir := filepath.Join(projectDir, "build", unit.Name, "src")
 
 	// If source dir exists and has local commits, don't touch it (dev mode)
 	if hasLocalCommits(srcDir) {
-		fmt.Printf("Using local source for %s (has commits beyond upstream)\n", unit.Name)
+		fmt.Fprintf(w, "Using local source for %s (has commits beyond upstream)\n", unit.Name)
 		return srcDir, nil
 	}
 
@@ -35,7 +35,7 @@ func Prepare(projectDir string, unit *yoestar.Unit) (string, error) {
 	}
 
 	// Fetch source into cache
-	cachedPath, err := Fetch(unit)
+	cachedPath, err := Fetch(unit, w)
 	if err != nil {
 		return "", err
 	}

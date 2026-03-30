@@ -154,7 +154,7 @@ func buildOne(proj *yoestar.Project, dag *resolve.DAG, unit *yoestar.Unit, hash 
 	// Prepare source (fetch + extract + patch, or reuse dev source).
 	// Units without a source field (e.g., musl) skip this step.
 	if unit.Source != "" {
-		if _, err := source.Prepare(opts.ProjectDir, unit); err != nil {
+		if _, err := source.Prepare(opts.ProjectDir, unit, w); err != nil {
 			return fmt.Errorf("preparing source: %w", err)
 		}
 	} else {

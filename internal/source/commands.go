@@ -22,7 +22,7 @@ func FetchAll(projectDir string, unitNames []string, w io.Writer) error {
 		if unit.Source == "" {
 			continue
 		}
-		if _, err := Fetch(unit); err != nil {
+		if _, err := Fetch(unit, w); err != nil {
 			return fmt.Errorf("fetching %s: %w", unit.Name, err)
 		}
 	}

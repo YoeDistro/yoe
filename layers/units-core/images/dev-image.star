@@ -21,6 +21,7 @@ image(
         "linux",
         "syslinux",
         # Networking
+        "network-config",
         "openssh",
         "curl",
         # Debug
