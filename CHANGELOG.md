@@ -21,9 +21,10 @@ and this project adheres to
 - **TUI quit confirmation** — quitting the TUI with `q` or `ctrl+c` while
   builds are running now prompts for confirmation before cancelling them and
   exiting, preventing accidental loss of in-progress builds.
-- **Fix build cancellation not stopping containers** — cancelling a build now
-  explicitly stops the Docker container (`docker stop`) instead of only killing
-  the CLI client, which left containers running in the background.
+- **Fix build cancellation not stopping containers** — cancelling a build (via
+  TUI quit or `ctrl+c` on the CLI) now explicitly stops the Docker container
+  (`docker stop`) instead of only killing the CLI client, which left containers
+  running in the background.
 
 ## [0.3.1] - 2026-03-30
 
