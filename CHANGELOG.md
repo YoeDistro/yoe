@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-03-30
+
 - **meson build system support** — added samurai (ninja-compatible build tool),
   meson, and kmod recipes. Container updated to v11 with python3 and
   py3-setuptools for meson. Build environment now sets `PYTHONPATH` to the
