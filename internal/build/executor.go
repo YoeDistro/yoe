@@ -73,6 +73,18 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		}
 	}
 
+	// Pre-scan: emit cached/waiting status for all units so the TUI
+	// can show the full build queue before any work starts.
+	for _, name := range order {
+		hash := hashes[name]
+		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
+		if !forceThis && !opts.NoCache && IsBuildCached(opts.ProjectDir, name, hash) {
+			notify(name, "cached")
+		} else {
+			notify(name, "waiting")
+		}
+	}
+
 	// Build in order
 	for _, name := range order {
 		unit := proj.Units[name]
@@ -85,7 +97,6 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		if !forceThis && !opts.NoCache {
 			if IsBuildCached(opts.ProjectDir, name, hash) {
 				fmt.Fprintf(w, "%-20s [cached] %s\n", name, hash[:12])
-				notify(name, "cached")
 				continue
 			}
 		}

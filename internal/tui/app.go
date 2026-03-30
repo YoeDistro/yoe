@@ -163,6 +163,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.status {
 		case "cached", "done":
 			m.statuses[msg.unit] = statusCached
+		case "waiting":
+			m.statuses[msg.unit] = statusWaiting
 		case "building":
 			m.statuses[msg.unit] = statusBuilding
 		case "failed":
