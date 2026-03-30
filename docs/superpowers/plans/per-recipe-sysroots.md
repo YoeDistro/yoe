@@ -202,8 +202,8 @@ many transitive deps, this could be noticeable. Options in order of preference:
 
 1. **Hardlinks (`cp -al`)** — same filesystem, zero copy, fast to create. This
    is what Yocto uses. Preferred first implementation since it's simple and
-   handles the common case well. Requires same filesystem for build dirs (already
-   true).
+   handles the common case well. Requires same filesystem for build dirs
+   (already true).
 2. **Overlayfs** — layer deps without copying. Would require root or user
    namespaces. More complex but zero disk overhead.
 3. **Bind mounts via bwrap** — compose the sysroot inside the sandbox by
