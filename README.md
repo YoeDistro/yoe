@@ -228,8 +228,9 @@ This is where Yoe-NG tooling (written in Go) provides value — similar to what
 
 The Yoe-NG CLI tool handles:
 
-- **TUI** — interactive interface for common workflows (configure a build,
-  select a machine, build an image, flash to SD card).
+- **TUI** — run `yoe` with no arguments for an interactive unit list with inline
+  build status, background builds, search, and quick actions (edit, diagnose,
+  clean).
 - **Build orchestration** — invoke language-native build tools in the right
   order, manage caching, assemble outputs. See
   [The `yoe` Tool](docs/yoe-tool.md) for the full CLI reference.

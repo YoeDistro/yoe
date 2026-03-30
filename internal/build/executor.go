@@ -15,6 +15,12 @@ import (
 )
 
 // Options controls build behavior.
+// BuildEvent is sent to Options.OnEvent during a build.
+type BuildEvent struct {
+	Unit   string
+	Status string // "cached", "building", "done", "failed"
+}
+
 type Options struct {
 	Force      bool   // rebuild even if cached
 	Clean      bool   // delete build dir before rebuilding (implies Force)
@@ -23,6 +29,7 @@ type Options struct {
 	Verbose    bool   // show build output in console (default: log only)
 	ProjectDir string // project root
 	Arch       string // target architecture
+	OnEvent    func(BuildEvent) // optional callback for build progress
 }
 
 // BuildUnits builds the specified units (or all if names is empty).
@@ -60,6 +67,12 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		return dryRun(w, proj, order, hashes, opts, requested)
 	}
 
+	notify := func(unit, status string) {
+		if opts.OnEvent != nil {
+			opts.OnEvent(BuildEvent{Unit: unit, Status: status})
+		}
+	}
+
 	// Build in order
 	for _, name := range order {
 		unit := proj.Units[name]
@@ -70,21 +83,25 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
 
 		if !forceThis && !opts.NoCache {
-			if isBuildCached(opts.ProjectDir, name, hash) {
+			if IsBuildCached(opts.ProjectDir, name, hash) {
 				fmt.Fprintf(w, "%-20s [cached] %s\n", name, hash[:12])
+				notify(name, "cached")
 				continue
 			}
 		}
 
 		fmt.Fprintf(w, "%-20s [building]\n", name)
+		notify(name, "building")
 
 		if err := buildOne(proj, unit, hash, opts, w); err != nil {
+			notify(name, "failed")
 			return fmt.Errorf("building %s: %w", name, err)
 		}
 
 		// Write cache marker
 		writeCacheMarker(opts.ProjectDir, name, hash)
 		fmt.Fprintf(w, "%-20s [done] %s\n", name, hash[:12])
+		notify(name, "done")
 	}
 
 	return nil
@@ -295,7 +312,7 @@ func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[strin
 		unit := proj.Units[name]
 		cached := ""
 		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
-		if !forceThis && isBuildCached(opts.ProjectDir, name, hashes[name]) {
+		if !forceThis && IsBuildCached(opts.ProjectDir, name, hashes[name]) {
 			cached = " [cached, skip]"
 		}
 		fmt.Fprintf(w, "  %-20s [%s] %s%s\n", name, unit.Class, hashes[name][:12], cached)
@@ -305,20 +322,25 @@ func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[strin
 
 // --- Simple file-based cache ---
 
-func cacheMarkerPath(projectDir, name, hash string) string {
+func CacheMarkerPath(projectDir, name, hash string) string {
 	return filepath.Join(projectDir, "build", name, ".yoe-hash")
 }
 
-func isBuildCached(projectDir, name, hash string) bool {
-	data, err := os.ReadFile(cacheMarkerPath(projectDir, name, hash))
+func IsBuildCached(projectDir, name, hash string) bool {
+	data, err := os.ReadFile(CacheMarkerPath(projectDir, name, hash))
 	if err != nil {
 		return false
 	}
 	return string(data) == hash
 }
 
+func HasBuildLog(projectDir, name string) bool {
+	_, err := os.Stat(filepath.Join(projectDir, "build", name, "build.log"))
+	return err == nil
+}
+
 func writeCacheMarker(projectDir, name, hash string) {
-	path := cacheMarkerPath(projectDir, name, hash)
+	path := CacheMarkerPath(projectDir, name, hash)
 	EnsureDir(filepath.Dir(path))
 	os.WriteFile(path, []byte(hash), 0644)
 }

@@ -117,7 +117,7 @@ func TestCacheMarker(t *testing.T) {
 	hash := "abc123def456"
 
 	// Not cached initially
-	if isBuildCached(dir, name, hash) {
+	if IsBuildCached(dir, name, hash) {
 		t.Error("should not be cached initially")
 	}
 
@@ -125,12 +125,12 @@ func TestCacheMarker(t *testing.T) {
 	writeCacheMarker(dir, name, hash)
 
 	// Now cached
-	if !isBuildCached(dir, name, hash) {
+	if !IsBuildCached(dir, name, hash) {
 		t.Error("should be cached after writing marker")
 	}
 
 	// Different hash not cached
-	if isBuildCached(dir, name, "different") {
+	if IsBuildCached(dir, name, "different") {
 		t.Error("different hash should not be cached")
 	}
 }
@@ -231,7 +231,7 @@ func TestBuildUnits_WithDeps(t *testing.T) {
 	}
 
 	// Verify cache marker was written
-	if !isBuildCached(projectDir, "hello", "") {
+	if !IsBuildCached(projectDir, "hello", "") {
 		// The hash won't be "" — just verify the marker file exists
 		markerDir := filepath.Join(projectDir, "build", "hello")
 		entries, _ := os.ReadDir(markerDir)

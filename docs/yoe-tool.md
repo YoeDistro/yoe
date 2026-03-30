@@ -519,31 +519,82 @@ yoe graph --stale
 
 ### `yoe` (no args)
 
-Running `yoe` with no arguments launches an interactive terminal UI for common
-workflows.
+Running `yoe` with no arguments launches an interactive terminal UI showing all
+units with their build status.
 
 ```
-┌─ Yoe-NG ─────────────────────────────────────────────┐
-│                                                       │
-│  Machine: beaglebone-black    Image: base             │
-│                                                       │
-│  [B] Build packages                                   │
-│  [I] Build image                                      │
-│  [F] Flash to device                                  │
-│  [R] Repository status                                │
-│  [M] Select machine                                   │
-│  [C] Configuration                                    │
-│  [L] Build log                                        │
-│                                                       │
-│  Packages: 23 built, 2 outdated                       │
-│  Last image: 2026-03-19 14:32                         │
-│                                                       │
-└───────────────────────────────────────────────────────┘
+  Yoe-NG  Machine: qemu-x86_64  Image: base-image
+
+  NAME                         CLASS        STATUS
+→ base-files                   unit         ● cached
+  busybox                      unit         ● cached
+  linux                        unit         ▌building...
+  musl                         unit         ● waiting
+  ncurses                      autotools    ● cached
+  openssh                      unit         ● failed
+  openssl                      autotools    ● cached
+  util-linux                   autotools
+  zlib                         autotools    ● cached
+
+  b build  e edit  d diagnose  l log  c clean  / search  q quit
 ```
 
-The TUI is built with [Bubble Tea](https://github.com/charmbracelet/bubbletea)
-and provides real-time build progress, log streaming, and interactive selection
-of machines/images/units.
+#### Status indicators
+
+| Indicator        | Color          | Meaning                      |
+| ---------------- | -------------- | ---------------------------- |
+| (none)           | —              | Never built                  |
+| `● cached`       | dim/gray       | Built and cached             |
+| `● waiting`      | yellow         | Queued, deps building first  |
+| `▌building...`   | flashing green | Actively compiling           |
+| `● failed`       | red            | Last build failed            |
+
+When you build a unit, its dependencies appear as "waiting" (yellow), then
+transition to "building" (flashing green) as the executor reaches them. Multiple
+deps can flash green simultaneously.
+
+#### Key bindings (unit list)
+
+| Key     | Action                                               |
+| ------- | ---------------------------------------------------- |
+| `b`     | Build selected unit in background                    |
+| `e`     | Open unit's `.star` file in `$EDITOR`                |
+| `d`     | Launch `claude diagnose` for the unit                |
+| `l`     | Open unit's build log in `$EDITOR`                   |
+| `a`     | Launch `claude /new-unit`                            |
+| `c`     | Clean selected unit's build artifacts (with confirm) |
+| `/`     | Search/filter units by name                          |
+| `Enter` | Show detail view (build output + log tail)           |
+| `B`     | Build all units in background                        |
+| `C`     | Clean all build artifacts (with confirm)             |
+| `j/k`   | Navigate up/down                                     |
+| `q`     | Quit                                                 |
+
+#### Detail view
+
+Pressing Enter on a unit shows a split-pane detail view:
+
+- **BUILD OUTPUT** (top) — executor progress: dependency resolution, cache hits,
+  build status for each dep
+- **BUILD LOG** (bottom) — tail of the unit's `build.log`, updated in real time
+  during a build
+
+| Key   | Action                            |
+| ----- | --------------------------------- |
+| `Esc` | Return to unit list               |
+| `b`   | Build this unit in background     |
+| `d`   | Launch `claude diagnose`          |
+| `l`   | Open build log in `$EDITOR`       |
+
+#### Search
+
+Press `/` to enter search mode. Type to filter — only matching units are shown.
+Press Enter to accept the filter, Esc to cancel and show all units.
+
+Builds call `build.BuildUnits()` directly (in-process, no subprocess). The
+executor sends events to the TUI as each unit starts and finishes building.
+
+The TUI is built with [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
 ### `yoe log`
 
