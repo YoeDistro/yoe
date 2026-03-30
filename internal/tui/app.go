@@ -237,6 +237,46 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.adjustListOffset()
 		return m, nil
 
+	case "pgup":
+		vis := m.visibleIndices()
+		page := m.listViewportHeight()
+		cursorPos := 0
+		for vi, i := range vis {
+			if i == m.cursor {
+				cursorPos = vi
+				break
+			}
+		}
+		newPos := cursorPos - page
+		if newPos < 0 {
+			newPos = 0
+		}
+		if len(vis) > 0 {
+			m.cursor = vis[newPos]
+		}
+		m.adjustListOffset()
+		return m, nil
+
+	case "pgdown":
+		vis := m.visibleIndices()
+		page := m.listViewportHeight()
+		cursorPos := 0
+		for vi, i := range vis {
+			if i == m.cursor {
+				cursorPos = vi
+				break
+			}
+		}
+		newPos := cursorPos + page
+		if newPos >= len(vis) {
+			newPos = len(vis) - 1
+		}
+		if len(vis) > 0 {
+			m.cursor = vis[newPos]
+		}
+		m.adjustListOffset()
+		return m, nil
+
 	case "enter":
 		if m.cursor < len(m.units) {
 			m.detailUnit = m.units[m.cursor]
