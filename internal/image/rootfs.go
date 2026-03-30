@@ -52,7 +52,8 @@ func Assemble(unit *yoestar.Unit, proj *yoestar.Project, projectDir, outputDir s
 }
 
 // resolvePackageDeps expands a list of package names to include all transitive
-// dependencies (both build and runtime). The returned list is in dependency
+// runtime dependencies. Build-time-only deps (unit.Deps) are excluded — they
+// are needed to compile but not to run. The returned list is in dependency
 // order (deps before dependents), with image-class units excluded.
 func resolvePackageDeps(packages []string, proj *yoestar.Project) []string {
 	seen := make(map[string]bool)
@@ -69,9 +70,6 @@ func resolvePackageDeps(packages []string, proj *yoestar.Project) []string {
 			// Skip image units — they aren't installable artifacts
 			if unit.Class == "image" {
 				return
-			}
-			for _, dep := range unit.Deps {
-				walk(dep)
 			}
 			for _, dep := range unit.RuntimeDeps {
 				walk(dep)
