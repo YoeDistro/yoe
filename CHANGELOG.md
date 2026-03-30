@@ -25,6 +25,9 @@ and this project adheres to
   TUI quit or `ctrl+c` on the CLI) now explicitly stops the Docker container
   (`docker stop`) instead of only killing the CLI client, which left containers
   running in the background.
+- **Fix stale cache after cancelled builds** — the cache marker is now removed
+  before building so a cancelled or failed rebuild no longer appears cached from
+  a previous successful build.
 
 ## [0.3.1] - 2026-03-30
 
