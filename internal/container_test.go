@@ -31,8 +31,8 @@ func TestContainerRunArgs_Basic(t *testing.T) {
 	if last3[0] != containerTag() {
 		t.Errorf("expected image tag %q, got %q", containerTag(), last3[0])
 	}
-	if last3[1] != "sh" || last3[2] != "-c" {
-		t.Errorf("expected 'sh -c', got %v", last3)
+	if last3[1] != "bash" || last3[2] != "-c" {
+		t.Errorf("expected 'bash -c', got %v", last3)
 	}
 }
 

@@ -96,7 +96,7 @@ func bwrapCommand(cfg *SandboxConfig, command string) string {
 	}
 	fullCmd += command
 
-	parts = append(parts, "--", "sh", "-c", shellQuote(fullCmd))
+	parts = append(parts, "--", "bash", "-c", shellQuote(fullCmd))
 	return strings.Join(parts, " ")
 }
 
