@@ -79,7 +79,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "Yoe-NG embedded Linux distribution builder\n\n")
 	fmt.Fprintf(os.Stderr, "Commands:\n")
 	fmt.Fprintf(os.Stderr, "  init <project-dir>      Create a new Yoe-NG project\n")
-	fmt.Fprintf(os.Stderr, "  container               Manage the build container (build, status)\n")
+	fmt.Fprintf(os.Stderr, "  container               Manage the build container (build, shell, status)\n")
 	fmt.Fprintf(os.Stderr, "  build [recipes...]      Build recipes (--force, --clean, --verbose, --dry-run)\n")
 	fmt.Fprintf(os.Stderr, "  dev                     Manage source modifications (extract, diff, status)\n")
 	fmt.Fprintf(os.Stderr, "  flash <device>          Write an image to a device/SD card\n")
@@ -202,7 +202,7 @@ func projectDir() string {
 
 func cmdContainer(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s container <build|status>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s container <build|shell|status>\n", os.Args[0])
 		os.Exit(1)
 	}
 
@@ -213,6 +213,8 @@ func cmdContainer(args []string) {
 			os.Exit(1)
 		}
 		fmt.Printf("Container image yoe-ng:%s built successfully\n", yoe.ContainerVersion())
+	case "shell":
+		cmdContainerShell()
 	case "status":
 		fmt.Printf("Container version: %s (image: yoe-ng:%s)\n", yoe.ContainerVersion(), yoe.ContainerVersion())
 		if err := yoe.EnsureImage(); err != nil {
@@ -222,6 +224,55 @@ func cmdContainer(args []string) {
 		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown container subcommand: %s\n", args[0])
+		os.Exit(1)
+	}
+}
+
+func cmdContainerShell() {
+	projectDir := projectDir()
+	sysroot := build.SysrootDir(projectDir)
+	build.EnsureDir(sysroot)
+
+	// Use a temp dir for src/destdir so the sandbox mounts are valid
+	srcDir := filepath.Join(projectDir, "build", "shell", "src")
+	destDir := filepath.Join(projectDir, "build", "shell", "destdir")
+	build.EnsureDir(srcDir)
+	build.EnsureDir(destDir)
+
+	cfg := &build.SandboxConfig{
+		SrcDir:     srcDir,
+		DestDir:    destDir,
+		Sysroot:    sysroot,
+		ProjectDir: projectDir,
+		Env: map[string]string{
+			"PREFIX":          "/usr",
+			"DESTDIR":         "/build/destdir",
+			"NPROC":           build.NProc(),
+			"ARCH":            build.Arch(),
+			"HOME":            "/tmp",
+			"PATH":            "/build/sysroot/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+			"PKG_CONFIG_PATH": "/build/sysroot/usr/lib/pkgconfig:/usr/lib/pkgconfig",
+			"CFLAGS":          "-I/build/sysroot/usr/include",
+			"CPPFLAGS":        "-I/build/sysroot/usr/include",
+			"LDFLAGS":         "-L/build/sysroot/usr/lib",
+			"PYTHONPATH":      "/build/sysroot/usr/lib/python3.12/site-packages",
+		},
+	}
+
+	bwrapCmd := build.BwrapShellCommand(cfg)
+	mounts := []yoe.Mount{
+		{Host: srcDir, Container: "/build/src"},
+		{Host: destDir, Container: "/build/destdir"},
+		{Host: sysroot, Container: "/build/sysroot", ReadOnly: true},
+	}
+
+	if err := yoe.RunInContainer(yoe.ContainerRunConfig{
+		Command:     bwrapCmd,
+		ProjectDir:  projectDir,
+		Mounts:      mounts,
+		Interactive: true,
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
