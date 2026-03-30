@@ -12,6 +12,11 @@ and this project adheres to
   Avoids autoconf compatibility issues (e.g., `AS_LINENO_PREPARE` infinite loop)
   and matches what upstream build scripts expect. Removed per-recipe bash
   workaround from util-linux.
+- **User account API** — new `classes/users.star` provides `user()` and
+  `users_commands()` functions for defining user accounts in Starlark.
+  `base-files` is now a callable `base_files()` function that accepts a `users`
+  parameter — image recipes can override it to add users (e.g., dev-image adds a
+  `user` account with password `password`).
 
 ## [0.2.8] - 2026-03-30
 

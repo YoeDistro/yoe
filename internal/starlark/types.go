@@ -121,6 +121,7 @@ type Recipe struct {
 	Services    []string
 	Conffiles   []string
 	Environment map[string]string
+	NoSysroot   bool // skip sysroot install (target-only packages like busybox)
 
 	// Image-specific (class == "image")
 	Packages   []string // packages to install in rootfs
