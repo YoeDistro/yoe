@@ -23,6 +23,10 @@ and this project adheres to
   all `/etc/init.d/S*` scripts at boot.
 - **network-config unit** — new unit that configures a network interface via an
   init script.
+- **Build failure context** — when a unit fails, the output now lists all
+  downstream units blocked by the failure. The TUI shows cached units in blue
+  and displays the full build queue (waiting/cached) before work begins.
+- **dev-image** — added `kmod` and `util-linux` to the development image.
 
 ## [0.3.0] - 2026-03-30
 

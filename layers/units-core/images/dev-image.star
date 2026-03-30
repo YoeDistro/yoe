@@ -18,6 +18,8 @@ image(
         "base-files-dev",
         "busybox",
         "musl",
+        "kmod",
+        "util-linux",
         "linux",
         "syslinux",
         # Networking
