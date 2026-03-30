@@ -12,6 +12,17 @@ and this project adheres to
   transitive `deps`, not every previously built unit. Fixes busybox symlinks
   shadowing container tools (e.g., musl-linked `expr` breaking autoconf).
 - **Run from TUI** — press `r` on an image unit to launch it in QEMU.
+- **Log writer plumbing** — container stdout/stderr in image assembly and source
+  fetch/prepare output now route through the build log writer instead of
+  os.Stdout. Fixes TUI alt-screen corruption during background builds.
+- **Autotools maintainer-mode override** — `make` invocations pass
+  `ACLOCAL=true AUTOCONF=true AUTOMAKE=true AUTOHEADER=true MAKEINFO=true` to
+  prevent re-running versioned autotools (e.g., `aclocal-1.16`) that aren't in
+  the container. Fixes gawk and similar packages.
+- **rcS init script** — `base-files` now includes `/etc/init.d/rcS` which runs
+  all `/etc/init.d/S*` scripts at boot.
+- **network-config unit** — new unit that configures a network interface via an
+  init script.
 
 ## [0.3.0] - 2026-03-30
 

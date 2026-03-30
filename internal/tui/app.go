@@ -25,6 +25,7 @@ var (
 	headerStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14"))
 	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("10"))
 	dimStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	cachedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("12")) // blue
 	failedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
 	buildingStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
 	helpStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
@@ -48,9 +49,10 @@ type unitStatus int
 const (
 	statusNone unitStatus = iota
 	statusCached
-	statusWaiting  // queued, deps building first
-	statusBuilding // actively compiling
+	statusWaiting    // queued, deps building first
+	statusBuilding   // actively compiling
 	statusFailed
+	statusDepFailed  // skipped because a dependency failed
 )
 
 // Messages
@@ -63,7 +65,8 @@ type buildDoneMsg struct {
 
 type buildEventMsg struct {
 	unit   string
-	status string // "cached", "building", "done", "failed"
+	status string // "cached", "building", "done", "failed", "dep-failed"
+	detail string // for "dep-failed": the failed dependency name
 }
 
 type execDoneMsg struct {
@@ -76,8 +79,9 @@ type model struct {
 	projectDir string
 	units      []string
 	hashes     map[string]string
-	statuses   map[string]unitStatus
-	cursor     int
+	statuses    map[string]unitStatus
+	depFailedBy map[string]string // unit → name of the dep that failed
+	cursor      int
 	view       viewKind
 	detailUnit  string
 	outputLines []string // executor output (.output.log)
@@ -122,8 +126,9 @@ func Run(proj *yoestar.Project, projectDir string) error {
 		projectDir: projectDir,
 		units:      units,
 		hashes:     hashes,
-		statuses:   statuses,
-		building:   make(map[string]bool),
+		statuses:    statuses,
+		depFailedBy: make(map[string]string),
+		building:    make(map[string]bool),
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
@@ -166,6 +171,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statuses[msg.unit] = statusBuilding
 		case "failed":
 			m.statuses[msg.unit] = statusFailed
+		case "dep-failed":
+			m.statuses[msg.unit] = statusDepFailed
+			m.depFailedBy[msg.unit] = msg.detail
 		}
 		return m, nil
 
@@ -631,7 +639,7 @@ func (m model) viewDetail() string {
 func (m model) renderStatus(name string) string {
 	switch m.statuses[name] {
 	case statusCached:
-		return dimStyle.Render("● cached")
+		return cachedStyle.Render("● cached")
 	case statusWaiting:
 		return waitingStyle.Render("● waiting")
 	case statusBuilding:
@@ -641,6 +649,9 @@ func (m model) renderStatus(name string) string {
 		return "            " // blank when flashing off
 	case statusFailed:
 		return failedStyle.Render("● failed")
+	case statusDepFailed:
+		dep := m.depFailedBy[name]
+		return failedStyle.Render(fmt.Sprintf("● skipped (dep %s failed)", dep))
 	default:
 		return ""
 	}
@@ -679,6 +690,7 @@ func (m *model) startBuild(name string) tea.Cmd {
 					tuiProgram.Send(buildEventMsg{
 						unit:   ev.Unit,
 						status: ev.Status,
+						detail: ev.Detail,
 					})
 				}
 			},

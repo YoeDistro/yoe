@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/YoeDistro/yoe-ng/internal/image"
 	"github.com/YoeDistro/yoe-ng/internal/artifact"
@@ -18,7 +20,8 @@ import (
 // BuildEvent is sent to Options.OnEvent during a build.
 type BuildEvent struct {
 	Unit   string
-	Status string // "cached", "building", "done", "failed"
+	Status string // "cached", "building", "done", "failed", "dep-failed"
+	Detail string // for "dep-failed": name of the failed dependency
 }
 
 type Options struct {
@@ -67,14 +70,33 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		return dryRun(w, proj, order, hashes, opts, requested)
 	}
 
-	notify := func(unit, status string) {
+	notify := func(unit, status, detail string) {
 		if opts.OnEvent != nil {
-			opts.OnEvent(BuildEvent{Unit: unit, Status: status})
+			opts.OnEvent(BuildEvent{Unit: unit, Status: status, Detail: detail})
 		}
 	}
 
+	// Track failed units so we can skip their dependents
+	failed := make(map[string]bool)
+
 	// Build in order
 	for _, name := range order {
+		// Check if any direct dependency has failed
+		node := dag.Nodes[name]
+		failedDep := ""
+		for _, dep := range node.Deps {
+			if failed[dep] {
+				failedDep = dep
+				break
+			}
+		}
+		if failedDep != "" {
+			failed[name] = true
+			fmt.Fprintf(w, "%-20s [skipped] dependency %s failed\n", name, failedDep)
+			notify(name, "dep-failed", failedDep)
+			continue
+		}
+
 		unit := proj.Units[name]
 		hash := hashes[name]
 
@@ -85,23 +107,34 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		if !forceThis && !opts.NoCache {
 			if IsBuildCached(opts.ProjectDir, name, hash) {
 				fmt.Fprintf(w, "%-20s [cached] %s\n", name, hash[:12])
-				notify(name, "cached")
+				notify(name, "cached", "")
 				continue
 			}
 		}
 
 		fmt.Fprintf(w, "%-20s [building]\n", name)
-		notify(name, "building")
+		notify(name, "building", "")
 
 		if err := buildOne(proj, dag, unit, hash, opts, w); err != nil {
-			notify(name, "failed")
-			return fmt.Errorf("building %s: %w", name, err)
+			failed[name] = true
+			fmt.Fprintf(w, "%-20s [failed] %v\n", name, err)
+			notify(name, "failed", "")
+			continue
 		}
 
 		// Write cache marker
 		writeCacheMarker(opts.ProjectDir, name, hash)
 		fmt.Fprintf(w, "%-20s [done] %s\n", name, hash[:12])
-		notify(name, "done")
+		notify(name, "done", "")
+	}
+
+	if len(failed) > 0 {
+		var names []string
+		for name := range failed {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		return fmt.Errorf("build failed for: %s", strings.Join(names, ", "))
 	}
 
 	return nil
