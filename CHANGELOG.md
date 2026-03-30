@@ -22,6 +22,16 @@ and starting over.
 - **`yoe diagnose`** — launch Claude Code with the `/diagnose` skill to
   analyze a build failure. Uses the most recent build log by default, or a
   specific unit's log with `yoe diagnose <unit>`.
+- **TUI rewrite** — `yoe` with no args launches an interactive unit list with
+  inline build status (cached/waiting/building/failed). Builds run in-process
+  via `build.BuildUnits()` with real-time status events — dependencies show as
+  yellow "waiting", then flash green as they build. Features: background builds
+  (`b`/`B`), edit unit in `$EDITOR` (`e`), view build log (`l`), diagnose with
+  Claude (`d`), add unit with Claude (`a`), clean with confirmation (`c`/`C`),
+  search/filter (`/`), and a split detail view showing executor output and build
+  log tail. The `yoe tui` subcommand has been removed.
+- **Build events** — `build.Options.OnEvent` callback notifies callers (e.g.,
+  the TUI) as each unit transitions through cached/building/done/failed states.
 
 ## [0.2.10] - 2026-03-30
 
