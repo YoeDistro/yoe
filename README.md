@@ -102,6 +102,9 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
   BSP, product, and core layers compose through Starlark `load()` function calls
 - **Image-based device management** — full image updates, OSTree, BDiff
 - **Good SDK story** — binary SDKs, pre-built packages like Chromium
+- **Parallel** — no global lock or global resource, support running concurrent
+  versions of `yoe` concurrently. This is essential for rapid development using
+  AI.
 
 ## 📚 Documentation
 
