@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"sort"
 
 	yoe "github.com/YoeDistro/yoe-ng/internal"
 	"github.com/YoeDistro/yoe-ng/internal/bootstrap"
@@ -63,6 +65,8 @@ func main() {
 		cmdRefs(args)
 	case "graph":
 		cmdGraph(args)
+	case "log":
+		cmdLog(args)
 	case "clean":
 		cmdClean(args)
 	default:
@@ -93,6 +97,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  refs <unit>           Show reverse dependencies\n")
 	fmt.Fprintf(os.Stderr, "  graph                   Visualize the dependency DAG\n")
 	fmt.Fprintf(os.Stderr, "  tui                     Launch the interactive TUI\n")
+	fmt.Fprintf(os.Stderr, "  log [unit] [-e]         Show build log (most recent, or specific unit; -e to edit)\n")
 	fmt.Fprintf(os.Stderr, "  clean                   Remove build artifacts\n")
 	fmt.Fprintf(os.Stderr, "  update                  Update yoe to the latest release\n")
 	fmt.Fprintf(os.Stderr, "  version                 Display version information\n")
@@ -504,6 +509,92 @@ func cmdBootstrap(args []string) {
 		fmt.Fprintf(os.Stderr, "Unknown bootstrap subcommand: %s\n", args[0])
 		os.Exit(1)
 	}
+}
+
+func cmdLog(args []string) {
+	edit := false
+	var unitName string
+
+	for _, a := range args {
+		switch a {
+		case "-e", "--edit":
+			edit = true
+		default:
+			unitName = a
+		}
+	}
+
+	dir := projectDir()
+	var logPath string
+
+	if unitName != "" {
+		logPath = filepath.Join(dir, "build", unitName, "build.log")
+	} else {
+		logPath = findLatestBuildLog(dir)
+	}
+
+	if logPath == "" {
+		fmt.Fprintln(os.Stderr, "No build logs found")
+		os.Exit(1)
+	}
+
+	if edit {
+		editor := os.Getenv("EDITOR")
+		if editor == "" {
+			editor = "vi"
+		}
+		cmd := exec.Command(editor, logPath)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	os.Stdout.Write(data)
+}
+
+func findLatestBuildLog(projectDir string) string {
+	buildDir := filepath.Join(projectDir, "build")
+	entries, err := os.ReadDir(buildDir)
+	if err != nil {
+		return ""
+	}
+
+	type logEntry struct {
+		path    string
+		modTime int64
+	}
+	var logs []logEntry
+
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		p := filepath.Join(buildDir, e.Name(), "build.log")
+		info, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+		logs = append(logs, logEntry{p, info.ModTime().UnixNano()})
+	}
+
+	if len(logs) == 0 {
+		return ""
+	}
+
+	sort.Slice(logs, func(i, j int) bool {
+		return logs[i].modTime > logs[j].modTime
+	})
+	return logs[0].path
 }
 
 func cmdUpdate() {
