@@ -8,11 +8,14 @@ and this project adheres to
 
 ## [Unreleased]
 
-- **Terminology rename** — "recipe" is now "unit" and "package" is now "artifact"
-  throughout the codebase. The Starlark `package()` function is now `unit()`, the
-  image field `packages` is now `artifacts`, and the `recipes/` directory in layers
-  is now `units/`. The `recipes-core` layer is now `units-core`. The Go
-  `internal/packaging` package is now `internal/artifact`.
+**BREAKING CHANGE** - due to rename, recommend deleting any external projects
+and starting over.
+
+- **Terminology rename** — "recipe" is now "unit" and "package" is now
+  "artifact" throughout the codebase. The Starlark `package()` function is now
+  `unit()`, the image field `packages` is now `artifacts`, and the `recipes/`
+  directory in layers is now `units/`. The `recipes-core` layer is now
+  `units-core`. The Go `internal/packaging` package is now `internal/artifact`.
 
 ## [0.2.10] - 2026-03-30
 
