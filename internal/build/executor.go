@@ -5,8 +5,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 
 	"github.com/YoeDistro/yoe-ng/internal/image"
 	"github.com/YoeDistro/yoe-ng/internal/artifact"
@@ -20,8 +18,7 @@ import (
 // BuildEvent is sent to Options.OnEvent during a build.
 type BuildEvent struct {
 	Unit   string
-	Status string // "cached", "building", "done", "failed", "dep-failed"
-	Detail string // for "dep-failed": name of the failed dependency
+	Status string // "cached", "building", "done", "failed"
 }
 
 type Options struct {
@@ -70,33 +67,14 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		return dryRun(w, proj, order, hashes, opts, requested)
 	}
 
-	notify := func(unit, status, detail string) {
+	notify := func(unit, status string) {
 		if opts.OnEvent != nil {
-			opts.OnEvent(BuildEvent{Unit: unit, Status: status, Detail: detail})
+			opts.OnEvent(BuildEvent{Unit: unit, Status: status})
 		}
 	}
 
-	// Track failed units so we can skip their dependents
-	failed := make(map[string]bool)
-
 	// Build in order
 	for _, name := range order {
-		// Check if any direct dependency has failed
-		node := dag.Nodes[name]
-		failedDep := ""
-		for _, dep := range node.Deps {
-			if failed[dep] {
-				failedDep = dep
-				break
-			}
-		}
-		if failedDep != "" {
-			failed[name] = true
-			fmt.Fprintf(w, "%-20s [skipped] dependency %s failed\n", name, failedDep)
-			notify(name, "dep-failed", failedDep)
-			continue
-		}
-
 		unit := proj.Units[name]
 		hash := hashes[name]
 
@@ -107,34 +85,31 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		if !forceThis && !opts.NoCache {
 			if IsBuildCached(opts.ProjectDir, name, hash) {
 				fmt.Fprintf(w, "%-20s [cached] %s\n", name, hash[:12])
-				notify(name, "cached", "")
+				notify(name, "cached")
 				continue
 			}
 		}
 
 		fmt.Fprintf(w, "%-20s [building]\n", name)
-		notify(name, "building", "")
+		notify(name, "building")
 
 		if err := buildOne(proj, dag, unit, hash, opts, w); err != nil {
-			failed[name] = true
-			fmt.Fprintf(w, "%-20s [failed] %v\n", name, err)
-			notify(name, "failed", "")
-			continue
+			notify(name, "failed")
+			// Show which remaining units are blocked by this failure
+			blocked := blockedUnits(dag, name, order)
+			if len(blocked) > 0 {
+				fmt.Fprintf(w, "  the following units depend on %s and cannot be built:\n", name)
+				for _, b := range blocked {
+					fmt.Fprintf(w, "    - %s\n", b)
+				}
+			}
+			return fmt.Errorf("building %s: %w", name, err)
 		}
 
 		// Write cache marker
 		writeCacheMarker(opts.ProjectDir, name, hash)
 		fmt.Fprintf(w, "%-20s [done] %s\n", name, hash[:12])
-		notify(name, "done", "")
-	}
-
-	if len(failed) > 0 {
-		var names []string
-		for name := range failed {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		return fmt.Errorf("build failed for: %s", strings.Join(names, ", "))
+		notify(name, "done")
 	}
 
 	return nil
@@ -337,6 +312,27 @@ func filterBuildOrder(dag *resolve.DAG, fullOrder []string, names []string) ([]s
 		}
 	}
 	return filtered, nil
+}
+
+// blockedUnits returns units remaining in the build order that transitively
+// depend on the failed unit.
+func blockedUnits(dag *resolve.DAG, failed string, order []string) []string {
+	rdeps, err := dag.RdepsOf(failed)
+	if err != nil {
+		return nil
+	}
+	rdepSet := make(map[string]bool, len(rdeps))
+	for _, r := range rdeps {
+		rdepSet[r] = true
+	}
+	// Return in build order for clarity
+	var blocked []string
+	for _, name := range order {
+		if rdepSet[name] {
+			blocked = append(blocked, name)
+		}
+	}
+	return blocked
 }
 
 func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[string]string, opts Options, requested map[string]bool) error {
