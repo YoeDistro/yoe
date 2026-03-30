@@ -304,10 +304,9 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "x":
 		if m.cursor < len(m.units) {
 			name := m.units[m.cursor]
-			if cancel, ok := m.cancels[name]; ok {
-				cancel()
-				delete(m.cancels, name)
-				m.message = fmt.Sprintf("Cancelling build: %s", name)
+			if _, ok := m.cancels[name]; ok {
+				m.confirm = "cancel:" + name
+				m.message = fmt.Sprintf("Cancel build of %s? (y/n)", name)
 			}
 		}
 		return m, nil
@@ -490,7 +489,14 @@ func (m model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "y", "Y":
-		if strings.HasPrefix(action, "clean:") {
+		if strings.HasPrefix(action, "cancel:") {
+			name := strings.TrimPrefix(action, "cancel:")
+			if cancel, ok := m.cancels[name]; ok {
+				cancel()
+				delete(m.cancels, name)
+				m.message = fmt.Sprintf("Cancelling build: %s", name)
+			}
+		} else if strings.HasPrefix(action, "clean:") {
 			name := strings.TrimPrefix(action, "clean:")
 			buildDir := filepath.Join(m.projectDir, "build", name)
 			if err := os.RemoveAll(buildDir); err != nil {
