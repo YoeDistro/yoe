@@ -20,7 +20,7 @@ and this project adheres to
   still available to update layers.
 - **TUI confirmation prompts** — quitting (`q`/`ctrl+c`) and cancelling a build
   (`x`) now prompt for confirmation when builds are active, preventing accidental
-  loss of in-progress builds.
+  loss of in-progress builds. Declining a prompt clears the message cleanly.
 - **Fix build cancellation not stopping containers** — cancelling a build (via
   TUI quit or `ctrl+c` on the CLI) now explicitly stops the Docker container
   (`docker stop`) instead of only killing the CLI client, which left containers
