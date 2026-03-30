@@ -11,20 +11,20 @@ import (
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
-// DevExtract extracts local commits in a recipe's build directory as patch
-// files and updates the recipe's patches list.
-func DevExtract(projectDir, recipeName string, w io.Writer) error {
+// DevExtract extracts local commits in a unit's build directory as patch
+// files and updates the unit's patches list.
+func DevExtract(projectDir, unitName string, w io.Writer) error {
 	proj, err := yoestar.LoadProject(projectDir)
 	if err != nil {
 		return err
 	}
 
-	recipe, ok := proj.Recipes[recipeName]
+	unit, ok := proj.Units[unitName]
 	if !ok {
-		return fmt.Errorf("recipe %q not found", recipeName)
+		return fmt.Errorf("unit %q not found", unitName)
 	}
 
-	srcDir := recipeSrcDir(projectDir, recipeName)
+	srcDir := unitSrcDir(projectDir, unitName)
 	if _, err := os.Stat(filepath.Join(srcDir, ".git")); os.IsNotExist(err) {
 		return fmt.Errorf("%s is not a git repo — build the recipe first with yoe build", srcDir)
 	}
@@ -36,12 +36,12 @@ func DevExtract(projectDir, recipeName string, w io.Writer) error {
 	}
 	commits := strings.TrimSpace(out)
 	if commits == "" {
-		fmt.Fprintf(w, "No local commits beyond upstream in %s\n", recipeName)
+		fmt.Fprintf(w, "No local commits beyond upstream in %s\n", unitName)
 		return nil
 	}
 
 	// Create patches directory
-	patchDir := filepath.Join(projectDir, "patches", recipeName)
+	patchDir := filepath.Join(projectDir, "patches", unitName)
 	if err := os.MkdirAll(patchDir, 0755); err != nil {
 		return fmt.Errorf("creating patch directory: %w", err)
 	}
@@ -73,18 +73,18 @@ func DevExtract(projectDir, recipeName string, w io.Writer) error {
 		fmt.Fprintf(w, "  %s\n", rel)
 	}
 
-	fmt.Fprintf(w, "\nExtracted %d patch(es) for %s\n", len(patches), recipeName)
-	fmt.Fprintf(w, "Update your recipe's patches list to:\n")
+	fmt.Fprintf(w, "\nExtracted %d patch(es) for %s\n", len(patches), unitName)
+	fmt.Fprintf(w, "Update your unit's patches list to:\n")
 	fmt.Fprintf(w, "    patches = [\n")
 	for _, p := range patchPaths {
 		fmt.Fprintf(w, "        %q,\n", p)
 	}
 	fmt.Fprintf(w, "    ],\n")
 
-	// Check if recipe already had patches and show diff
-	if len(recipe.Patches) > 0 {
+	// Check if unit already had patches and show diff
+	if len(unit.Patches) > 0 {
 		fmt.Fprintf(w, "\nPrevious patches were:\n")
-		for _, p := range recipe.Patches {
+		for _, p := range unit.Patches {
 			fmt.Fprintf(w, "    %q,\n", p)
 		}
 	}
@@ -92,9 +92,9 @@ func DevExtract(projectDir, recipeName string, w io.Writer) error {
 	return nil
 }
 
-// DevDiff shows local commits beyond upstream in a recipe's build directory.
-func DevDiff(projectDir, recipeName string, w io.Writer) error {
-	srcDir := recipeSrcDir(projectDir, recipeName)
+// DevDiff shows local commits beyond upstream in a unit's build directory.
+func DevDiff(projectDir, unitName string, w io.Writer) error {
+	srcDir := unitSrcDir(projectDir, unitName)
 	if _, err := os.Stat(filepath.Join(srcDir, ".git")); os.IsNotExist(err) {
 		return fmt.Errorf("%s is not a git repo — build the recipe first", srcDir)
 	}
@@ -105,16 +105,16 @@ func DevDiff(projectDir, recipeName string, w io.Writer) error {
 	}
 
 	if strings.TrimSpace(out) == "" {
-		fmt.Fprintf(w, "No local changes beyond upstream in %s\n", recipeName)
+		fmt.Fprintf(w, "No local changes beyond upstream in %s\n", unitName)
 		return nil
 	}
 
-	fmt.Fprintf(w, "Local commits in %s (upstream..HEAD):\n\n", recipeName)
+	fmt.Fprintf(w, "Local commits in %s (upstream..HEAD):\n\n", unitName)
 	fmt.Fprint(w, out)
 	return nil
 }
 
-// DevStatus shows which recipes have local modifications.
+// DevStatus shows which units have local modifications.
 func DevStatus(projectDir string, w io.Writer) error {
 	proj, err := yoestar.LoadProject(projectDir)
 	if err != nil {
@@ -124,7 +124,7 @@ func DevStatus(projectDir string, w io.Writer) error {
 	buildDir := filepath.Join(projectDir, "build")
 	found := false
 
-	for name := range proj.Recipes {
+	for name := range proj.Units {
 		srcDir := filepath.Join(buildDir, name, "src")
 		gitDir := filepath.Join(srcDir, ".git")
 		if _, err := os.Stat(gitDir); os.IsNotExist(err) {
@@ -144,14 +144,14 @@ func DevStatus(projectDir string, w io.Writer) error {
 	}
 
 	if !found {
-		fmt.Fprintln(w, "No recipes with local modifications")
+		fmt.Fprintln(w, "No units with local modifications")
 	}
 
 	return nil
 }
 
-func recipeSrcDir(projectDir, recipeName string) string {
-	return filepath.Join(projectDir, "build", recipeName, "src")
+func unitSrcDir(projectDir, unitName string) string {
+	return filepath.Join(projectDir, "build", unitName, "src")
 }
 
 func gitCmd(dir string, args ...string) (string, error) {

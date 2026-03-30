@@ -80,7 +80,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "Commands:\n")
 	fmt.Fprintf(os.Stderr, "  init <project-dir>      Create a new Yoe-NG project\n")
 	fmt.Fprintf(os.Stderr, "  container               Manage the build container (build, shell, status)\n")
-	fmt.Fprintf(os.Stderr, "  build [recipes...]      Build recipes (--force, --clean, --verbose, --dry-run)\n")
+	fmt.Fprintf(os.Stderr, "  build [units...]      Build units (--force, --clean, --verbose, --dry-run)\n")
 	fmt.Fprintf(os.Stderr, "  dev                     Manage source modifications (extract, diff, status)\n")
 	fmt.Fprintf(os.Stderr, "  flash <device>          Write an image to a device/SD card\n")
 	fmt.Fprintf(os.Stderr, "  run                     Run an image in QEMU\n")
@@ -89,8 +89,8 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  cache                   Manage the build cache (local and remote)\n")
 	fmt.Fprintf(os.Stderr, "  source                  Download and manage source archives/repos\n")
 	fmt.Fprintf(os.Stderr, "  config                  View and edit project configuration\n")
-	fmt.Fprintf(os.Stderr, "  desc <recipe>           Describe a recipe or target\n")
-	fmt.Fprintf(os.Stderr, "  refs <recipe>           Show reverse dependencies\n")
+	fmt.Fprintf(os.Stderr, "  desc <unit>           Describe a unit or target\n")
+	fmt.Fprintf(os.Stderr, "  refs <unit>           Show reverse dependencies\n")
 	fmt.Fprintf(os.Stderr, "  graph                   Visualize the dependency DAG\n")
 	fmt.Fprintf(os.Stderr, "  tui                     Launch the interactive TUI\n")
 	fmt.Fprintf(os.Stderr, "  clean                   Remove build artifacts\n")
@@ -150,7 +150,7 @@ func cmdBuild(args []string) {
 	noCache := false
 	dryRun := false
 	verbose := false
-	var recipes []string
+	var units []string
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -165,9 +165,9 @@ func cmdBuild(args []string) {
 		case "--verbose", "-v":
 			verbose = true
 		case "--all":
-			// build all — recipes stays empty
+			// build all — units stays empty
 		default:
-			recipes = append(recipes, args[i])
+			units = append(units, args[i])
 		}
 	}
 
@@ -182,7 +182,7 @@ func cmdBuild(args []string) {
 		Arch:       build.Arch(),
 	}
 
-	if err := build.BuildRecipes(proj, recipes, opts, os.Stdout); err != nil {
+	if err := build.BuildUnits(proj, units, opts, os.Stdout); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -335,14 +335,14 @@ func cmdConfig(args []string) {
 
 func cmdClean(args []string) {
 	all := false
-	var recipes []string
+	var units []string
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "-all", "--all":
 			all = true
 		default:
-			recipes = append(recipes, args[i])
+			units = append(units, args[i])
 		}
 	}
 
@@ -351,7 +351,7 @@ func cmdClean(args []string) {
 		dir = "."
 	}
 
-	if err := yoe.RunClean(dir, all, recipes); err != nil {
+	if err := yoe.RunClean(dir, all, units); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -383,7 +383,7 @@ func defaultArch(proj *yoestar.Project) string {
 
 func cmdDesc(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s desc <recipe>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s desc <unit>\n", os.Args[0])
 		os.Exit(1)
 	}
 	proj := loadProject()
@@ -396,7 +396,7 @@ func cmdDesc(args []string) {
 
 func cmdRefs(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s refs <recipe> [--direct]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s refs <unit> [--direct]\n", os.Args[0])
 		os.Exit(1)
 	}
 	name := args[0]
@@ -436,7 +436,7 @@ func cmdGraph(args []string) {
 
 func cmdDev(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s dev <extract|diff|status> [recipe]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s dev <extract|diff|status> [unit]\n", os.Args[0])
 		os.Exit(1)
 	}
 
@@ -448,7 +448,7 @@ func cmdDev(args []string) {
 	switch args[0] {
 	case "extract":
 		if len(args) < 2 {
-			fmt.Fprintf(os.Stderr, "Usage: %s dev extract <recipe>\n", os.Args[0])
+			fmt.Fprintf(os.Stderr, "Usage: %s dev extract <unit>\n", os.Args[0])
 			os.Exit(1)
 		}
 		if err := yoe.DevExtract(dir, args[1], os.Stdout); err != nil {
@@ -457,7 +457,7 @@ func cmdDev(args []string) {
 		}
 	case "diff":
 		if len(args) < 2 {
-			fmt.Fprintf(os.Stderr, "Usage: %s dev diff <recipe>\n", os.Args[0])
+			fmt.Fprintf(os.Stderr, "Usage: %s dev diff <unit>\n", os.Args[0])
 			os.Exit(1)
 		}
 		if err := yoe.DevDiff(dir, args[1], os.Stdout); err != nil {
@@ -523,11 +523,11 @@ func cmdTUI(_ []string) {
 
 func cmdFlash(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s flash <image-recipe> <device> [--dry-run]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s flash <image-unit> <device> [--dry-run]\n", os.Args[0])
 		os.Exit(1)
 	}
 
-	recipeName := args[0]
+	unitName := args[0]
 	devicePath := ""
 	dryRun := false
 
@@ -541,19 +541,19 @@ func cmdFlash(args []string) {
 	}
 
 	if devicePath == "" && !dryRun {
-		fmt.Fprintf(os.Stderr, "Usage: %s flash <image-recipe> <device>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s flash <image-unit> <device>\n", os.Args[0])
 		os.Exit(1)
 	}
 
 	proj := loadProject()
-	if err := device.Flash(proj, recipeName, devicePath, projectDir(), dryRun, os.Stdout); err != nil {
+	if err := device.Flash(proj, unitName, devicePath, projectDir(), dryRun, os.Stdout); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
 func cmdRun(args []string) {
-	recipeName := ""
+	unitName := ""
 	machineName := ""
 	opts := device.QEMUOptions{Memory: "1G"}
 
@@ -579,20 +579,20 @@ func cmdRun(args []string) {
 		case "--daemon":
 			opts.Daemon = true
 		default:
-			recipeName = args[i]
+			unitName = args[i]
 		}
 	}
 
 	proj := loadProject()
-	if recipeName == "" {
-		recipeName = proj.Defaults.Image
+	if unitName == "" {
+		unitName = proj.Defaults.Image
 	}
-	if recipeName == "" {
-		fmt.Fprintf(os.Stderr, "Usage: %s run <image-recipe> [--machine <name>]\n", os.Args[0])
+	if unitName == "" {
+		fmt.Fprintf(os.Stderr, "Usage: %s run <image-unit> [--machine <name>]\n", os.Args[0])
 		os.Exit(1)
 	}
 
-	if err := device.RunQEMU(proj, recipeName, machineName, projectDir(), opts, os.Stdout); err != nil {
+	if err := device.RunQEMU(proj, unitName, machineName, projectDir(), opts, os.Stdout); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -639,7 +639,7 @@ func cmdRepo(args []string) {
 
 func cmdSource(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s source <fetch|list|verify|clean> [recipes...]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s source <fetch|list|verify|clean> [units...]\n", os.Args[0])
 		os.Exit(1)
 	}
 

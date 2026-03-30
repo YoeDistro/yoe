@@ -154,7 +154,7 @@ func buildCommandContext(args map[string]string, projectRoot string) *starlarkst
 	return starlarkstruct.FromStringDict(starlark.String("ctx"), ctxDict)
 }
 
-// ctxShell executes a shell command. Unlike recipe evaluation, command
+// ctxShell executes a shell command. Unlike unit evaluation, command
 // execution has full I/O access.
 func ctxShell(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
 	if len(args) == 0 {

@@ -1,9 +1,9 @@
-# Recipes Roadmap
+# Units Roadmap
 
-Recipes needed for a complete base Linux system. Existing recipes can be found
-via `yoe list` or by browsing `layers/recipes-core/recipes/`.
+Units needed for a complete base Linux system. Existing units can be found
+via `yoe list` or by browsing `layers/units-core/units/`.
 
-## Needed Recipes
+## Needed Units
 
 ### High Priority — Required for a Functional System
 
@@ -38,9 +38,9 @@ via `yoe list` or by browsing `layers/recipes-core/recipes/`.
 
 ## Notes
 
-- Every dependency must be built from source as a recipe. Never install packages
+- Every dependency must be built from source as a unit. Never install packages
   in the container Dockerfile.
 - For non-essential build features (docs, man pages), prefer disabling via
-  configure flags over adding build tool recipes.
-- Check Alpine, Yocto, and Buildroot packaging before writing new recipes — they
+  configure flags over adding build tool units.
+- Check Alpine, Yocto, and Buildroot packaging before writing new units — they
   are good references for configure flags, deps, and patches.

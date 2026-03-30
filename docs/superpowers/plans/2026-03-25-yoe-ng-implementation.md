@@ -5,12 +5,12 @@
 > superpowers:executing-plans to implement this plan task-by-task. Steps use
 > checkbox (`- [x]`) syntax for tracking.
 
-**Goal:** Build `yoe`, a Go CLI tool that builds packages from Starlark recipes,
+**Goal:** Build `yoe`, a Go CLI tool that builds packages from Starlark units,
 assembles root filesystem images, and manages an embedded Linux distribution — a
 simpler alternative to Yocto.
 
 **Architecture:** Single Go binary with stdlib CLI (no framework — switch/case
-dispatch like brun), go.starlark.net for recipe/config evaluation, bubblewrap
+dispatch like brun), go.starlark.net for unit/config evaluation, bubblewrap
 for build isolation, and apk-tools for package management. Two-phase
 resolve-then-build model inspired by Bazel/GN. Content-addressed caching at
 every layer.
@@ -32,13 +32,13 @@ on any dev machine). Phases 4+ require Linux with bubblewrap and apk-tools.
 | 1     | CLI Foundation                | —          | **DONE** — `yoe init/config/clean/layer`, Starlark engine, all builtins                |
 | 2     | Dependency Resolution         | 1          | **DONE** — DAG, topo sort, hashing, `desc/refs/graph`, `dev`, custom commands, patches |
 | 2.5   | Layer Management & Engine     | 1          | `yoe layer sync`, load() resolution, remove class builtins, recursive discovery        |
-| 2.6   | recipes-core Layer (Phase 1)  | 2.5        | Layer skeleton, Starlark classes, toolchain recipes                                    |
-| 2.7   | recipes-core Layer (Phase 2)  | 2.6, 6     | Base system recipes, QEMU machines, base/dev images                                    |
-| 2.8   | recipes-core Layer (Phase 3)  | 2.7        | Essential libs, crypto/TLS, networking, debug tools                                    |
+| 2.6   | units-core Layer (Phase 1)  | 2.5        | Layer skeleton, Starlark classes, toolchain units                                    |
+| 2.7   | units-core Layer (Phase 2)  | 2.6, 6     | Base system units, QEMU machines, base/dev images                                    |
+| 2.8   | units-core Layer (Phase 3)  | 2.7        | Essential libs, crypto/TLS, networking, debug tools                                    |
 | 3     | Source Management             | 1          | `yoe source fetch/list/verify/clean`, content-addressed cache                          |
 | 4     | Build Execution               | 2, 3       | `yoe build` with bubblewrap isolation, build step execution                            |
 | 5     | Package Creation & Repository | 4          | APK package creation, `yoe repo` commands, local repository                            |
-| 6     | Image Assembly                | 5          | Image recipe builds — rootfs via apk, overlays, disk image generation                  |
+| 6     | Image Assembly                | 5          | Image unit builds — rootfs via apk, overlays, disk image generation                  |
 | 7     | Device Interaction            | 6          | `yoe flash`, `yoe run` (QEMU with KVM)                                                 |
 | 8     | TUI                           | 2          | `yoe tui` — Bubble Tea interactive interface                                           |
 | 9     | Bootstrap                     | 5          | `yoe bootstrap stage0/stage1` — self-hosting toolchain                                 |
@@ -48,7 +48,7 @@ on any dev machine). Phases 4+ require Linux with bubblewrap and apk-tools.
 ## Phase 1: CLI Foundation
 
 **Goal:** Establish the Go project, stdlib CLI with switch/case dispatch (brun
-pattern), Starlark evaluation engine for recipes/config, `yoe init` scaffolding,
+pattern), Starlark evaluation engine for units/config, `yoe init` scaffolding,
 and `yoe config` — the skeleton everything else builds on.
 
 ### File Structure
@@ -57,8 +57,8 @@ and `yoe config` — the skeleton everything else builds on.
 cmd/yoe/main.go                        — entry point, switch/case command dispatch
 internal/config/project.go             — project discovery (find PROJECT.star)
 internal/starlark/engine.go            — Starlark thread setup, load() handler, evaluation
-internal/starlark/builtins.go          — built-in functions: project(), machine(), package(), image(), layer_info(), etc.
-internal/starlark/types.go             — Go types produced by evaluation (Project, Machine, Recipe, LayerInfo, etc.)
+internal/starlark/builtins.go          — built-in functions: project(), machine(), unit(), image(), layer_info(), etc.
+internal/starlark/types.go             — Go types produced by evaluation (Project, Machine, Unit, LayerInfo, etc.)
 internal/starlark/loader.go            — walk project tree, evaluate all .star files, return Project
 internal/starlark/engine_test.go       — tests for engine + builtins
 internal/starlark/loader_test.go       — tests for full project loading
@@ -71,7 +71,7 @@ go.sum
 testdata/valid-project/                — test fixture: complete valid project
 testdata/valid-project/PROJECT.star
 testdata/valid-project/machines/*.star
-testdata/valid-project/recipes/*.star
+testdata/valid-project/units/*.star
 testdata/minimal-project/              — test fixture: minimal valid project
 testdata/invalid-project/              — test fixture: various invalid configs
 ```
@@ -138,7 +138,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "Yoe-NG embedded Linux distribution builder\n\n")
 	fmt.Fprintf(os.Stderr, "Commands:\n")
 	fmt.Fprintf(os.Stderr, "  init <project-dir>      Create a new Yoe-NG project\n")
-	fmt.Fprintf(os.Stderr, "  build [recipes...]      Build recipes (packages and images)\n")
+	fmt.Fprintf(os.Stderr, "  build [units...]      Build units (packages and images)\n")
 	fmt.Fprintf(os.Stderr, "  flash <device>          Write an image to a device/SD card\n")
 	fmt.Fprintf(os.Stderr, "  run                     Run an image in QEMU\n")
 	fmt.Fprintf(os.Stderr, "  layer                   Manage external layers (fetch, sync, list)\n")
@@ -146,8 +146,8 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  cache                   Manage the build cache (local and remote)\n")
 	fmt.Fprintf(os.Stderr, "  source                  Download and manage source archives/repos\n")
 	fmt.Fprintf(os.Stderr, "  config                  View and edit project configuration\n")
-	fmt.Fprintf(os.Stderr, "  desc <recipe>           Describe a recipe or target\n")
-	fmt.Fprintf(os.Stderr, "  refs <recipe>           Show reverse dependencies\n")
+	fmt.Fprintf(os.Stderr, "  desc <unit>           Describe a unit or target\n")
+	fmt.Fprintf(os.Stderr, "  refs <unit>           Show reverse dependencies\n")
 	fmt.Fprintf(os.Stderr, "  graph                   Visualize the dependency DAG\n")
 	fmt.Fprintf(os.Stderr, "  tui                     Launch the interactive TUI\n")
 	fmt.Fprintf(os.Stderr, "  clean                   Remove build artifacts\n")
@@ -228,7 +228,7 @@ type Project struct {
 	Sources    SourcesConfig
 	Layers     []LayerRef
 	Machines   map[string]*Machine
-	Recipes    map[string]*Recipe
+	Units    map[string]*Unit
 }
 
 type Defaults struct {
@@ -291,7 +291,7 @@ type KernelConfig struct {
 	Tag         string
 	Defconfig   string
 	DeviceTrees []string
-	Recipe      string
+	Unit      string
 	Cmdline     string
 }
 
@@ -310,8 +310,8 @@ type QEMUConfig struct {
 	Display  string
 }
 
-// Recipe represents an evaluated package(), autotools(), image(), etc. call.
-type Recipe struct {
+// Unit represents an evaluated unit(), autotools(), image(), etc. call.
+type Unit struct {
 	Name        string
 	Version     string
 	Class       string // "package", "autotools", "cmake", "go", "image", etc.
@@ -329,7 +329,7 @@ type Recipe struct {
 	RuntimeDeps []string
 
 	// Build
-	Build         []string // shell commands (for generic package())
+	Build         []string // shell commands (for generic unit())
 	ConfigureArgs []string // for autotools/cmake
 	GoPackage     string   // for go_binary
 
@@ -339,7 +339,7 @@ type Recipe struct {
 	Environment map[string]string
 
 	// Image-specific (class == "image")
-	Packages   []string // packages to install in rootfs
+	Packages   []string // artifacts to install in rootfs
 	Exclude    []string
 	Hostname   string
 	Timezone   string
@@ -380,7 +380,7 @@ git commit -m "feat: add Go types for Starlark evaluation output"
 - Create: `internal/starlark/engine_test.go`
 
 The engine evaluates `.star` files and collects the results of built-in function
-calls (project(), machine(), package(), image(), etc.) into Go types.
+calls (project(), machine(), unit(), image(), etc.) into Go types.
 
 - [x] **Step 1: Write the failing test**
 
@@ -460,7 +460,7 @@ machine(
 
 func TestEvalPackageRecipe(t *testing.T) {
 	src := `
-package(
+unit(
     name = "openssh",
     version = "9.6p1",
     source = "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.6p1.tar.gz",
@@ -477,13 +477,13 @@ package(
 )
 `
 	eng := NewEngine()
-	if err := eng.ExecString("recipes/openssh.star", src); err != nil {
+	if err := eng.ExecString("units/openssh.star", src); err != nil {
 		t.Fatalf("ExecString: %v", err)
 	}
-	recipes := eng.Recipes()
-	r, ok := recipes["openssh"]
+	units := eng.Units()
+	r, ok := units["openssh"]
 	if !ok {
-		t.Fatal("recipe 'openssh' not found")
+		t.Fatal("unit 'openssh' not found")
 	}
 	if r.Class != "package" {
 		t.Errorf("Class = %q, want %q", r.Class, "package")
@@ -504,7 +504,7 @@ func TestEvalImageRecipe(t *testing.T) {
 image(
     name = "base-image",
     version = "1.0.0",
-    packages = ["openssh", "myapp"],
+    artifacts = ["openssh", "myapp"],
     hostname = "yoe",
     services = ["sshd"],
     partitions = [
@@ -514,13 +514,13 @@ image(
 )
 `
 	eng := NewEngine()
-	if err := eng.ExecString("recipes/base-image.star", src); err != nil {
+	if err := eng.ExecString("units/base-image.star", src); err != nil {
 		t.Fatalf("ExecString: %v", err)
 	}
-	recipes := eng.Recipes()
-	r, ok := recipes["base-image"]
+	units := eng.Units()
+	r, ok := units["base-image"]
 	if !ok {
-		t.Fatal("recipe 'base-image' not found")
+		t.Fatal("unit 'base-image' not found")
 	}
 	if r.Class != "image" {
 		t.Errorf("Class = %q, want %q", r.Class, "image")
@@ -549,10 +549,10 @@ machine(name = "bad", arch = "mips")
 
 func TestEvalPackageRequiresBuild(t *testing.T) {
 	src := `
-package(name = "broken", version = "1.0.0")
+unit(name = "broken", version = "1.0.0")
 `
 	eng := NewEngine()
-	err := eng.ExecString("recipes/broken.star", src)
+	err := eng.ExecString("units/broken.star", src)
 	if err == nil {
 		t.Fatal("expected error for package with no build steps, got nil")
 	}
@@ -587,19 +587,19 @@ type Engine struct {
 	mu       sync.Mutex
 	project  *Project
 	machines map[string]*Machine
-	recipes  map[string]*Recipe
+	units  map[string]*Unit
 }
 
 func NewEngine() *Engine {
 	return &Engine{
 		machines: make(map[string]*Machine),
-		recipes:  make(map[string]*Recipe),
+		units:  make(map[string]*Unit),
 	}
 }
 
 func (e *Engine) Project() *Project   { return e.project }
 func (e *Engine) Machines() map[string]*Machine { return e.machines }
-func (e *Engine) Recipes() map[string]*Recipe   { return e.recipes }
+func (e *Engine) Units() map[string]*Unit   { return e.units }
 
 // ExecString evaluates Starlark source code with built-in functions available.
 func (e *Engine) ExecString(filename, src string) error {
@@ -903,7 +903,7 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, args starlar
 			Tag:         structString(kernelS, "tag"),
 			Defconfig:   structString(kernelS, "defconfig"),
 			DeviceTrees: structStringList(kernelS, "device_trees"),
-			Recipe:      structString(kernelS, "recipe"),
+			Unit:      structString(kernelS, "unit"),
 			Cmdline:     structString(kernelS, "cmdline"),
 		},
 	}
@@ -944,13 +944,13 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, args starlar
 	return starlark.None, nil
 }
 
-func (e *Engine) registerRecipe(class string, kwargs []starlark.Tuple) (*Recipe, error) {
+func (e *Engine) registerRecipe(class string, kwargs []starlark.Tuple) (*Unit, error) {
 	name := kwString(kwargs, "name")
 	if name == "" {
 		return nil, fmt.Errorf("%s() requires name", class)
 	}
 
-	r := &Recipe{
+	r := &Unit{
 		Name:          name,
 		Version:       kwString(kwargs, "version"),
 		Class:         class,
@@ -1004,7 +1004,7 @@ func (e *Engine) registerRecipe(class string, kwargs []starlark.Tuple) (*Recipe,
 	}
 
 	e.mu.Lock()
-	e.recipes[name] = r
+	e.units[name] = r
 	e.mu.Unlock()
 
 	return r, nil
@@ -1016,7 +1016,7 @@ func (e *Engine) fnPackage(_ *starlark.Thread, _ *starlark.Builtin, args starlar
 		return nil, err
 	}
 	if len(r.Build) == 0 {
-		return nil, fmt.Errorf("package(%q): build steps required", r.Name)
+		return nil, fmt.Errorf("unit(%q): build steps required", r.Name)
 	}
 	return starlark.None, nil
 }
@@ -1066,9 +1066,9 @@ git commit -m "feat: add Starlark evaluation engine with built-in functions"
 - Create: `testdata/valid-project/PROJECT.star`
 - Create: `testdata/valid-project/machines/beaglebone-black.star`
 - Create: `testdata/valid-project/machines/qemu-x86_64.star`
-- Create: `testdata/valid-project/recipes/openssh.star`
-- Create: `testdata/valid-project/recipes/myapp.star`
-- Create: `testdata/valid-project/recipes/base-image.star`
+- Create: `testdata/valid-project/units/openssh.star`
+- Create: `testdata/valid-project/units/myapp.star`
+- Create: `testdata/valid-project/units/base-image.star`
 - Create: `testdata/minimal-project/PROJECT.star`
 - Create: `testdata/invalid-project/bad-arch.star`
 
@@ -1092,7 +1092,7 @@ project(
     ),
     sources = sources(go_proxy = "https://proxy.golang.org"),
     layers = [
-        layer("github.com/yoe/recipes-core", ref = "v1.0.0"),
+        layer("github.com/yoe/units-core", ref = "v1.0.0"),
     ],
 )
 ```
@@ -1124,15 +1124,15 @@ Create `testdata/valid-project/machines/qemu-x86_64.star`:
 machine(
     name = "qemu-x86_64",
     arch = "x86_64",
-    kernel = kernel(recipe = "linux-qemu", cmdline = "console=ttyS0 root=/dev/vda2 rw"),
+    kernel = kernel(unit = "linux-qemu", cmdline = "console=ttyS0 root=/dev/vda2 rw"),
     qemu = qemu_config(machine = "q35", cpu = "host", memory = "1G", firmware = "ovmf", display = "none"),
 )
 ```
 
-Create `testdata/valid-project/recipes/openssh.star`:
+Create `testdata/valid-project/units/openssh.star`:
 
 ```python
-package(
+unit(
     name = "openssh",
     version = "9.6p1",
     description = "OpenSSH client and server",
@@ -1151,7 +1151,7 @@ package(
 )
 ```
 
-Create `testdata/valid-project/recipes/myapp.star`:
+Create `testdata/valid-project/units/myapp.star`:
 
 ```python
 go_binary(
@@ -1167,14 +1167,14 @@ go_binary(
 )
 ```
 
-Create `testdata/valid-project/recipes/base-image.star`:
+Create `testdata/valid-project/units/base-image.star`:
 
 ```python
 image(
     name = "base-image",
     version = "1.0.0",
     description = "Minimal bootable system",
-    packages = ["openssh", "myapp"],
+    artifacts = ["openssh", "myapp"],
     hostname = "yoe",
     timezone = "UTC",
     services = ["sshd", "myapp"],
@@ -1285,8 +1285,8 @@ func LoadProject(startDir string) (*Project, error) {
 		return nil, err
 	}
 
-	// Evaluate all recipes
-	if err := evalDir(eng, root, "recipes"); err != nil {
+	// Evaluate all units
+	if err := evalDir(eng, root, "units"); err != nil {
 		return nil, err
 	}
 
@@ -1296,7 +1296,7 @@ func LoadProject(startDir string) (*Project, error) {
 	}
 
 	proj.Machines = eng.Machines()
-	proj.Recipes = eng.Recipes()
+	proj.Units = eng.Units()
 
 	return proj, nil
 }
@@ -1357,22 +1357,22 @@ func TestLoadProject(t *testing.T) {
 		t.Error("expected QEMU config on qemu-x86_64")
 	}
 
-	// Recipes
-	if len(proj.Recipes) != 3 {
-		t.Errorf("got %d recipes, want 3", len(proj.Recipes))
+	// Units
+	if len(proj.Units) != 3 {
+		t.Errorf("got %d units, want 3", len(proj.Units))
 	}
-	if r, ok := proj.Recipes["openssh"]; !ok {
-		t.Error("expected recipe 'openssh'")
+	if r, ok := proj.Units["openssh"]; !ok {
+		t.Error("expected unit 'openssh'")
 	} else if r.Class != "package" {
 		t.Errorf("openssh class = %q, want %q", r.Class, "package")
 	}
-	if r, ok := proj.Recipes["myapp"]; !ok {
-		t.Error("expected recipe 'myapp'")
+	if r, ok := proj.Units["myapp"]; !ok {
+		t.Error("expected unit 'myapp'")
 	} else if r.Class != "go" {
 		t.Errorf("myapp class = %q, want %q", r.Class, "go")
 	}
-	if r, ok := proj.Recipes["base-image"]; !ok {
-		t.Error("expected recipe 'base-image'")
+	if r, ok := proj.Units["base-image"]; !ok {
+		t.Error("expected unit 'base-image'")
 	} else if r.Class != "image" {
 		t.Errorf("base-image class = %q, want %q", r.Class, "image")
 	}
@@ -1438,7 +1438,7 @@ func TestRunInit(t *testing.T) {
 	for _, path := range []string{
 		"PROJECT.star",
 		"machines",
-		"recipes",
+		"units",
 		"classes",
 		"overlays",
 	} {
@@ -1499,7 +1499,7 @@ func RunInit(projectDir string, machine string) error {
 		return fmt.Errorf("project already exists at %s (PROJECT.star found)", projectDir)
 	}
 
-	dirs := []string{"machines", "recipes", "classes", "overlays"}
+	dirs := []string{"machines", "units", "classes", "overlays"}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(filepath.Join(projectDir, dir), 0755); err != nil {
 			return fmt.Errorf("creating directory %s: %w", dir, err)
@@ -1544,7 +1544,7 @@ func createMachineFile(projectDir, name string) error {
 		content = fmt.Sprintf(`machine(
     name = %q,
     arch = "x86_64",
-    kernel = kernel(recipe = "linux-qemu", cmdline = "console=ttyS0 root=/dev/vda2 rw"),
+    kernel = kernel(unit = "linux-qemu", cmdline = "console=ttyS0 root=/dev/vda2 rw"),
     qemu = qemu_config(machine = "q35", cpu = "host", memory = "1G", firmware = "ovmf", display = "none"),
 )
 `, name)
@@ -1552,7 +1552,7 @@ func createMachineFile(projectDir, name string) error {
 		content = fmt.Sprintf(`machine(
     name = %q,
     arch = "arm64",
-    kernel = kernel(recipe = "linux-qemu", cmdline = "console=ttyAMA0 root=/dev/vda2 rw"),
+    kernel = kernel(unit = "linux-qemu", cmdline = "console=ttyAMA0 root=/dev/vda2 rw"),
     qemu = qemu_config(machine = "virt", cpu = "host", memory = "1G", firmware = "aavmf", display = "none"),
 )
 `, name)
@@ -1560,7 +1560,7 @@ func createMachineFile(projectDir, name string) error {
 		content = fmt.Sprintf(`machine(
     name = %q,
     arch = "riscv64",
-    kernel = kernel(recipe = "linux-qemu", cmdline = "console=ttyS0 root=/dev/vda2 rw"),
+    kernel = kernel(unit = "linux-qemu", cmdline = "console=ttyS0 root=/dev/vda2 rw"),
     qemu = qemu_config(machine = "virt", cpu = "host", memory = "1G", firmware = "opensbi", display = "none"),
 )
 `, name)
@@ -1637,7 +1637,7 @@ func ShowConfig(dir string) error {
 	fmt.Printf("Repository: %s\n", proj.Repository.Path)
 	fmt.Printf("Cache:      %s\n", proj.Cache.Path)
 	fmt.Printf("Machines:   %d defined\n", len(proj.Machines))
-	fmt.Printf("Recipes:    %d defined\n", len(proj.Recipes))
+	fmt.Printf("Units:    %d defined\n", len(proj.Units))
 
 	if len(proj.Machines) > 0 {
 		fmt.Println("\nMachines:")
@@ -1646,9 +1646,9 @@ func ShowConfig(dir string) error {
 		}
 	}
 
-	if len(proj.Recipes) > 0 {
+	if len(proj.Units) > 0 {
 		fmt.Println("\nRecipes:")
-		for name, r := range proj.Recipes {
+		for name, r := range proj.Units {
 			fmt.Printf("  %-20s [%s] %s\n", name, r.Class, r.Version)
 		}
 	}
@@ -1664,7 +1664,7 @@ go build -o yoe ./cmd/yoe
 cd testdata/valid-project && ../../yoe config show
 ```
 
-Expected: prints project name, machines, recipes.
+Expected: prints project name, machines, units.
 
 - [x] **Step 3: Commit**
 
@@ -1696,11 +1696,11 @@ import (
 	"path/filepath"
 )
 
-func RunClean(projectDir string, all bool, recipes []string) error {
+func RunClean(projectDir string, all bool, units []string) error {
 	buildDir := filepath.Join(projectDir, "build")
 
-	if len(recipes) > 0 {
-		for _, r := range recipes {
+	if len(units) > 0 {
+		for _, r := range units {
 			dir := filepath.Join(buildDir, r)
 			if err := os.RemoveAll(dir); err != nil {
 				return fmt.Errorf("removing %s: %w", dir, err)
@@ -1780,7 +1780,7 @@ and their transitive dependencies from `LAYER.star` files. Also make the engine
 changes required to support Starlark-based classes in layers.
 
 See
-[recipes-core Layer Design](../specs/2026-03-26-recipes-core-layer-design.md)
+[units-core Layer Design](../specs/2026-03-26-units-core-layer-design.md)
 for the full specification of what the base layer contains and the engine
 changes needed.
 
@@ -1804,8 +1804,8 @@ changes needed.
 - Implement `load()` resolution: `//path` relative to current file's layer root,
   `@layer-name//path` relative to named layer's root
 - Add `package_extend()` primitive for modifier classes like `systemd_service()`
-- Add `bootstrap` flag to `package()` for stage 0/1 toolchain recipes
-- Change recipe discovery from `recipes/*.star` to `recipes/**/*.star` for
+- Add `bootstrap` flag to `unit()` for stage 0/1 toolchain units
+- Change unit discovery from `units/*.star` to `units/**/*.star` for
   categorized subdirectories
 
 **Depends on:** Phase 1 (LayerRef/LayerInfo types, Starlark engine, project
@@ -1823,10 +1823,10 @@ overridden by PROJECT.star. Diamond dependencies resolve to the highest semver.
 
 **Implemented:**
 
-- `internal/resolve/dag.go` — DAG construction from recipes, Kahn's algorithm
+- `internal/resolve/dag.go` — DAG construction from units, Kahn's algorithm
   topological sort with cycle detection, transitive dep/rdep queries
 - `internal/resolve/hash.go` — SHA256 content-addressed cache key computation
-  (recipe + source + patches + dep hashes + arch)
+  (unit + source + patches + dep hashes + arch)
 - `internal/resolve/describe.go` — `yoe desc`, `yoe refs`, `yoe graph` (text and
   DOT format)
 - 11 tests for DAG, topo sort, cycles, hashing, hash cascading
@@ -1836,7 +1836,7 @@ overridden by PROJECT.star. Diamond dependencies resolve to the highest semver.
 - `yoe dev` — source modification workflow (extract patches, diff, status)
 - `yoe` custom commands — extensible CLI via `commands/*.star` with `command()`,
   `arg()`, `run(ctx)` pattern
-- Patches support — `patches` field in recipes, included in cache hash
+- Patches support — `patches` field in units, included in cache hash
 
 ---
 
@@ -1852,24 +1852,24 @@ local modifications and extract patches.
 - `internal/source/cache.go` — content-addressed source cache
   ($YOE_CACHE/sources/)
 - `internal/source/verify.go` — SHA256 verification
-- `internal/source/patch.go` — apply recipe patches as git commits on top of
+- `internal/source/patch.go` — apply unit patches as git commits on top of
   upstream tag
 - `cmd/yoe/main.go` — add `source` command with subcommands to switch statement
 
 **Integration with `yoe dev`:** After fetching source, the build directory
-(`build/<recipe>/src/`) is a git repo with the `upstream` tag. Existing patches
-from the recipe are applied as individual commits. If the developer has local
+(`build/<unit>/src/`) is a git repo with the `upstream` tag. Existing patches
+from the unit are applied as individual commits. If the developer has local
 commits beyond upstream, `yoe build` uses them directly (skips re-fetch).
 `yoe dev extract` runs `git format-patch upstream..HEAD` to produce patch files.
 
-**Depends on:** Phase 1 (recipe types for source URLs), Phase 2 (for patch field
-in recipes)
+**Depends on:** Phase 1 (unit types for source URLs), Phase 2 (for patch field
+in units)
 
 ---
 
 ## Phase 4: Build Execution (detailed plan TBD)
 
-**Goal:** Execute recipe build steps inside bubblewrap sandboxes. Detect local
+**Goal:** Execute unit build steps inside bubblewrap sandboxes. Detect local
 source modifications (`yoe dev`) and skip re-fetch when present.
 
 **Key components:**
@@ -1879,7 +1879,7 @@ source modifications (`yoe dev`) and skip re-fetch when present.
 - `internal/build/environment.go` — build environment assembly (apk install of
   build deps)
 - `internal/build/executor.go` — build step execution with logging; detect
-  `build/<recipe>/src/` with local commits and skip fetch/patch when present
+  `build/<unit>/src/` with local commits and skip fetch/patch when present
 - `internal/build/cache.go` — content-addressed build cache using hashes from
   Phase 2
 - `cmd/yoe/main.go` — add `build` command to switch statement
@@ -1891,7 +1891,7 @@ source modifications (`yoe dev`) and skip re-fetch when present.
 
 ## Phase 5: Package Creation, Repository & Cache (detailed plan TBD)
 
-**Goal:** Create .apk packages from build output, manage a local repository, and
+**Goal:** Create .apk artifacts from build output, manage a local repository, and
 provide S3-compatible remote cache for sharing builds across CI/team.
 
 **Key components:**
@@ -1912,8 +1912,8 @@ provide S3-compatible remote cache for sharing builds across CI/team.
 
 ## Phase 6: Image Assembly (detailed plan TBD)
 
-**Goal:** Implement the image recipe build path — when `yoe build` encounters a
-recipe with `image()` class, assemble a bootable disk image from packages
+**Goal:** Implement the image unit build path — when `yoe build` encounters a
+unit with `image()` class, assemble a bootable disk image from packages
 instead of compiling source code. No separate `yoe image` command; images are
 built through the same `yoe build` pipeline.
 
@@ -1924,7 +1924,7 @@ built through the same `yoe build` pipeline.
 - `internal/image/overlay.go` — overlay file copying
 - `internal/image/disk.go` — partition table creation, filesystem formatting
 - `internal/image/kernel.go` — kernel + bootloader installation
-- `internal/build/executor.go` — extend to dispatch image recipes to image
+- `internal/build/executor.go` — extend to dispatch image units to image
   assembly instead of sandbox build
 
 **Depends on:** Phase 5 (populated package repository) **System requirements:**
@@ -1958,59 +1958,59 @@ user namespaces (bubblewrap), mkfs.ext4, mkfs.vfat, systemd-repart
 - `internal/tui/views/` — machine selector, build progress, log viewer
 - `cmd/yoe/main.go` — add `tui` command to switch statement
 
-**Depends on:** Phase 2 (recipe/machine listing), can start after Phase 2
+**Depends on:** Phase 2 (unit/machine listing), can start after Phase 2
 
 ---
 
-## Phase 2.6: recipes-core Layer Phase 1 — Skeleton + Classes + Toolchain (detailed plan TBD)
+## Phase 2.6: units-core Layer Phase 1 — Skeleton + Classes + Toolchain (detailed plan TBD)
 
-**Goal:** Create the `layers/recipes-core/` directory with the layer manifest,
-all Starlark class files, and the toolchain/build-tool recipes. This is the
-foundation that all other recipes build on.
+**Goal:** Create the `layers/units-core/` directory with the layer manifest,
+all Starlark class files, and the toolchain/build-tool units. This is the
+foundation that all other units build on.
 
 See
-[recipes-core Layer Design](../specs/2026-03-26-recipes-core-layer-design.md)
+[units-core Layer Design](../specs/2026-03-26-units-core-layer-design.md)
 for the full specification.
 
 **Key deliverables:**
 
-- `layers/recipes-core/LAYER.star` — layer manifest
+- `layers/units-core/LAYER.star` — layer manifest
 - 10 class files: `autotools`, `cmake`, `meson`, `go`, `rust`, `python`, `node`,
   `image`, `sdk`, `systemd`
-- Toolchain recipes: `gcc`, `binutils`, `glibc`, `linux-headers`
-- Build tool recipes: `make`, `pkg-config`, `autoconf`, `automake`, `libtool`,
+- Toolchain units: `gcc`, `binutils`, `glibc`, `linux-headers`
+- Build tool units: `make`, `pkg-config`, `autoconf`, `automake`, `libtool`,
   `cmake` (the package), `meson`, `ninja`
 
 **Depends on:** Phase 2.5 (load() resolution, class builtins removed, recursive
-recipe discovery)
+unit discovery)
 
 **Deliverable:** Can build C/C++ packages from source inside a Yoe-NG build
 root.
 
 ---
 
-## Phase 2.7: recipes-core Layer Phase 2 — Base System + QEMU Machines (detailed plan TBD)
+## Phase 2.7: units-core Layer Phase 2 — Base System + QEMU Machines (detailed plan TBD)
 
 **Goal:** Add the base system packages, kernel, bootloaders, QEMU machine
-definitions, and image recipes needed to produce a bootable system.
+definitions, and image units needed to produce a bootable system.
 
 **Key deliverables:**
 
-- Base recipes: `busybox`, `systemd`, `util-linux`, `kmod`, `apk-tools`,
+- Base units: `busybox`, `systemd`, `util-linux`, `kmod`, `apk-tools`,
   `bubblewrap`
-- Kernel recipe: `linux`
-- Bootloader recipes: `u-boot`, `ovmf`, `opensbi`
+- Kernel unit: `linux`
+- Bootloader units: `u-boot`, `ovmf`, `opensbi`
 - Machine definitions: `qemu-x86_64`, `qemu-arm64`, `qemu-riscv64`
-- Image recipes: `base-image`, `dev-image`
+- Image units: `base-image`, `dev-image`
 
-**Depends on:** Phase 2.6 (toolchain recipes), Phase 6 (image assembly engine)
+**Depends on:** Phase 2.6 (toolchain units), Phase 6 (image assembly engine)
 
 **Deliverable:** `yoe build base-image --machine qemu-x86_64` produces a
 bootable image.
 
 ---
 
-## Phase 2.8: recipes-core Layer Phase 3 — Essential Libs + Networking (detailed plan TBD)
+## Phase 2.8: units-core Layer Phase 3 — Essential Libs + Networking (detailed plan TBD)
 
 **Goal:** Add the libraries and networking packages that most embedded projects
 need.
@@ -2040,12 +2040,12 @@ an existing toolchain, then rebuild with own toolchain.
 - `internal/bootstrap/stage0.go` — cross-pollination from Alpine
 - `internal/bootstrap/stage1.go` — self-hosting rebuild
 - `cmd/yoe/main.go` — add `bootstrap` command to switch statement
-- Bootstrap recipe set from `layers/recipes-core/recipes/toolchain/` — recipes
+- Bootstrap unit set from `layers/units-core/units/toolchain/` — units
   with `bootstrap = True` (glibc, binutils, gcc, linux-headers) plus base
-  recipes (busybox, apk-tools, bubblewrap)
+  units (busybox, apk-tools, bubblewrap)
 
 **Depends on:** Phase 5 (package creation and repository), Phase 2.6 (toolchain
-recipes exist in recipes-core)
+units exist in units-core)
 
 **This is the most complex phase** — building a C library and compiler toolchain
 is non-trivial. Consider starting with pre-built packages and implementing

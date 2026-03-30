@@ -1,11 +1,11 @@
-# Per-Recipe Container and Task Support
+# Per-Unit Container and Task Support
 
 ## Context
 
-All yoe-ng recipes currently build inside a single Alpine container using bwrap
-for per-recipe isolation, with build steps as a flat list of shell commands.
-Different recipes need different toolchains — Go apps need the Go SDK, Rust apps
-need Cargo, kernel builds need specific headers. And some recipes have distinct
+All yoe-ng units currently build inside a single Alpine container using bwrap
+for per-unit isolation, with build steps as a flat list of shell commands.
+Different units need different toolchains — Go apps need the Go SDK, Rust apps
+need Cargo, kernel builds need specific headers. And some units have distinct
 phases that benefit from different environments (codegen in one container,
 compile in another).
 
@@ -29,7 +29,7 @@ For each task, the execution environment is determined by:
 ### Backward Compatibility
 
 The `build = [...]` string list continues to work. Internally it is converted to
-a list of unnamed tasks without containers. Existing recipes need no changes.
+a list of unnamed tasks without containers. Existing units need no changes.
 
 ## Usage Examples
 
@@ -48,7 +48,7 @@ go_binary(
 )
 
 # Task-level override — codegen uses a different container
-package(
+unit(
     name = "complex-app",
     container = "golang:1.22-alpine",       # default for all tasks
     tasks = [
@@ -63,7 +63,7 @@ package(
 )
 
 # Mix of container and bwrap tasks
-package(
+unit(
     name = "hybrid-tool",
     tasks = [
         task("generate",
@@ -91,7 +91,7 @@ Classes produce task lists instead of build step strings:
 ```python
 # classes/autotools.star
 def autotools(name, version, source, configure_args=[], **kwargs):
-    package(
+    unit(
         name=name, version=version, source=source,
         tasks = [
             task("configure",
@@ -108,7 +108,7 @@ def go_binary(name, version, source, go_package="",
               container="golang:1.22-alpine", **kwargs):
     if not go_package:
         go_package = "./cmd/" + name
-    package(
+    unit(
         name=name, version=version, source=source,
         container=container,
         tasks = [
@@ -123,18 +123,18 @@ def go_binary(name, version, source, go_package="",
 
 ### 1. `internal/starlark/types.go`
 
-Add `Task` struct and update `Recipe`:
+Add `Task` struct and update `Unit`:
 
 ```go
 // Task represents a named build step with optional container override.
 type Task struct {
     Name      string
-    Container string // overrides recipe Container if set
+    Container string // overrides unit Container if set
     Run       string // shell command
 }
 
-// In Recipe struct:
-type Recipe struct {
+// In Unit struct:
+type Unit struct {
     // ... existing fields ...
 
     // Build — either Tasks or Build (legacy), not both
@@ -159,8 +159,8 @@ type Recipe struct {
 Include container and tasks in hash:
 
 ```go
-fmt.Fprintf(h, "container:%s\n", recipe.Container)
-for _, t := range recipe.Tasks {
+fmt.Fprintf(h, "container:%s\n", unit.Container)
+for _, t := range unit.Tasks {
     fmt.Fprintf(h, "task:%s:%s:%s\n", t.Name, t.Container, t.Run)
 }
 ```
@@ -189,10 +189,10 @@ Runs:
 Replace the command loop with a task loop. For each task, resolve the container:
 
 ```go
-tasks := recipe.Tasks
+tasks := unit.Tasks
 if len(tasks) == 0 {
     // Legacy: convert build strings to tasks
-    for i, cmd := range buildCommands(recipe) {
+    for i, cmd := range buildCommands(unit) {
         tasks = append(tasks, Task{Name: fmt.Sprintf("step-%d", i+1), Run: cmd})
     }
 }
@@ -200,7 +200,7 @@ if len(tasks) == 0 {
 for i, t := range tasks {
     container := t.Container
     if container == "" {
-        container = recipe.Container
+        container = unit.Container
     }
 
     fmt.Fprintf(w, "  [%d/%d] %s: %s\n", i+1, len(tasks), t.Name, t.Run)
@@ -250,9 +250,9 @@ maintained through the legacy conversion in the executor).
 ## Verification
 
 1. `go test ./...` — all existing tests pass
-2. Legacy `build = [...]` recipes still work (backward compat)
-3. Go recipe with task container pulls golang image and builds
-4. Recipe with mixed tasks (container + bwrap) works
+2. Legacy `build = [...]` units still work (backward compat)
+3. Go unit with task container pulls golang image and builds
+4. Unit with mixed tasks (container + bwrap) works
 5. Package-level container inherited by tasks without override
 6. Task-level container overrides package-level
 7. Hash changes when container or task fields change

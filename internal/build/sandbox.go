@@ -11,7 +11,7 @@ import (
 	yoe "github.com/YoeDistro/yoe-ng/internal"
 )
 
-// SandboxConfig defines the bubblewrap sandbox for a recipe build.
+// SandboxConfig defines the bubblewrap sandbox for a unit build.
 type SandboxConfig struct {
 	BuildRoot  string
 	SrcDir     string
@@ -173,7 +173,7 @@ func SysrootDir(projectDir string) string {
 	return filepath.Join(projectDir, "build", "sysroot")
 }
 
-// InstallToSysroot copies a recipe's destdir contents into the shared sysroot.
+// InstallToSysroot copies a unit's destdir contents into the shared sysroot.
 func InstallToSysroot(destDir, sysrootDir string) error {
 	if err := os.MkdirAll(sysrootDir, 0755); err != nil {
 		return err
@@ -211,7 +211,7 @@ func Arch() string {
 	}
 }
 
-// RecipeBuildDir returns the build directory for a recipe.
-func RecipeBuildDir(projectDir, recipeName string) string {
-	return filepath.Join(projectDir, "build", recipeName)
+// UnitBuildDir returns the build directory for a unit.
+func UnitBuildDir(projectDir, unitName string) string {
+	return filepath.Join(projectDir, "build", unitName)
 }

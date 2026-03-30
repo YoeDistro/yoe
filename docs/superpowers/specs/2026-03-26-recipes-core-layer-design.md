@@ -1,4 +1,4 @@
-# recipes-core Layer Design
+# units-core Layer Design
 
 The base metadata layer for Yoe-NG. Contains the toolchain, base system,
 essential libraries, build classes, and QEMU machine definitions that every
@@ -6,21 +6,21 @@ Yoe-NG project depends on.
 
 ## Location
 
-`layers/recipes-core/` in the main yoe-ng repository. Will be extracted to its
-own Git repo (`github.com/yoe/recipes-core`) once stable. During development,
+`layers/units-core/` in the main yoe-ng repository. Will be extracted to its
+own Git repo (`github.com/yoe/units-core`) once stable. During development,
 projects reference it as a local layer override:
 
 ```python
 # PROJECT.star
 layers = [
-    layer("github.com/yoe/recipes-core", local = "../layers/recipes-core"),
+    layer("github.com/yoe/units-core", local = "../layers/units-core"),
 ]
 ```
 
 ## Directory Structure
 
 ```
-layers/recipes-core/
+layers/units-core/
 ├── LAYER.star
 ├── classes/
 │   ├── autotools.star
@@ -37,7 +37,7 @@ layers/recipes-core/
 │   ├── qemu-x86_64.star
 │   ├── qemu-arm64.star
 │   └── qemu-riscv64.star
-├── recipes/
+├── units/
 │   ├── toolchain/
 │   │   ├── gcc.star
 │   │   ├── binutils.star
@@ -92,14 +92,14 @@ layers/recipes-core/
     └── dev-image.star
 ```
 
-Recipes are organized by category in subdirectories. This scales better than a
-flat layout as the layer grows toward 100+ recipes.
+Units are organized by category in subdirectories. This scales better than a
+flat layout as the layer grows toward 100+ units.
 
 ## LAYER.star
 
 ```python
 layer_info(
-    name = "recipes-core",
+    name = "units-core",
     description = "Yoe-NG base layer: toolchain, base system, essential libraries, and QEMU machines",
     # No deps — this is the root layer. All other layers depend on this one.
 )
@@ -110,16 +110,16 @@ layer_info(
 The `yoe` Go binary provides low-level **primitives** as Starlark builtins.
 These are the atoms that everything else is built from:
 
-**Go builtins (primitives):** `package()`, `image()`, `machine()`, `project()`,
+**Go builtins (primitives):** `unit()`, `image()`, `machine()`, `project()`,
 `layer_info()`, `partition()`, `kernel()`, `uboot()`, `qemu_config()`,
 `defaults()`, `repository()`, `cache()`, `s3_cache()`, `sources()`, `layer()`,
-`subpackage()`, `auto()`
+`subunit()`, `auto()`
 
 **Starlark classes (in this layer):** `autotools()`, `cmake()`, `meson()`,
-`go_binary()`, `rust_binary()`, `python_package()`, `node_package()`, `sdk()`,
+`go_binary()`, `rust_binary()`, `python_unit()`, `node_unit()`, `sdk()`,
 `systemd_service()`
 
-Classes are ordinary `.star` files that call `package()` with the right build
+Classes are ordinary `.star` files that call `unit()` with the right build
 steps. Users can read them, override them in their project's `classes/`
 directory, or write new ones.
 
@@ -136,7 +136,7 @@ def autotools(name, version, source, sha256 = "", deps = [], runtime_deps = [],
         "make -j$NPROC " + " ".join(make_args),
         "make DESTDIR=$DESTDIR install " + " ".join(make_install_args),
     ]
-    package(
+    unit(
         name = name,
         version = version,
         source = source,
@@ -167,7 +167,7 @@ def cmake(name, version, source, sha256 = "", deps = [], runtime_deps = [],
         "cmake --build build -j$NPROC",
         "DESTDIR=$DESTDIR cmake --install build",
     ]
-    package(
+    unit(
         name = name,
         version = version,
         source = source,
@@ -198,7 +198,7 @@ def go_binary(name, version, source, tag = "", sha256 = "",
     build = [
         "go build -o $DESTDIR$PREFIX/bin/" + name + " " + go_package,
     ]
-    package(
+    unit(
         name = name,
         version = version,
         source = source,
@@ -236,16 +236,16 @@ def systemd_service(name, unit, conffiles = [], wants = [], after = []):
 different build paths (rootfs assembly vs. source compilation). The
 `classes/image.star` and `classes/sdk.star` files in the layer are thin wrappers
 that re-export the primitive with layer-specific defaults (e.g., default
-partition layouts, default base packages). Recipes can use the primitive
+partition layouts, default base packages). Units can use the primitive
 directly or use the class wrapper.
 
-## Recipe Conventions
+## Unit Conventions
 
-1. **One recipe per `.star` file**, named after the package. `zlib.star`
+1. **One unit per `.star` file**, named after the package. `zlib.star`
    produces the `zlib` package (plus automatic `-dev`, `-doc`, `-dbg`
    sub-packages).
 
-2. **Recipes use layer classes via `load()`:**
+2. **Units use layer classes via `load()`:**
 
    ```python
    load("//classes/autotools.star", "autotools")
@@ -259,19 +259,19 @@ directly or use the class wrapper.
    ```
 
    Within the layer, `//` is relative to the layer root. Downstream projects
-   loading from this layer use `@recipes-core//classes/autotools.star`.
+   loading from this layer use `@units-core//classes/autotools.star`.
 
 3. **Default sub-packages** apply automatically (`-dev`, `-doc`, `-dbg`).
-   Recipes only declare `subpackages` for custom splits (e.g., openssh-server
+   Units only declare `subpackages` for custom splits (e.g., openssh-server
    vs. openssh-client).
 
-4. **Version pinning** — each recipe pins an exact upstream version and sha256.
+4. **Version pinning** — each unit pins an exact upstream version and sha256.
    Version bumps are explicit commits.
 
-5. **Toolchain recipes** may set `bootstrap = True` to indicate they can be
+5. **Toolchain units** may set `bootstrap = True` to indicate they can be
    built with a foreign toolchain during stage 0/1 bootstrap.
 
-## Recipe Examples
+## Unit Examples
 
 ### Toolchain: glibc.star
 
@@ -296,7 +296,7 @@ autotools(
         "dev": auto(),
         "doc": auto(),
         "dbg": auto(),
-        "utils": subpackage(
+        "utils": subunit(
             description = "glibc utility programs",
             files = ["/usr/bin/ldd", "/usr/bin/getconf", "/sbin/ldconfig"],
         ),
@@ -308,7 +308,7 @@ autotools(
 ### Base: busybox.star
 
 ```python
-package(
+unit(
     name = "busybox",
     version = "1.36.1",
     source = "https://busybox.net/downloads/busybox-1.36.1.tar.bz2",
@@ -329,7 +329,7 @@ package(
 ### Base: linux.star (kernel)
 
 ```python
-package(
+unit(
     name = "linux",
     version = "6.6.30",
     source = "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.6.30.tar.xz",
@@ -345,7 +345,7 @@ package(
         "install -D arch/$KARCH/boot/*Image $DESTDIR/boot/",
     ],
     subpackages = {
-        "dev": subpackage(
+        "dev": subunit(
             description = "Linux kernel headers for building modules",
             files = ["/usr/src/linux/include/**", "/usr/src/linux/Module.symvers"],
         ),
@@ -391,12 +391,12 @@ autotools(
         "dev": auto(),
         "doc": auto(),
         "dbg": auto(),
-        "server": subpackage(
+        "server": subunit(
             description = "OpenSSH server",
             files = ["/usr/sbin/sshd", "/etc/ssh/sshd_config"],
             services = ["sshd"],
         ),
-        "client": subpackage(
+        "client": subunit(
             description = "OpenSSH client utilities",
             files = ["/usr/bin/ssh", "/usr/bin/scp", "/usr/bin/sftp",
                      "/usr/bin/ssh-keygen", "/usr/bin/ssh-agent"],
@@ -416,12 +416,12 @@ machine(
     arch = "x86_64",
     description = "QEMU x86_64 virtual machine (KVM)",
     kernel = kernel(
-        recipe = "linux",
+        unit = "linux",
         defconfig = "x86_64_defconfig",
         cmdline = "console=ttyS0 root=/dev/vda2 rw",
     ),
     bootloader = uboot(
-        recipe = "ovmf",
+        unit = "ovmf",
     ),
     qemu = qemu_config(
         machine = "q35",
@@ -441,7 +441,7 @@ machine(
     arch = "arm64",
     description = "QEMU AArch64 virtual machine (KVM)",
     kernel = kernel(
-        recipe = "linux",
+        unit = "linux",
         defconfig = "defconfig",
         cmdline = "console=ttyAMA0 root=/dev/vda2 rw",
     ),
@@ -463,12 +463,12 @@ machine(
     arch = "riscv64",
     description = "QEMU RISC-V 64-bit virtual machine (KVM)",
     kernel = kernel(
-        recipe = "linux",
+        unit = "linux",
         defconfig = "defconfig",
         cmdline = "console=ttyS0 root=/dev/vda2 rw",
     ),
     bootloader = uboot(
-        recipe = "opensbi",
+        unit = "opensbi",
     ),
     qemu = qemu_config(
         machine = "virt",
@@ -491,7 +491,7 @@ image(
     name = "base-image",
     version = "1.0.0",
     description = "Minimal bootable Yoe-NG system",
-    packages = [
+    artifacts = [
         "busybox",
         "systemd",
         "util-linux",
@@ -518,7 +518,7 @@ image(
     name = "dev-image",
     version = "1.0.0",
     description = "Development image with networking, SSH, and debug tools",
-    packages = [
+    artifacts = [
         # Base
         "busybox",
         "systemd",
@@ -555,8 +555,8 @@ image(
 - `LAYER.star`
 - All 10 class files (`autotools`, `cmake`, `meson`, `go`, `rust`, `python`,
   `node`, `image`, `sdk`, `systemd`)
-- Toolchain recipes: `gcc`, `binutils`, `glibc`, `linux-headers`
-- Build tool recipes: `make`, `pkg-config`, `autoconf`, `automake`, `libtool`,
+- Toolchain units: `gcc`, `binutils`, `glibc`, `linux-headers`
+- Build tool units: `make`, `pkg-config`, `autoconf`, `automake`, `libtool`,
   `cmake` (the package), `meson`, `ninja`
 
 **Deliverable:** Can build C/C++ packages from source inside a Yoe-NG build
@@ -564,12 +564,12 @@ root.
 
 ### Phase 2: Base system + QEMU machines
 
-- Base recipes: `busybox`, `systemd`, `util-linux`, `kmod`, `apk-tools`,
+- Base units: `busybox`, `systemd`, `util-linux`, `kmod`, `apk-tools`,
   `bubblewrap`
-- Kernel recipe: `linux`
-- Bootloader recipes: `u-boot`, `ovmf`, `opensbi`
+- Kernel unit: `linux`
+- Bootloader units: `u-boot`, `ovmf`, `opensbi`
 - Machine definitions: `qemu-x86_64`, `qemu-arm64`, `qemu-riscv64`
-- Image recipes: `base-image`, `dev-image`
+- Image units: `base-image`, `dev-image`
 
 **Deliverable:** `yoe build base-image --machine qemu-x86_64` produces a
 bootable image.
@@ -606,16 +606,16 @@ Moving classes from Go builtins to Starlark files requires these changes to the
      not in a layer)
    - `@layer-name//path` — relative to the named layer's root
 
-3. **Evaluate layers before project recipes.** The loader must fetch/cache
+3. **Evaluate layers before project units.** The loader must fetch/cache
    layers (per `yoe layer sync`), then make their files available for `load()`
-   resolution before evaluating project recipes.
+   resolution before evaluating project units.
 
 4. **Add `package_extend()` primitive.** Needed for `systemd_service()` and
    similar modifier classes that add metadata to an existing package without
    creating a new one.
 
-5. **Add `bootstrap` flag to `package()`.** Marks recipes that participate in
+5. **Add `bootstrap` flag to `unit()`.** Marks units that participate in
    stage 0/1 bootstrap and can be built with a foreign toolchain.
 
-6. **Recursive recipe discovery.** The current loader globs `recipes/*.star`.
-   With categorized subdirectories, it needs to glob `recipes/**/*.star`.
+6. **Recursive unit discovery.** The current loader globs `units/*.star`.
+   With categorized subdirectories, it needs to glob `units/**/*.star`.

@@ -1,7 +1,7 @@
 # Content-Addressed Cache Implementation Plan
 
 **Goal:** Replace the current rebuild-avoidance marker
-(`build/<recipe>/.yoe-hash`) with a proper content-addressed object store that
+(`build/<unit>/.yoe-hash`) with a proper content-addressed object store that
 caches both source archives and built `.apk` packages. Enable sharing across
 machines via S3-compatible remote backends.
 
@@ -47,7 +47,7 @@ Refactor `internal/source/fetch.go`:
 
 - **HTTP tarballs**: After download + SHA256 verification,
   `store.Put("sources", contentHash, tmpFile)`. Lookup uses content hash (from
-  `recipe.SHA256`), not URL hash.
+  `unit.SHA256`), not URL hash.
 - **Git repos**: Keep URL#ref hash as key (git repos are directories, not single
   files). Store under `sources/<hash>.git/`.
 - Source fetch checks `store.Has()` before downloading.
@@ -162,11 +162,11 @@ This is important for production but not needed for initial implementation.
 ## Verification
 
 1. `go test ./internal/cache/...` — unit tests for store operations
-2. Build a recipe, verify `.apk` appears in object store under correct hash
+2. Build a unit, verify `.apk` appears in object store under correct hash
 3. `yoe clean openssh && yoe build openssh` — verify cache hit (no rebuild)
 4. Copy object store to another machine, verify it builds without network
 5. Set up MinIO, configure `cache.url`, verify push/pull works
-6. Build on machine A, build same recipe on machine B — verify B gets cache hit
+6. Build on machine A, build same unit on machine B — verify B gets cache hit
 
 ## Current State vs. Target
 

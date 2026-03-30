@@ -13,24 +13,24 @@ import (
 )
 
 func TestBuildCommands_Package(t *testing.T) {
-	recipe := &yoestar.Recipe{
+	unit := &yoestar.Unit{
 		Name:  "test",
-		Class: "package",
+		Class: "unit",
 		Build: []string{"make", "make install"},
 	}
-	cmds := buildCommands(recipe)
+	cmds := buildCommands(unit)
 	if len(cmds) != 2 {
 		t.Errorf("got %d commands, want 2", len(cmds))
 	}
 }
 
 func TestBuildCommands_Autotools(t *testing.T) {
-	recipe := &yoestar.Recipe{
+	unit := &yoestar.Unit{
 		Name:          "test",
 		Class:         "autotools",
 		ConfigureArgs: []string{"--with-ssl"},
 	}
-	cmds := buildCommands(recipe)
+	cmds := buildCommands(unit)
 	if len(cmds) != 3 {
 		t.Errorf("got %d commands, want 3", len(cmds))
 	}
@@ -40,11 +40,11 @@ func TestBuildCommands_Autotools(t *testing.T) {
 }
 
 func TestBuildCommands_CMake(t *testing.T) {
-	recipe := &yoestar.Recipe{
+	unit := &yoestar.Unit{
 		Name:  "test",
 		Class: "cmake",
 	}
-	cmds := buildCommands(recipe)
+	cmds := buildCommands(unit)
 	if len(cmds) != 3 {
 		t.Errorf("got %d commands, want 3", len(cmds))
 	}
@@ -54,12 +54,12 @@ func TestBuildCommands_CMake(t *testing.T) {
 }
 
 func TestBuildCommands_Go(t *testing.T) {
-	recipe := &yoestar.Recipe{
+	unit := &yoestar.Unit{
 		Name:      "myapp",
 		Class:     "go",
 		GoPackage: "./cmd/myapp",
 	}
-	cmds := buildCommands(recipe)
+	cmds := buildCommands(unit)
 	if len(cmds) != 1 {
 		t.Errorf("got %d commands, want 1", len(cmds))
 	}
@@ -72,11 +72,11 @@ func TestBuildCommands_Go(t *testing.T) {
 }
 
 func TestBuildCommands_Image(t *testing.T) {
-	recipe := &yoestar.Recipe{
+	unit := &yoestar.Unit{
 		Name:  "base-image",
 		Class: "image",
 	}
-	cmds := buildCommands(recipe)
+	cmds := buildCommands(unit)
 	if cmds != nil {
 		t.Errorf("image should have no build commands, got %v", cmds)
 	}
@@ -85,9 +85,9 @@ func TestBuildCommands_Image(t *testing.T) {
 func TestDryRun(t *testing.T) {
 	proj := &yoestar.Project{
 		Name: "test",
-		Recipes: map[string]*yoestar.Recipe{
-			"zlib":    {Name: "zlib", Version: "1.3", Class: "package", Build: []string{"make"}},
-			"openssh": {Name: "openssh", Version: "9.6", Class: "package", Deps: []string{"zlib"}, Build: []string{"make"}},
+		Units: map[string]*yoestar.Unit{
+			"zlib":    {Name: "zlib", Version: "1.3", Class: "unit", Build: []string{"make"}},
+			"openssh": {Name: "openssh", Version: "9.6", Class: "unit", Deps: []string{"zlib"}, Build: []string{"make"}},
 		},
 	}
 
@@ -98,8 +98,8 @@ func TestDryRun(t *testing.T) {
 		Arch:       "arm64",
 	}
 
-	if err := BuildRecipes(proj, nil, opts, &buf); err != nil {
-		t.Fatalf("BuildRecipes dry run: %v", err)
+	if err := BuildUnits(proj, nil, opts, &buf); err != nil {
+		t.Fatalf("BuildUnits dry run: %v", err)
 	}
 
 	output := buf.String()
@@ -113,7 +113,7 @@ func TestDryRun(t *testing.T) {
 
 func TestCacheMarker(t *testing.T) {
 	dir := t.TempDir()
-	name := "test-recipe"
+	name := "test-unit"
 	hash := "abc123def456"
 
 	// Not cached initially
@@ -137,7 +137,7 @@ func TestCacheMarker(t *testing.T) {
 
 func TestFilterBuildOrder(t *testing.T) {
 	proj := &yoestar.Project{
-		Recipes: map[string]*yoestar.Recipe{
+		Units: map[string]*yoestar.Unit{
 			"a": {Name: "a"},
 			"b": {Name: "b", Deps: []string{"a"}},
 			"c": {Name: "c", Deps: []string{"b"}},
@@ -155,7 +155,7 @@ func TestFilterBuildOrder(t *testing.T) {
 
 	// c depends on b depends on a — should include all three but not d
 	if len(filtered) != 3 {
-		t.Errorf("got %d recipes, want 3 (a, b, c)", len(filtered))
+		t.Errorf("got %d units, want 3 (a, b, c)", len(filtered))
 	}
 
 	has := make(map[string]bool)
@@ -170,7 +170,7 @@ func TestFilterBuildOrder(t *testing.T) {
 	}
 }
 
-func TestBuildRecipes_WithDeps(t *testing.T) {
+func TestBuildUnits_WithDeps(t *testing.T) {
 	if os.Getenv("CI") != "" {
 		t.Skip("requires --privileged container with user namespace support")
 	}
@@ -180,12 +180,12 @@ func TestBuildRecipes_WithDeps(t *testing.T) {
 		}
 	}
 
-	// Create a project with recipes that have trivial build steps
+	// Create a project with units that have trivial build steps
 	projectDir := t.TempDir()
 
 	proj := &yoestar.Project{
 		Name: "test",
-		Recipes: map[string]*yoestar.Recipe{
+		Units: map[string]*yoestar.Unit{
 			"hello": {
 				Name:    "hello",
 				Version: "1.0",
@@ -218,8 +218,8 @@ func TestBuildRecipes_WithDeps(t *testing.T) {
 		Arch:       "x86_64",
 	}
 
-	if err := BuildRecipes(proj, []string{"hello"}, opts, &buf); err != nil {
-		t.Fatalf("BuildRecipes: %v", err)
+	if err := BuildUnits(proj, []string{"hello"}, opts, &buf); err != nil {
+		t.Fatalf("BuildUnits: %v", err)
 	}
 
 	output := buf.String()

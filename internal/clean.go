@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 )
 
-func RunClean(projectDir string, all bool, recipes []string) error {
+func RunClean(projectDir string, all bool, units []string) error {
 	buildDir := filepath.Join(projectDir, "build")
 
-	if len(recipes) > 0 {
-		for _, r := range recipes {
+	if len(units) > 0 {
+		for _, r := range units {
 			dir := filepath.Join(buildDir, r)
 			if err := os.RemoveAll(dir); err != nil {
 				return fmt.Errorf("removing %s: %w", dir, err)

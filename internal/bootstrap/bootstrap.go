@@ -9,13 +9,13 @@ import (
 
 	yoe "github.com/YoeDistro/yoe-ng/internal"
 	"github.com/YoeDistro/yoe-ng/internal/build"
-	"github.com/YoeDistro/yoe-ng/internal/packaging"
+	"github.com/YoeDistro/yoe-ng/internal/artifact"
 	"github.com/YoeDistro/yoe-ng/internal/repo"
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
-// Bootstrap recipe names — the minimal set needed for a self-hosting build root.
-var bootstrapRecipes = []string{
+// Bootstrap unit names — the minimal set needed for a self-hosting build root.
+var bootstrapUnits = []string{
 	"linux-headers",
 	"glibc",
 	"binutils",
@@ -35,26 +35,26 @@ func Stage0(proj *yoestar.Project, projectDir string, w io.Writer) error {
 
 	arch := build.Arch()
 
-	// Verify bootstrap recipes exist
+	// Verify bootstrap units exist
 	var missing []string
-	for _, name := range bootstrapRecipes {
-		if _, ok := proj.Recipes[name]; !ok {
+	for _, name := range bootstrapUnits {
+		if _, ok := proj.Units[name]; !ok {
 			missing = append(missing, name)
 		}
 	}
 	if len(missing) > 0 {
-		return fmt.Errorf("bootstrap recipes not found: %s\nAdd them to your project or include a layer that provides them",
+		return fmt.Errorf("bootstrap units not found: %s\nAdd them to your project or include a layer that provides them",
 			strings.Join(missing, ", "))
 	}
 
-	// Build each bootstrap recipe without sandbox isolation (using host tools)
+	// Build each bootstrap unit without sandbox isolation (using host tools)
 	repoDir := repo.RepoDir(proj, projectDir)
 
-	for _, name := range bootstrapRecipes {
-		recipe := proj.Recipes[name]
-		fmt.Fprintf(w, "\n--- Building %s %s ---\n", recipe.Name, recipe.Version)
+	for _, name := range bootstrapUnits {
+		unit := proj.Units[name]
+		fmt.Fprintf(w, "\n--- Building %s %s ---\n", unit.Name, unit.Version)
 
-		buildDir := build.RecipeBuildDir(projectDir, recipe.Name)
+		buildDir := build.UnitBuildDir(projectDir, unit.Name)
 		destDir := filepath.Join(buildDir, "destdir")
 
 		// Clean and prepare
@@ -62,9 +62,9 @@ func Stage0(proj *yoestar.Project, projectDir string, w io.Writer) error {
 		os.MkdirAll(destDir, 0755)
 
 		// Get build commands
-		commands := stage0Commands(recipe)
+		commands := stage0Commands(unit)
 		if len(commands) == 0 {
-			fmt.Fprintf(w, "  (no build steps for %s)\n", recipe.Name)
+			fmt.Fprintf(w, "  (no build steps for %s)\n", unit.Name)
 			continue
 		}
 
@@ -86,25 +86,25 @@ func Stage0(proj *yoestar.Project, projectDir string, w io.Writer) error {
 				ProjectDir: projectDir,
 			}
 			if err := build.RunSimple(cfg, cmd); err != nil {
-				return fmt.Errorf("stage0 %s step %d: %w", recipe.Name, i+1, err)
+				return fmt.Errorf("stage0 %s step %d: %w", unit.Name, i+1, err)
 			}
 		}
 
 		// Package the output
-		apkPath, err := packaging.CreateAPK(recipe, destDir, filepath.Join(buildDir, "pkg"))
+		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"))
 		if err != nil {
-			return fmt.Errorf("packaging %s: %w", recipe.Name, err)
+			return fmt.Errorf("packaging %s: %w", unit.Name, err)
 		}
 
 		// Publish to the local repo
 		if err := repo.Publish(apkPath, repoDir); err != nil {
-			return fmt.Errorf("publishing %s: %w", recipe.Name, err)
+			return fmt.Errorf("publishing %s: %w", unit.Name, err)
 		}
 
 		fmt.Fprintf(w, "  → %s\n", filepath.Base(apkPath))
 	}
 
-	fmt.Fprintf(w, "\n=== Stage 0 complete: %d packages in %s ===\n", len(bootstrapRecipes), repoDir)
+	fmt.Fprintf(w, "\n=== Stage 0 complete: %d packages in %s ===\n", len(bootstrapUnits), repoDir)
 	return nil
 }
 
@@ -129,18 +129,18 @@ func Stage1(proj *yoestar.Project, projectDir string, w io.Writer) error {
 		return fmt.Errorf("creating build root: %w", err)
 	}
 
-	// Rebuild each bootstrap recipe inside the build root
-	for _, name := range bootstrapRecipes {
-		recipe := proj.Recipes[name]
-		fmt.Fprintf(w, "\n--- Rebuilding %s %s (self-hosted) ---\n", recipe.Name, recipe.Version)
+	// Rebuild each bootstrap unit inside the build root
+	for _, name := range bootstrapUnits {
+		unit := proj.Units[name]
+		fmt.Fprintf(w, "\n--- Rebuilding %s %s (self-hosted) ---\n", unit.Name, unit.Version)
 
-		buildDir := build.RecipeBuildDir(projectDir, recipe.Name)
+		buildDir := build.UnitBuildDir(projectDir, unit.Name)
 		destDir := filepath.Join(buildDir, "destdir")
 
 		os.RemoveAll(destDir)
 		os.MkdirAll(destDir, 0755)
 
-		commands := stage0Commands(recipe)
+		commands := stage0Commands(unit)
 		if len(commands) == 0 {
 			continue
 		}
@@ -165,17 +165,17 @@ func Stage1(proj *yoestar.Project, projectDir string, w io.Writer) error {
 				ProjectDir: projectDir,
 			}
 			if err := build.RunInSandbox(cfg, cmd); err != nil {
-				return fmt.Errorf("stage1 %s step %d: %w", recipe.Name, i+1, err)
+				return fmt.Errorf("stage1 %s step %d: %w", unit.Name, i+1, err)
 			}
 		}
 
 		// Package and publish (overwriting Stage 0 packages)
-		apkPath, err := packaging.CreateAPK(recipe, destDir, filepath.Join(buildDir, "pkg"))
+		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"))
 		if err != nil {
-			return fmt.Errorf("packaging %s: %w", recipe.Name, err)
+			return fmt.Errorf("packaging %s: %w", unit.Name, err)
 		}
 		if err := repo.Publish(apkPath, repoDir); err != nil {
-			return fmt.Errorf("publishing %s: %w", recipe.Name, err)
+			return fmt.Errorf("publishing %s: %w", unit.Name, err)
 		}
 
 		fmt.Fprintf(w, "  → %s (self-hosted)\n", filepath.Base(apkPath))
@@ -193,10 +193,10 @@ func Status(proj *yoestar.Project, projectDir string, w io.Writer) error {
 	fmt.Fprintf(w, "Repository: %s\n", repoDir)
 	fmt.Fprintf(w, "Architecture: %s\n\n", build.Arch())
 
-	for _, name := range bootstrapRecipes {
+	for _, name := range bootstrapUnits {
 		status := "missing"
-		if _, ok := proj.Recipes[name]; ok {
-			status = "recipe found"
+		if _, ok := proj.Units[name]; ok {
+			status = "unit found"
 		}
 
 		// Check if package exists in repo
@@ -216,19 +216,19 @@ func Status(proj *yoestar.Project, projectDir string, w io.Writer) error {
 	return nil
 }
 
-// stage0Commands returns the build commands for a bootstrap recipe.
-// Bootstrap builds use the host toolchain directly, so we use the recipe's
+// stage0Commands returns the build commands for a bootstrap unit.
+// Bootstrap builds use the host toolchain directly, so we use the unit's
 // build steps if available, or class-specific defaults.
-func stage0Commands(recipe *yoestar.Recipe) []string {
-	if len(recipe.Build) > 0 {
-		return recipe.Build
+func stage0Commands(unit *yoestar.Unit) []string {
+	if len(unit.Build) > 0 {
+		return unit.Build
 	}
 
-	switch recipe.Class {
+	switch unit.Class {
 	case "autotools":
 		args := ""
-		if len(recipe.ConfigureArgs) > 0 {
-			args = " " + strings.Join(recipe.ConfigureArgs, " ")
+		if len(unit.ConfigureArgs) > 0 {
+			args = " " + strings.Join(unit.ConfigureArgs, " ")
 		}
 		return []string{
 			"./configure --prefix=$PREFIX" + args,
@@ -237,8 +237,8 @@ func stage0Commands(recipe *yoestar.Recipe) []string {
 		}
 	case "cmake":
 		args := ""
-		if len(recipe.ConfigureArgs) > 0 {
-			args = " " + strings.Join(recipe.ConfigureArgs, " ")
+		if len(unit.ConfigureArgs) > 0 {
+			args = " " + strings.Join(unit.ConfigureArgs, " ")
 		}
 		return []string{
 			"cmake -B build -DCMAKE_INSTALL_PREFIX=$PREFIX" + args,
@@ -256,7 +256,7 @@ func verifyStage0(repoDir string) error {
 		return fmt.Errorf("repo not found at %s", repoDir)
 	}
 
-	for _, name := range bootstrapRecipes {
+	for _, name := range bootstrapUnits {
 		found := false
 		for _, e := range entries {
 			if strings.HasPrefix(e.Name(), name+"-") && strings.HasSuffix(e.Name(), ".apk") {
@@ -288,7 +288,7 @@ func createBuildRoot(buildRoot, repoDir, projectDir string, w io.Writer) error {
 		"--repository", "/build/repo",
 		"add",
 	}
-	args = append(args, bootstrapRecipes...)
+	args = append(args, bootstrapUnits...)
 	cmd := strings.Join(args, " ")
 
 	return yoe.RunInContainer(yoe.ContainerRunConfig{

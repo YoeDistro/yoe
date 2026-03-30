@@ -13,7 +13,7 @@ capable but carries significant complexity.
 
 - **Machine abstraction** — a declarative way to define board-specific
   configuration (kernel defconfig, device tree, bootloader, partition layout).
-- **Image recipes** — composable definitions of what goes into a root filesystem
+- **Image units** — composable definitions of what goes into a root filesystem
   image and how it's laid out on disk.
 - **Layer architecture** — the ability to overlay vendor BSP customizations on
   top of a common base without forking.
@@ -23,10 +23,10 @@ capable but carries significant complexity.
 **What Yoe-NG leaves behind:**
 
 - BitBake and the task-level dependency graph.
-- The recipe/bbappend/bbclass metadata system.
+- The unit/bbappend/bbclass metadata system.
 - sstate-cache complexity — Yocto's sstate is per-task and requires careful
   configuration of mirrors, hash equivalence servers, and signing. Yoe-NG's
-  cache is per-recipe, stored in S3-compatible object storage, and needs only a
+  cache is per-unit, stored in S3-compatible object storage, and needs only a
   bucket URL.
 - Cross-compilation toolchains.
 - Python as the tooling language.
@@ -37,12 +37,12 @@ capable but carries significant complexity.
 | ------------------- | -------------------------------------------- | ----------------------------------------------- |
 | Build system        | BitBake (Python)                             | `yoe` (Go)                                      |
 | Package format      | rpm / deb / ipk                              | apk                                             |
-| Config format       | BitBake recipes (.bb/.bbappend)              | Starlark (Python-like)                          |
+| Config format       | BitBake units (.bb/.bbappend)              | Starlark (Python-like)                          |
 | Cross-compilation   | Required, central design assumption          | None — native builds only                       |
-| Dependency model    | Task-level DAG (do_fetch → do_compile → ...) | Recipe-level DAG (simpler, atomic per-recipe)   |
-| Language ecosystems | Wrapped in recipes                           | Native toolchains (go modules, cargo, etc.)     |
+| Dependency model    | Task-level DAG (do_fetch → do_compile → ...) | Unit-level DAG (simpler, atomic per-unit)   |
+| Language ecosystems | Wrapped in units                           | Native toolchains (go modules, cargo, etc.)     |
 | Learning curve      | Steep — weeks to become productive           | Shallow — Starlark (Python-like)                |
-| Build caching       | sstate (per-task, hash-based, complex setup) | Per-recipe `.apk` hashes in S3-compatible cache |
+| Build caching       | sstate (per-task, hash-based, complex setup) | Per-unit `.apk` hashes in S3-compatible cache |
 | Multi-image support | Yes — multiple images from one project       | Yes — image inheritance + machine matrix        |
 | On-device updates   | Possible but complex (smart image)           | Built-in via apk repositories                   |
 
@@ -82,7 +82,7 @@ shares Yoe-NG's preference for simplicity.
 | CI/team sharing    | Everyone rebuilds from scratch                | Push/pull from shared package repo                  |
 | Composable images  | No — single image output                      | Yes — assemble different images from same packages  |
 
-**The biggest structural difference** is the recipe/package split. Buildroot has
+**The biggest structural difference** is the unit/package split. Buildroot has
 no concept of installable packages — it builds everything into a monolithic
 rootfs. This means:
 
@@ -138,7 +138,7 @@ looks like.
 | Target            | Containers, small servers         | Custom embedded hardware                             |
 | BSP support       | Generic x86/ARM images            | Per-board machine definitions                        |
 | Image assembly    | `alpine-make-rootfs`              | `yoe build <image>` with machine + partition support |
-| Build system      | `abuild` + APKBUILD shell scripts | `yoe build` + Starlark recipes                       |
+| Build system      | `abuild` + APKBUILD shell scripts | `yoe build` + Starlark units                       |
 | Kernel management | Generic kernels                   | Per-machine kernel config, device trees              |
 | OTA updates       | Standard apk upgrade              | apk + full image update + rollback                   |
 
@@ -159,8 +159,8 @@ transparency directly influences Yoe-NG's design.
 - **Minimal base, user-assembled** — ship the smallest useful system and let the
   integrator compose what they need.
 - **PKGBUILD-style simplicity** — build definitions should be concise, readable
-  shell-like scripts, not complex metadata. Yoe-NG's Starlark recipes aim for
-  similar auditability — simple recipes read like declarative config.
+  shell-like scripts, not complex metadata. Yoe-NG's Starlark units aim for
+  similar auditability — simple units read like declarative config.
 - **Documentation culture** — invest in clear, practical docs rather than tribal
   knowledge.
 
@@ -178,7 +178,7 @@ transparency directly influences Yoe-NG's design.
 | Target            | Desktop/server, x86-first | Embedded, multi-arch            |
 | Package manager   | pacman                    | apk                             |
 | Package format    | tar.zst + .PKGINFO        | apk (tar.gz + .PKGINFO)         |
-| Build definitions | PKGBUILD (bash)           | Starlark recipes                |
+| Build definitions | PKGBUILD (bash)           | Starlark units                |
 | Reproducibility   | Not a goal                | Content-addressed builds        |
 | Image assembly    | Manual (pacstrap)         | Automated (`yoe build <image>`) |
 | Administration    | Interactive (hands-on)    | Declarative (config-driven)     |
@@ -231,7 +231,7 @@ content-addressed build outputs in S3-compatible storage. The key differences:
 Nix caches _closures_ (a package plus all its transitive runtime dependencies),
 which can be very large. Yoe-NG caches individual `.apk` packages, which are
 smaller and more granular. Nix's content addressing is based on the full
-derivation hash (all inputs); Yoe-NG uses a similar scheme but at recipe
+derivation hash (all inputs); Yoe-NG uses a similar scheme but at unit
 granularity rather than Nix's per-output granularity.
 
 **When to use Nix instead:** when you need the strongest possible
@@ -249,25 +249,25 @@ tooling design.
 
 - **Two-phase resolve-then-build** — GN fully resolves and validates the
   dependency graph before generating any build files. `yoe build` does the same:
-  resolve the entire recipe DAG, check for errors, then build. No partial builds
+  resolve the entire unit DAG, check for errors, then build. No partial builds
   from graph errors discovered mid-way.
 - **Config propagation** — GN's `public_configs` automatically apply compiler
   flags to anything that depends on a target. Yoe-NG propagates machine-level
-  settings (arch flags, optimization, kernel headers) through the recipe graph.
+  settings (arch flags, optimization, kernel headers) through the unit graph.
 - **Build introspection** — GN provides `gn desc` (what does this target do?)
   and `gn refs` (what depends on this?). Yoe-NG provides `yoe desc`, `yoe refs`,
   and `yoe graph` for the same purpose.
 - **Label-based references** — GN uses `//path/to:target` for unambiguous target
-  identification. Yoe-NG uses a similar scheme for composable recipe references
+  identification. Yoe-NG uses a similar scheme for composable unit references
   across repositories.
 
 **What Yoe-NG leaves behind:**
 
-- Ninja file generation — Yoe-NG's recipe builds are coarse-grained enough that
+- Ninja file generation — Yoe-NG's unit builds are coarse-grained enough that
   `yoe` orchestrates directly.
 - GN's custom scripting language — Starlark serves the same purpose for Yoe-NG.
 - C/C++ build model specifics — GN is deeply tied to source-file-level
-  dependency tracking, which isn't relevant for recipe-level builds.
+  dependency tracking, which isn't relevant for unit-level builds.
 
 **Key differences:**
 
@@ -276,7 +276,7 @@ tooling design.
 | Purpose                | C/C++ meta-build system | Embedded Linux distribution builder |
 | Output                 | Ninja build files       | `.apk` packages and disk images     |
 | Config language        | GN (custom)             | Starlark (Python-like)              |
-| Dependency granularity | Source file / target    | Recipe (package)                    |
+| Dependency granularity | Source file / target    | Unit (package)                    |
 | Build execution        | Ninja                   | `yoe` directly                      |
 | Introspection          | `gn desc`, `gn refs`    | `yoe desc`, `yoe refs`, `yoe graph` |
 
@@ -288,7 +288,7 @@ well-proven patterns that Yoe-NG applies to the embedded Linux domain.
 
 ### The Core Thesis
 
-Yocto's model of wrapping every dependency in a recipe made sense when C/C++ was
+Yocto's model of wrapping every dependency in a unit made sense when C/C++ was
 the only game in town and there was no dependency management beyond "whatever
 headers are on the system." Modern languages have solved this:
 
@@ -303,7 +303,7 @@ already knows about — `SRC_URI` with checksums for each crate,
 `LIC_FILES_CHKSUM` for each module. This is busywork that duplicates what
 `Cargo.lock` and `go.sum` already guarantee.
 
-Yoe-NG's position: **let the language package manager do its job.** A Go recipe
+Yoe-NG's position: **let the language package manager do its job.** A Go unit
 should declare _what_ to build, not _how to resolve every transitive
 dependency_. Content-addressed caching hashes the output — if inputs haven't
 changed, the output is the same. You get reproducibility without micromanaging
@@ -319,13 +319,13 @@ This is not a technology problem — it's an ecosystem problem that Linux
 Foundation backing solves. No amount of technical superiority overcomes "the
 silicon vendor gives us a Yocto BSP and supports it."
 
-**Package count.** Yocto has thousands of recipes, Buildroot has ~2800. Yoe-NG
+**Package count.** Yocto has thousands of units, Buildroot has ~2800. Yoe-NG
 has a handful. Need curl, dbus, python3, or ffmpeg? You have to write the
-recipe.
+unit.
 
 **Configuration UX.** Buildroot's `make menuconfig` is a killer feature —
 visual, discoverable, searchable. You can explore what's available without
-reading recipe files. Yoe-NG requires editing Starlark by hand.
+reading unit files. Yoe-NG requires editing Starlark by hand.
 
 **Documentation and community.** Yocto has comprehensive manuals, Bootlin
 training materials, and years of mailing list archives. Buildroot has a
@@ -344,13 +344,13 @@ Buildroot runs on millions of devices. Yoe-NG is a prototype.
 **Target audience:** Teams building Go/Rust/Zig services for embedded Linux —
 edge computing, IoT gateways, network appliances. Teams where the application
 _is_ the product, not the base OS. Teams that want "Alpine + my app on custom
-hardware" not "custom Linux distro with 200 hand-tuned recipes."
+hardware" not "custom Linux distro with 200 hand-tuned units."
 
 These teams currently use Buildroot, hack together Docker-based builds, or
 cross-compile manually. They would never adopt Yocto because the overhead is
 absurd for their use case.
 
-**First-class modern language support.** Go/Rust/Zig recipe classes should be
+**First-class modern language support.** Go/Rust/Zig unit classes should be
 trivial to use. The build system should get out of the way and let `go build`,
 `cargo build`, and `zig build` do their jobs. This is where Yocto is most out of
 touch.
@@ -359,7 +359,7 @@ touch.
 Fedora, Alpine) have great package management but no story for custom kernels,
 device trees, bootloaders, board-specific firmware, or flash/deploy workflows.
 This is the entire reason Yocto and Buildroot exist. Yoe-NG should provide BSP
-tooling (machine definitions, kernel recipes, `yoe flash`, `yoe run`) that is
+tooling (machine definitions, kernel units, `yoe flash`, `yoe run`) that is
 simpler than Yocto's but more capable than anything desktop distros offer.
 
 **Incremental builds and shared caching.** Buildroot rebuilds everything from
@@ -368,8 +368,8 @@ content-addressed `.apk` cache in S3-compatible storage is conceptually simpler:
 push packages to a bucket, pull them on other machines. CI builds once,
 developers reuse the output.
 
-**AI-assisted recipe generation.** If an AI can generate a working Starlark
-recipe from a project URL faster than porting a Yocto recipe, the small package
+**AI-assisted unit generation.** If an AI can generate a working Starlark
+unit from a project URL faster than porting a Yocto unit, the small package
 count stops mattering. Starlark is far more tractable for AI than BitBake's
 metadata format.
 
@@ -383,19 +383,19 @@ Buildroot is too limited.
 
 ### What to Focus On
 
-1. **Modern language recipe classes** — Go, Rust, Zig should be first-class, not
+1. **Modern language unit classes** — Go, Rust, Zig should be first-class, not
    afterthoughts. These are the differentiator. A Go developer should go from "I
    have a binary" to "I have a bootable image on custom hardware" in minutes.
 
-2. **BSP tooling** — machine definitions, kernel/bootloader recipes,
+2. **BSP tooling** — machine definitions, kernel/bootloader units,
    `yoe flash`, `yoe run`. This is what desktop distros lack and what justifies
    Yoe-NG's existence as a build system rather than just another distro.
 
 3. **Shared build cache** — the S3-backed package cache is a major advantage
    over Buildroot. Make it trivial to set up so teams see the value immediately.
 
-4. **AI recipe generation** — lean into the AI-native angle. If generating a new
-   recipe is a conversation rather than a manual porting exercise, the package
+4. **AI unit generation** — lean into the AI-native angle. If generating a new
+   unit is a conversation rather than a manual porting exercise, the package
    count gap closes fast.
 
 5. **Board support** — start with popular, accessible boards (Raspberry Pi,
@@ -403,7 +403,7 @@ Buildroot is too limited.
    potential user who doesn't need Yocto.
 
 6. **Don't chase Yocto's tail** — resist the urge to add Yocto-like features
-   (task-level DAGs, recipe splitting, bbappend equivalents) to win over Yocto
+   (task-level DAGs, unit splitting, bbappend equivalents) to win over Yocto
    users. Instead, make the simple path so good that teams choose Yoe-NG because
    it fits their workflow, not because it replicates Yocto's.
 

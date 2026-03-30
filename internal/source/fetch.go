@@ -27,29 +27,29 @@ func CacheDir() (string, error) {
 	return dir, nil
 }
 
-// Fetch downloads the source for a recipe into the cache.
+// Fetch downloads the source for a unit into the cache.
 // Returns the path to the cached source (tarball or bare git repo).
-func Fetch(recipe *yoestar.Recipe) (string, error) {
+func Fetch(unit *yoestar.Unit) (string, error) {
 	cacheDir, err := CacheDir()
 	if err != nil {
 		return "", err
 	}
 
-	if recipe.Source == "" {
-		return "", fmt.Errorf("recipe %q has no source", recipe.Name)
+	if unit.Source == "" {
+		return "", fmt.Errorf("unit %q has no source", unit.Name)
 	}
 
-	if isGitURL(recipe.Source) {
-		return fetchGit(cacheDir, recipe)
+	if isGitURL(unit.Source) {
+		return fetchGit(cacheDir, unit)
 	}
-	return fetchHTTP(cacheDir, recipe)
+	return fetchHTTP(cacheDir, unit)
 }
 
 // fetchHTTP downloads a tarball and caches it by URL hash.
-func fetchHTTP(cacheDir string, recipe *yoestar.Recipe) (string, error) {
+func fetchHTTP(cacheDir string, unit *yoestar.Unit) (string, error) {
 	// Cache key: sha256 of URL
-	urlHash := fmt.Sprintf("%x", sha256.Sum256([]byte(recipe.Source)))
-	ext := guessExt(recipe.Source)
+	urlHash := fmt.Sprintf("%x", sha256.Sum256([]byte(unit.Source)))
+	ext := guessExt(unit.Source)
 	cachedPath := filepath.Join(cacheDir, urlHash+ext)
 
 	// Already cached?
@@ -57,16 +57,16 @@ func fetchHTTP(cacheDir string, recipe *yoestar.Recipe) (string, error) {
 		return cachedPath, nil
 	}
 
-	fmt.Printf("Fetching %s...\n", recipe.Source)
+	fmt.Printf("Fetching %s...\n", unit.Source)
 
-	resp, err := http.Get(recipe.Source)
+	resp, err := http.Get(unit.Source)
 	if err != nil {
-		return "", fmt.Errorf("downloading %s: %w", recipe.Source, err)
+		return "", fmt.Errorf("downloading %s: %w", unit.Source, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("downloading %s: HTTP %d", recipe.Source, resp.StatusCode)
+		return "", fmt.Errorf("downloading %s: HTTP %d", unit.Source, resp.StatusCode)
 	}
 
 	// Write to temp file then rename (atomic)
@@ -80,16 +80,16 @@ func fetchHTTP(cacheDir string, recipe *yoestar.Recipe) (string, error) {
 	if _, err := io.Copy(io.MultiWriter(tmp, h), resp.Body); err != nil {
 		tmp.Close()
 		os.Remove(tmpPath)
-		return "", fmt.Errorf("downloading %s: %w", recipe.Source, err)
+		return "", fmt.Errorf("downloading %s: %w", unit.Source, err)
 	}
 	tmp.Close()
 
 	// Verify SHA256 if specified
 	actualHash := fmt.Sprintf("%x", h.Sum(nil))
-	if recipe.SHA256 != "" && actualHash != recipe.SHA256 {
+	if unit.SHA256 != "" && actualHash != unit.SHA256 {
 		os.Remove(tmpPath)
 		return "", fmt.Errorf("SHA256 mismatch for %s: expected %s, got %s",
-			recipe.Source, recipe.SHA256, actualHash)
+			unit.Source, unit.SHA256, actualHash)
 	}
 
 	if err := os.Rename(tmpPath, cachedPath); err != nil {
@@ -103,49 +103,49 @@ func fetchHTTP(cacheDir string, recipe *yoestar.Recipe) (string, error) {
 // fetchGit clones or updates a bare git repo in the cache.
 // Uses shallow clone by default (only the pinned tag/branch) to avoid
 // downloading full history. For the Linux kernel this is ~4GB vs ~200MB.
-func fetchGit(cacheDir string, recipe *yoestar.Recipe) (string, error) {
+func fetchGit(cacheDir string, unit *yoestar.Unit) (string, error) {
 	// Cache key: sha256 of repo URL + ref (different tags get different clones)
-	ref := recipe.Tag
+	ref := unit.Tag
 	if ref == "" {
-		ref = recipe.Branch
+		ref = unit.Branch
 	}
 	if ref == "" {
 		ref = "HEAD"
 	}
-	cacheKey := recipe.Source + "#" + ref
+	cacheKey := unit.Source + "#" + ref
 	urlHash := fmt.Sprintf("%x", sha256.Sum256([]byte(cacheKey)))
 	barePath := filepath.Join(cacheDir, urlHash+".git")
 
 	if _, err := os.Stat(barePath); os.IsNotExist(err) {
-		fmt.Printf("Cloning %s (ref: %s)...\n", recipe.Source, ref)
+		fmt.Printf("Cloning %s (ref: %s)...\n", unit.Source, ref)
 
 		// Shallow clone of just the ref we need
 		args := []string{"clone", "--bare", "--depth", "1"}
-		if recipe.Tag != "" {
-			args = append(args, "--branch", recipe.Tag)
-		} else if recipe.Branch != "" {
-			args = append(args, "--branch", recipe.Branch)
+		if unit.Tag != "" {
+			args = append(args, "--branch", unit.Tag)
+		} else if unit.Branch != "" {
+			args = append(args, "--branch", unit.Branch)
 		}
-		args = append(args, recipe.Source, barePath)
+		args = append(args, unit.Source, barePath)
 
 		cmd := exec.Command("git", args...)
 		if out, err := cmd.CombinedOutput(); err != nil {
-			return "", fmt.Errorf("git clone %s: %s\n%s", recipe.Source, err, out)
+			return "", fmt.Errorf("git clone %s: %s\n%s", unit.Source, err, out)
 		}
 	} else {
 		// Repo already cached — fetch the specific ref if needed
-		fmt.Printf("Using cached %s (ref: %s)\n", recipe.Source, ref)
+		fmt.Printf("Using cached %s (ref: %s)\n", unit.Source, ref)
 	}
 
 	return barePath, nil
 }
 
 // Verify checks the SHA256 of a cached source file.
-func Verify(recipe *yoestar.Recipe) error {
-	if recipe.SHA256 == "" {
+func Verify(unit *yoestar.Unit) error {
+	if unit.SHA256 == "" {
 		return nil // no hash to verify
 	}
-	if isGitURL(recipe.Source) {
+	if isGitURL(unit.Source) {
 		return nil // git sources verified by commit hash
 	}
 
@@ -154,8 +154,8 @@ func Verify(recipe *yoestar.Recipe) error {
 		return err
 	}
 
-	urlHash := fmt.Sprintf("%x", sha256.Sum256([]byte(recipe.Source)))
-	ext := guessExt(recipe.Source)
+	urlHash := fmt.Sprintf("%x", sha256.Sum256([]byte(unit.Source)))
+	ext := guessExt(unit.Source)
 	cachedPath := filepath.Join(cacheDir, urlHash+ext)
 
 	f, err := os.Open(cachedPath)
@@ -170,9 +170,9 @@ func Verify(recipe *yoestar.Recipe) error {
 	}
 
 	actual := fmt.Sprintf("%x", h.Sum(nil))
-	if actual != recipe.SHA256 {
+	if actual != unit.SHA256 {
 		return fmt.Errorf("SHA256 mismatch for %s: expected %s, got %s",
-			recipe.Name, recipe.SHA256, actual)
+			unit.Name, unit.SHA256, actual)
 	}
 
 	return nil

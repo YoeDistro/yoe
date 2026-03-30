@@ -17,7 +17,7 @@ func TestRunInit(t *testing.T) {
 		"PROJECT.star",
 		".gitignore",
 		"machines",
-		"recipes",
+		"units",
 		"classes",
 		"overlays",
 	} {

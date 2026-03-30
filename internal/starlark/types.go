@@ -10,7 +10,7 @@ type Project struct {
 	Sources    SourcesConfig
 	Layers     []LayerRef
 	Machines   map[string]*Machine
-	Recipes    map[string]*Recipe
+	Units      map[string]*Unit
 }
 
 type Defaults struct {
@@ -74,7 +74,7 @@ type KernelConfig struct {
 	Tag         string
 	Defconfig   string
 	DeviceTrees []string
-	Recipe      string
+	Unit        string
 	Cmdline     string
 }
 
@@ -93,11 +93,11 @@ type QEMUConfig struct {
 	Display  string
 }
 
-// Recipe represents an evaluated package(), autotools(), image(), etc. call.
-type Recipe struct {
+// Unit represents an evaluated unit(), autotools(), image(), etc. call.
+type Unit struct {
 	Name        string
 	Version     string
-	Class       string // "package", "autotools", "cmake", "go", "image", etc.
+	Class       string // "unit", "autotools", "cmake", "go", "image", etc.
 	Description string
 	License     string
 
@@ -113,18 +113,18 @@ type Recipe struct {
 	RuntimeDeps []string
 
 	// Build
-	Build         []string // shell commands (for generic package())
+	Build         []string // shell commands (for generic unit())
 	ConfigureArgs []string // for autotools/cmake
 	GoPackage     string   // for go_binary
 
-	// Package metadata
+	// Artifact metadata
 	Services    []string
 	Conffiles   []string
 	Environment map[string]string
-	NoSysroot   bool // skip sysroot install (target-only packages like busybox)
+	NoSysroot   bool // skip sysroot install (target-only units like busybox)
 
 	// Image-specific (class == "image")
-	Packages   []string // packages to install in rootfs
+	Artifacts  []string // artifacts to install in rootfs
 	Exclude    []string
 	Hostname   string
 	Timezone   string

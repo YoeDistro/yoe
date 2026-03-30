@@ -14,7 +14,7 @@ to a bootable image fast. Self-built packages replace Alpine's incrementally via
 the bootstrap process later.
 
 The critical path is: APKINDEX generation → load() for layer imports →
-recipes-core layer with real recipes → disk image generation → boot in QEMU.
+units-core layer with real units → disk image generation → boot in QEMU.
 
 **Tech Stack:** Go, go.starlark.net, apk-tools, bubblewrap, QEMU, syslinux/
 extlinux (bootloader), mkfs.ext4, mkfs.vfat
@@ -26,11 +26,11 @@ extlinux (bootloader), mkfs.ext4, mkfs.vfat
 | Step | Name                            | Deliverable                                         |
 | ---- | ------------------------------- | --------------------------------------------------- |
 | 1    | APKINDEX generation             | `apk` can resolve deps from our local repo          |
-| 2    | Starlark load() implementation  | Recipes can import classes from layers              |
-| 3    | Recursive recipe discovery      | `recipes/**/*.star` works for categorized layouts   |
-| 4    | recipes-core: classes           | Starlark autotools/cmake/go/image class files       |
-| 5    | recipes-core: base recipes      | Real zlib, busybox, linux kernel recipes            |
-| 6    | recipes-core: machines + images | qemu-x86_64 machine, base-image definition          |
+| 2    | Starlark load() implementation  | Units can import classes from layers              |
+| 3    | Recursive unit discovery      | `units/**/*.star` works for categorized layouts   |
+| 4    | units-core: classes           | Starlark autotools/cmake/go/image class files       |
+| 5    | units-core: base units      | Real zlib, busybox, linux kernel units            |
+| 6    | units-core: machines + images | qemu-x86_64 machine, base-image definition          |
 | 7    | Disk image generation           | GPT partition table, ext4 rootfs, vfat boot, kernel |
 | 8    | Boot configuration              | extlinux.conf for QEMU serial console boot          |
 | 9    | End-to-end integration test     | `yoe build base-image` → `yoe run` boots to shell   |
@@ -72,13 +72,13 @@ func TestGenerateIndex(t *testing.T) {
 	os.MkdirAll(destDir, 0755)
 	os.WriteFile(filepath.Join(destDir, "hello"), []byte("#!/bin/sh\necho hi\n"), 0755)
 
-	recipe := &yoestar.Recipe{
+	unit := &yoestar.Unit{
 		Name:        "hello",
 		Version:     "1.0.0",
 		Description: "Test package",
 		RuntimeDeps: []string{"glibc"},
 	}
-	apkPath, err := packaging.CreateAPK(recipe, filepath.Join(t.TempDir(), "destdir"), repoDir)
+	apkPath, err := packaging.CreateAPK(unit, filepath.Join(t.TempDir(), "destdir"), repoDir)
 	if err != nil {
 		t.Fatalf("CreateAPK: %v", err)
 	}
@@ -259,7 +259,7 @@ git commit -m "feat: generate APKINDEX.tar.gz for apk dependency resolution"
 
 ## Task 2: Starlark load() Implementation
 
-Recipes need `load("//classes/autotools.star", "autotools")` to import class
+Units need `load("//classes/autotools.star", "autotools")` to import class
 functions. The Starlark thread needs a load handler.
 
 **Files:**
@@ -289,11 +289,11 @@ func TestLoadFunction(t *testing.T) {
 	os.MkdirAll(classDir, 0755)
 	os.WriteFile(filepath.Join(classDir, "myclass.star"), []byte(`
 def my_builder(name, version, **kwargs):
-    package(name=name, version=version, build=["make"], **kwargs)
+    unit(name=name, version=version, build=["make"], **kwargs)
 `), 0644)
 
-	// Create a recipe that loads the class
-	recipeDir := filepath.Join(dir, "recipes")
+	// Create a unit that loads the class
+	recipeDir := filepath.Join(dir, "units")
 	os.MkdirAll(recipeDir, 0755)
 	os.WriteFile(filepath.Join(recipeDir, "hello.star"), []byte(`
 load("//classes/myclass.star", "my_builder")
@@ -307,9 +307,9 @@ my_builder(name = "hello", version = "1.0")
 		t.Fatalf("ExecFile with load: %v", err)
 	}
 
-	recipes := eng.Recipes()
-	if _, ok := recipes["hello"]; !ok {
-		t.Fatal("recipe 'hello' not found — load() didn't work")
+	units := eng.Units()
+	if _, ok := units["hello"]; !ok {
+		t.Fatal("unit 'hello' not found — load() didn't work")
 	}
 }
 
@@ -321,11 +321,11 @@ func TestLoadFunction_LayerRef(t *testing.T) {
 	os.MkdirAll(filepath.Join(layerDir, "classes"), 0755)
 	os.WriteFile(filepath.Join(layerDir, "classes", "helper.star"), []byte(`
 def helper(name):
-    package(name=name, version="1.0", build=["make"])
+    unit(name=name, version="1.0", build=["make"])
 `), 0644)
 
-	// Recipe uses @mylib//classes/helper.star
-	recipeDir := filepath.Join(dir, "recipes")
+	// Unit uses @mylib//classes/helper.star
+	recipeDir := filepath.Join(dir, "units")
 	os.MkdirAll(recipeDir, 0755)
 	os.WriteFile(filepath.Join(recipeDir, "test.star"), []byte(`
 load("@mylib//classes/helper.star", "helper")
@@ -340,8 +340,8 @@ helper(name = "test")
 		t.Fatalf("ExecFile with layer load: %v", err)
 	}
 
-	if _, ok := eng.Recipes()["test"]; !ok {
-		t.Fatal("recipe 'test' not found — layer load() didn't work")
+	if _, ok := eng.Units()["test"]; !ok {
+		t.Fatal("unit 'test' not found — layer load() didn't work")
 	}
 }
 ```
@@ -480,7 +480,7 @@ type Engine struct {
 	mu          sync.Mutex
 	project     *Project
 	machines    map[string]*Machine
-	recipes     map[string]*Recipe
+	units     map[string]*Unit
 	commands    map[string]*Command
 	layerInfo   *LayerInfo
 	globals     starlark.StringDict
@@ -553,11 +553,11 @@ git commit -m "feat: implement Starlark load() for class imports and layer refer
 
 ---
 
-## Task 3: Recursive Recipe Discovery
+## Task 3: Recursive Unit Discovery
 
-The recipes-core layer organizes recipes in subdirectories
-(`recipes/toolchain/`, `recipes/base/`, etc.). The loader needs to glob
-`recipes/**/*.star` instead of just `recipes/*.star`.
+The units-core layer organizes units in subdirectories
+(`units/toolchain/`, `units/base/`, etc.). The loader needs to glob
+`units/**/*.star` instead of just `units/*.star`.
 
 **Files:**
 
@@ -590,10 +590,10 @@ Add `"os"` and `"strings"` to the import block if not already present.
 
 - [ ] **Step 2: Add test fixture with subdirectories**
 
-Create `testdata/valid-project/recipes/libs/testlib.star`:
+Create `testdata/valid-project/units/libs/testlib.star`:
 
 ```python
-package(
+unit(
     name = "testlib",
     version = "1.0.0",
     source = "https://example.com/testlib-1.0.tar.gz",
@@ -606,13 +606,13 @@ package(
 Add to `TestLoadProject` in `internal/starlark/loader_test.go`:
 
 ```go
-	// Recipes in subdirectories should also be found
-	if _, ok := proj.Recipes["testlib"]; !ok {
-		t.Error("expected recipe 'testlib' from recipes/libs/ subdirectory")
+	// Units in subdirectories should also be found
+	if _, ok := proj.Units["testlib"]; !ok {
+		t.Error("expected unit 'testlib' from units/libs/ subdirectory")
 	}
 ```
 
-Update the expected recipe count from 5 to 6.
+Update the expected unit count from 5 to 6.
 
 - [ ] **Step 4: Run tests**
 
@@ -624,30 +624,30 @@ go test ./...
 - [ ] **Step 5: Commit**
 
 ```bash
-git add internal/starlark/loader.go testdata/valid-project/recipes/libs/
-git commit -m "feat: recursive recipe discovery (recipes/**/*.star)"
+git add internal/starlark/loader.go testdata/valid-project/units/libs/
+git commit -m "feat: recursive unit discovery (units/**/*.star)"
 ```
 
 ---
 
-## Task 4: recipes-core Layer — Starlark Classes
+## Task 4: units-core Layer — Starlark Classes
 
-Create the class files as pure Starlark functions that call the `package()`
+Create the class files as pure Starlark functions that call the `unit()`
 primitive.
 
 **Files:**
 
-- Create: `layers/recipes-core/LAYER.star`
-- Create: `layers/recipes-core/classes/autotools.star`
-- Create: `layers/recipes-core/classes/cmake.star`
-- Create: `layers/recipes-core/classes/go.star`
-- Create: `layers/recipes-core/classes/image.star`
+- Create: `layers/units-core/LAYER.star`
+- Create: `layers/units-core/classes/autotools.star`
+- Create: `layers/units-core/classes/cmake.star`
+- Create: `layers/units-core/classes/go.star`
+- Create: `layers/units-core/classes/image.star`
 
 - [ ] **Step 1: Create LAYER.star**
 
 ```python
 layer_info(
-    name = "recipes-core",
+    name = "units-core",
     description = "Yoe-NG base layer: toolchain, base system, essential libraries",
 )
 ```
@@ -663,7 +663,7 @@ def autotools(name, version, source, sha256="", deps=[], runtime_deps=[],
         "make -j$NPROC",
         "make DESTDIR=$DESTDIR install",
     ]
-    package(
+    unit(
         name=name, version=version, source=source, sha256=sha256,
         deps=deps, runtime_deps=runtime_deps, patches=patches,
         build=build, services=services, conffiles=conffiles,
@@ -683,7 +683,7 @@ def cmake(name, version, source, sha256="", deps=[], runtime_deps=[],
         "cmake --build build -j$NPROC",
         "DESTDIR=$DESTDIR cmake --install build",
     ]
-    package(
+    unit(
         name=name, version=version, source=source, sha256=sha256,
         deps=deps, runtime_deps=runtime_deps, patches=patches,
         build=build, services=services, conffiles=conffiles,
@@ -703,7 +703,7 @@ def go_binary(name, version, source, tag="", sha256="",
     build = [
         "go build -o $DESTDIR$PREFIX/bin/" + name + " " + go_package,
     ]
-    package(
+    unit(
         name=name, version=version, source=source, sha256=sha256,
         tag=tag, deps=deps, runtime_deps=runtime_deps,
         build=build, services=services, conffiles=conffiles,
@@ -728,26 +728,26 @@ def yoe_image(name, version, description="", packages=[], hostname="yoe",
 - [ ] **Step 6: Commit**
 
 ```bash
-git add layers/recipes-core/
-git commit -m "feat: add recipes-core layer with Starlark classes"
+git add layers/units-core/
+git commit -m "feat: add units-core layer with Starlark classes"
 ```
 
 ---
 
-## Task 5: recipes-core — Base Recipes
+## Task 5: units-core — Base Units
 
-Real recipes for the packages needed in a minimal bootable image. For the first
+Real units for the packages needed in a minimal bootable image. For the first
 pass, these use simple build steps. The sources must be real URLs.
 
 **Files:**
 
-- Create: `layers/recipes-core/recipes/libs/zlib.star`
-- Create: `layers/recipes-core/recipes/base/busybox.star`
-- Create: `layers/recipes-core/recipes/base/linux.star`
+- Create: `layers/units-core/units/libs/zlib.star`
+- Create: `layers/units-core/units/base/busybox.star`
+- Create: `layers/units-core/units/base/linux.star`
 
-- [ ] **Step 1: Create zlib recipe**
+- [ ] **Step 1: Create zlib unit**
 
-`layers/recipes-core/recipes/libs/zlib.star`:
+`layers/units-core/units/libs/zlib.star`:
 
 ```python
 load("//classes/autotools.star", "autotools")
@@ -762,12 +762,12 @@ autotools(
 )
 ```
 
-- [ ] **Step 2: Create busybox recipe**
+- [ ] **Step 2: Create busybox unit**
 
-`layers/recipes-core/recipes/base/busybox.star`:
+`layers/units-core/units/base/busybox.star`:
 
 ```python
-package(
+unit(
     name = "busybox",
     version = "1.36.1",
     source = "https://busybox.net/downloads/busybox-1.36.1.tar.bz2",
@@ -782,12 +782,12 @@ package(
 )
 ```
 
-- [ ] **Step 3: Create linux kernel recipe**
+- [ ] **Step 3: Create linux kernel unit**
 
-`layers/recipes-core/recipes/base/linux.star`:
+`layers/units-core/units/base/linux.star`:
 
 ```python
-package(
+unit(
     name = "linux",
     version = "6.6.87",
     source = "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.6.87.tar.xz",
@@ -806,22 +806,22 @@ package(
 - [ ] **Step 4: Commit**
 
 ```bash
-git add layers/recipes-core/recipes/
-git commit -m "feat: add base recipes (zlib, busybox, linux kernel)"
+git add layers/units-core/units/
+git commit -m "feat: add base units (zlib, busybox, linux kernel)"
 ```
 
 ---
 
-## Task 6: recipes-core — Machines and Images
+## Task 6: units-core — Machines and Images
 
 **Files:**
 
-- Create: `layers/recipes-core/machines/qemu-x86_64.star`
-- Create: `layers/recipes-core/images/base-image.star`
+- Create: `layers/units-core/machines/qemu-x86_64.star`
+- Create: `layers/units-core/images/base-image.star`
 
 - [ ] **Step 1: Create QEMU x86_64 machine**
 
-`layers/recipes-core/machines/qemu-x86_64.star`:
+`layers/units-core/machines/qemu-x86_64.star`:
 
 ```python
 machine(
@@ -829,7 +829,7 @@ machine(
     arch = "x86_64",
     description = "QEMU x86_64 virtual machine (KVM)",
     kernel = kernel(
-        recipe = "linux",
+        unit = "linux",
         defconfig = "x86_64_defconfig",
         cmdline = "console=ttyS0 root=/dev/vda2 rw",
     ),
@@ -845,14 +845,14 @@ machine(
 
 - [ ] **Step 2: Create base image**
 
-`layers/recipes-core/images/base-image.star`:
+`layers/units-core/images/base-image.star`:
 
 ```python
 image(
     name = "base-image",
     version = "1.0.0",
     description = "Minimal bootable Yoe-NG system",
-    packages = [
+    artifacts = [
         "busybox",
     ],
     hostname = "yoe",
@@ -869,7 +869,7 @@ image(
 - [ ] **Step 3: Commit**
 
 ```bash
-git add layers/recipes-core/machines/ layers/recipes-core/images/
+git add layers/units-core/machines/ layers/units-core/images/
 git commit -m "feat: add qemu-x86_64 machine and base-image definitions"
 ```
 
@@ -904,10 +904,10 @@ import (
 )
 
 // GenerateDiskImage creates a partitioned disk image from a rootfs directory.
-func GenerateDiskImage(rootfs, imgPath string, recipe *yoestar.Recipe, w io.Writer) error {
+func GenerateDiskImage(rootfs, imgPath string, unit *yoestar.Unit, w io.Writer) error {
 	// Calculate total image size from partitions
 	totalMB := 0
-	for _, p := range recipe.Partitions {
+	for _, p := range unit.Partitions {
 		size := parseSizeMB(p.Size)
 		if size == 0 {
 			size = 512 // default for "fill"
@@ -926,12 +926,12 @@ func GenerateDiskImage(rootfs, imgPath string, recipe *yoestar.Recipe, w io.Writ
 	}
 
 	// Partition with sfdisk (GPT)
-	if err := partitionImage(imgPath, recipe.Partitions, w); err != nil {
+	if err := partitionImage(imgPath, unit.Partitions, w); err != nil {
 		return fmt.Errorf("partitioning: %w", err)
 	}
 
 	// Set up loop device, format partitions, copy files
-	if err := populateImage(imgPath, rootfs, recipe, w); err != nil {
+	if err := populateImage(imgPath, rootfs, unit, w); err != nil {
 		return fmt.Errorf("populating: %w", err)
 	}
 
@@ -977,7 +977,7 @@ func partitionImage(imgPath string, partitions []yoestar.Partition, w io.Writer)
 	return cmd.Run()
 }
 
-func populateImage(imgPath, rootfs string, recipe *yoestar.Recipe, w io.Writer) error {
+func populateImage(imgPath, rootfs string, unit *yoestar.Unit, w io.Writer) error {
 	// Use loop device to access partitions
 	// losetup --find --show --partscan imgPath
 	out, err := exec.Command("losetup", "--find", "--show", "--partscan", imgPath).Output()
@@ -990,7 +990,7 @@ func populateImage(imgPath, rootfs string, recipe *yoestar.Recipe, w io.Writer) 
 	defer exec.Command("losetup", "-d", loopDev).Run()
 
 	// Format and populate each partition
-	for i, p := range recipe.Partitions {
+	for i, p := range unit.Partitions {
 		partDev := fmt.Sprintf("%sp%d", loopDev, i+1)
 		fmt.Fprintf(w, "  Formatting %s as %s...\n", p.Label, p.Type)
 
@@ -1054,8 +1054,8 @@ Add `"strings"` to the import block.
 Replace the `generateImage` function in `internal/image/rootfs.go`:
 
 ```go
-func generateImage(rootfs, imgPath string, recipe *yoestar.Recipe, w io.Writer) error {
-	return GenerateDiskImage(rootfs, imgPath, recipe, w)
+func generateImage(rootfs, imgPath string, unit *yoestar.Unit, w io.Writer) error {
+	return GenerateDiskImage(rootfs, imgPath, unit, w)
 }
 ```
 
@@ -1112,7 +1112,7 @@ git commit -m "feat: install extlinux boot config for QEMU serial console"
 
 ## Task 9: End-to-End Integration Test
 
-Wire everything together with a test project that uses the recipes-core layer
+Wire everything together with a test project that uses the units-core layer
 and builds a complete image.
 
 **Files:**
@@ -1132,8 +1132,8 @@ project(
     repository = repository(path = "build/repo"),
     cache = cache(path = "build/cache"),
     layers = [
-        layer("github.com/yoe/recipes-core",
-              local = "../../layers/recipes-core"),
+        layer("github.com/yoe/units-core",
+              local = "../../layers/units-core"),
     ],
 )
 ```
@@ -1156,7 +1156,7 @@ import (
 
 func TestE2E_DryRun(t *testing.T) {
 	// This test verifies the full pipeline works end-to-end in dry-run mode:
-	// load project → resolve layers → evaluate recipes → build DAG → dry run
+	// load project → resolve layers → evaluate units → build DAG → dry run
 	projectDir := filepath.Join("..", "..", "testdata", "e2e-project")
 	if _, err := os.Stat(filepath.Join(projectDir, "PROJECT.star")); os.IsNotExist(err) {
 		t.Skip("e2e test project not found")
@@ -1167,20 +1167,20 @@ func TestE2E_DryRun(t *testing.T) {
 		t.Fatalf("LoadProject: %v", err)
 	}
 
-	// Should have machines from recipes-core layer
+	// Should have machines from units-core layer
 	if _, ok := proj.Machines["qemu-x86_64"]; !ok {
-		t.Error("expected qemu-x86_64 machine from recipes-core layer")
+		t.Error("expected qemu-x86_64 machine from units-core layer")
 	}
 
-	// Should have recipes from recipes-core layer
-	if _, ok := proj.Recipes["busybox"]; !ok {
-		t.Error("expected busybox recipe from recipes-core layer")
+	// Should have units from units-core layer
+	if _, ok := proj.Units["busybox"]; !ok {
+		t.Error("expected busybox unit from units-core layer")
 	}
-	if _, ok := proj.Recipes["linux"]; !ok {
-		t.Error("expected linux recipe from recipes-core layer")
+	if _, ok := proj.Units["linux"]; !ok {
+		t.Error("expected linux unit from units-core layer")
 	}
-	if _, ok := proj.Recipes["base-image"]; !ok {
-		t.Error("expected base-image from recipes-core layer")
+	if _, ok := proj.Units["base-image"]; !ok {
+		t.Error("expected base-image from units-core layer")
 	}
 
 	// Dry run should work
@@ -1211,7 +1211,7 @@ func TestE2E_DryRun(t *testing.T) {
 go test ./internal/build/ -run TestE2E -v
 ```
 
-This test verifies: project loading → layer resolution → recipe evaluation → DAG
+This test verifies: project loading → layer resolution → unit evaluation → DAG
 construction → dry run output. It doesn't actually build or boot — that requires
 the container and real tools.
 
@@ -1239,10 +1239,10 @@ git commit -m "feat: add end-to-end integration test for QEMU x86_64 image"
 After completing all 9 tasks:
 
 1. `apk` can resolve dependencies from our repo (APKINDEX)
-2. Recipes can `load()` classes from layers
-3. Subdirectory recipe layout works
-4. recipes-core provides real Starlark classes
-5. Real recipes exist for zlib, busybox, linux kernel
+2. Units can `load()` classes from layers
+3. Subdirectory unit layout works
+4. units-core provides real Starlark classes
+5. Real units exist for zlib, busybox, linux kernel
 6. QEMU x86_64 machine and base-image are defined
 7. Disk images have real partitions (GPT, ext4, vfat)
 8. Boot configuration works for QEMU serial console

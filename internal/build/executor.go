@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/YoeDistro/yoe-ng/internal/image"
-	"github.com/YoeDistro/yoe-ng/internal/packaging"
+	"github.com/YoeDistro/yoe-ng/internal/artifact"
 	"github.com/YoeDistro/yoe-ng/internal/repo"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
 	"github.com/YoeDistro/yoe-ng/internal/source"
@@ -25,8 +25,8 @@ type Options struct {
 	Arch       string // target architecture
 }
 
-// BuildRecipes builds the specified recipes (or all if names is empty).
-func BuildRecipes(proj *yoestar.Project, names []string, opts Options, w io.Writer) error {
+// BuildUnits builds the specified units (or all if names is empty).
+func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer) error {
 	dag, err := resolve.BuildDAG(proj)
 	if err != nil {
 		return err
@@ -44,7 +44,7 @@ func BuildRecipes(proj *yoestar.Project, names []string, opts Options, w io.Writ
 		return err
 	}
 
-	// Filter to requested recipes (and their deps)
+	// Filter to requested units (and their deps)
 	requested := make(map[string]bool)
 	if len(names) > 0 {
 		for _, n := range names {
@@ -62,10 +62,10 @@ func BuildRecipes(proj *yoestar.Project, names []string, opts Options, w io.Writ
 
 	// Build in order
 	for _, name := range order {
-		recipe := proj.Recipes[name]
+		unit := proj.Units[name]
 		hash := hashes[name]
 
-		// --force/--clean only apply to explicitly requested recipes;
+		// --force/--clean only apply to explicitly requested units;
 		// dependencies still use the cache.
 		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
 
@@ -78,7 +78,7 @@ func BuildRecipes(proj *yoestar.Project, names []string, opts Options, w io.Writ
 
 		fmt.Fprintf(w, "%-20s [building]\n", name)
 
-		if err := buildOne(proj, recipe, hash, opts, w); err != nil {
+		if err := buildOne(proj, unit, hash, opts, w); err != nil {
 			return fmt.Errorf("building %s: %w", name, err)
 		}
 
@@ -90,8 +90,8 @@ func BuildRecipes(proj *yoestar.Project, names []string, opts Options, w io.Writ
 	return nil
 }
 
-func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts Options, w io.Writer) error {
-	buildDir := RecipeBuildDir(opts.ProjectDir, recipe.Name)
+func buildOne(proj *yoestar.Project, unit *yoestar.Unit, hash string, opts Options, w io.Writer) error {
+	buildDir := UnitBuildDir(opts.ProjectDir, unit.Name)
 	EnsureDir(buildDir)
 
 	// Open build log. In verbose mode, tee to terminal + log file.
@@ -110,10 +110,10 @@ func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts O
 		logW = logFile
 	}
 
-	// Image recipes go through a different path — assemble rootfs
-	if recipe.Class == "image" {
+	// Image units go through a different path — assemble rootfs
+	if unit.Class == "image" {
 		outputDir := filepath.Join(buildDir, "output")
-		if err := image.Assemble(recipe, proj, opts.ProjectDir, outputDir, logW); err != nil {
+		if err := image.Assemble(unit, proj, opts.ProjectDir, outputDir, logW); err != nil {
 			if !opts.Verbose {
 				fmt.Fprintf(w, "  build log: %s\n", logPath)
 			}
@@ -135,9 +135,9 @@ func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts O
 	EnsureDir(destDir)
 
 	// Prepare source (fetch + extract + patch, or reuse dev source).
-	// Recipes without a source field (e.g., musl) skip this step.
-	if recipe.Source != "" {
-		if _, err := source.Prepare(opts.ProjectDir, recipe); err != nil {
+	// Units without a source field (e.g., musl) skip this step.
+	if unit.Source != "" {
+		if _, err := source.Prepare(opts.ProjectDir, unit); err != nil {
 			return fmt.Errorf("preparing source: %w", err)
 		}
 	} else {
@@ -145,9 +145,9 @@ func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts O
 	}
 
 	// Determine build commands based on class
-	commands := buildCommands(recipe)
+	commands := buildCommands(unit)
 	if len(commands) == 0 {
-		fmt.Fprintf(w, "  (no build steps for %s class %q)\n", recipe.Name, recipe.Class)
+		fmt.Fprintf(w, "  (no build steps for %s class %q)\n", unit.Name, unit.Class)
 		return nil
 	}
 
@@ -191,8 +191,8 @@ func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts O
 	}
 
 	// Package the output into an .apk and publish to the local repo
-	if recipe.Class != "image" {
-		apkPath, err := packaging.CreateAPK(recipe, destDir, filepath.Join(buildDir, "pkg"))
+	if unit.Class != "image" {
+		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"))
 		if err != nil {
 			return fmt.Errorf("creating apk: %w", err)
 		}
@@ -213,19 +213,19 @@ func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts O
 	return nil
 }
 
-// buildCommands returns the shell commands to execute for a recipe.
-func buildCommands(recipe *yoestar.Recipe) []string {
+// buildCommands returns the shell commands to execute for a unit.
+func buildCommands(unit *yoestar.Unit) []string {
 	// Explicit build steps take priority
-	if len(recipe.Build) > 0 {
-		return recipe.Build
+	if len(unit.Build) > 0 {
+		return unit.Build
 	}
 
 	// Class-specific defaults
-	switch recipe.Class {
+	switch unit.Class {
 	case "autotools":
 		configureArgs := ""
-		if len(recipe.ConfigureArgs) > 0 {
-			configureArgs = " " + joinArgs(recipe.ConfigureArgs)
+		if len(unit.ConfigureArgs) > 0 {
+			configureArgs = " " + joinArgs(unit.ConfigureArgs)
 		}
 		return []string{
 			"./configure --prefix=$PREFIX" + configureArgs,
@@ -234,8 +234,8 @@ func buildCommands(recipe *yoestar.Recipe) []string {
 		}
 	case "cmake":
 		cmakeArgs := ""
-		if len(recipe.ConfigureArgs) > 0 {
-			cmakeArgs = " " + joinArgs(recipe.ConfigureArgs)
+		if len(unit.ConfigureArgs) > 0 {
+			cmakeArgs = " " + joinArgs(unit.ConfigureArgs)
 		}
 		return []string{
 			"cmake -B build -DCMAKE_INSTALL_PREFIX=$PREFIX" + cmakeArgs,
@@ -243,12 +243,12 @@ func buildCommands(recipe *yoestar.Recipe) []string {
 			"DESTDIR=$DESTDIR cmake --install build",
 		}
 	case "go":
-		pkg := recipe.GoPackage
+		pkg := unit.GoPackage
 		if pkg == "" {
 			pkg = "."
 		}
 		return []string{
-			fmt.Sprintf("go build -o $DESTDIR/usr/bin/%s %s", recipe.Name, pkg),
+			fmt.Sprintf("go build -o $DESTDIR/usr/bin/%s %s", unit.Name, pkg),
 		}
 	case "image":
 		// Images are assembled, not compiled — handled separately
@@ -270,7 +270,7 @@ func filterBuildOrder(dag *resolve.DAG, fullOrder []string, names []string) ([]s
 	needed := make(map[string]bool)
 	for _, name := range names {
 		if _, ok := dag.Nodes[name]; !ok {
-			return nil, fmt.Errorf("recipe %q not found", name)
+			return nil, fmt.Errorf("unit %q not found", name)
 		}
 		needed[name] = true
 		deps, _ := dag.DepsOf(name)
@@ -291,13 +291,13 @@ func filterBuildOrder(dag *resolve.DAG, fullOrder []string, names []string) ([]s
 func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[string]string, opts Options, requested map[string]bool) error {
 	fmt.Fprintln(w, "Dry run — would build in this order:")
 	for _, name := range order {
-		recipe := proj.Recipes[name]
+		unit := proj.Units[name]
 		cached := ""
 		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
 		if !forceThis && isBuildCached(opts.ProjectDir, name, hashes[name]) {
 			cached = " [cached, skip]"
 		}
-		fmt.Fprintf(w, "  %-20s [%s] %s%s\n", name, recipe.Class, hashes[name][:12], cached)
+		fmt.Fprintf(w, "  %-20s [%s] %s%s\n", name, unit.Class, hashes[name][:12], cached)
 	}
 	return nil
 }

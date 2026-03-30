@@ -10,7 +10,7 @@ that design — a stepping stone toward the long-term goal of running all builds
 on the host via bwrap + Tier 1 build root, with Docker only for
 bootstrapping/onboarding.
 
-**Goal**: Recipe compilation stays in the container (for now). Image assembly
+**Goal**: Unit compilation stays in the container (for now). Image assembly
 moves to the host, running inside a bwrap user namespace
 (`--unshare-user --uid 0 --gid 0`) so files are owned by the real user on the
 host filesystem.
@@ -19,11 +19,11 @@ host filesystem.
 
 ```
 Phase 1 (container):  yoe build openssh base-image
-  → builds recipe deps (openssh, busybox, etc.) inside Docker
-  → skips image-class recipes
-  → .apk packages land in build/repo/ (bind-mounted)
+  → builds unit deps (openssh, busybox, etc.) inside Docker
+  → skips image-class units
+  → .apk artifacts land in build/repo/ (bind-mounted)
 
-Phase 2 (host):  yoe assembles image recipes on host
+Phase 2 (host):  yoe assembles image units on host
   → bwrap --unshare-user --uid 0 --gid 0 provides pseudo-root
   → container rootfs (exported once) provides tools (tar, mkfs.ext4, sfdisk)
   → output files owned by real user
@@ -89,11 +89,11 @@ bwrap --unshare-user --uid 0 --gid 0 \
 The `--unshare-user --uid 0 --gid 0` maps the real user to uid 0 inside the
 namespace. Files created appear owned by the invoking user on the host.
 
-### Step 3: Split build dispatch for image recipes
+### Step 3: Split build dispatch for image units
 
 **File: `internal/build/executor.go`**
 
-Modify `BuildRecipes` to separate image and non-image recipes:
+Modify `BuildRecipes` to separate image and non-image units:
 
 ```go
 func BuildRecipes(proj, names, opts, w) error {
@@ -101,20 +101,20 @@ func BuildRecipes(proj, names, opts, w) error {
 
     var imageRecipes, nonImageRecipes []string
     for _, name := range order {
-        if proj.Recipes[name].Class == "image" {
+        if proj.Units[name].Class == "image" {
             imageRecipes = append(imageRecipes, name)
         } else {
             nonImageRecipes = append(nonImageRecipes, name)
         }
     }
 
-    // Build non-image recipes (may be in container)
+    // Build non-image units (may be in container)
     for _, name := range nonImageRecipes { ... }
 
-    // Build image recipes (on host, via bwrap)
+    // Build image units (on host, via bwrap)
     if !InContainer() && len(imageRecipes) > 0 {
         for _, name := range imageRecipes {
-            buildImageOnHost(proj, proj.Recipes[name], opts, w)
+            buildImageOnHost(proj, proj.Units[name], opts, w)
         }
     }
 }
@@ -143,8 +143,8 @@ case "image-assemble":
 
 This command:
 
-- Accepts recipe name, project dir, output dir as args
-- Loads project, finds recipe, calls `image.Assemble` directly
+- Accepts unit name, project dir, output dir as args
+- Loads project, finds unit, calls `image.Assemble` directly
 - Runs inside bwrap namespace with pseudo-root
 
 ### Step 5: Update container dispatch
@@ -156,8 +156,8 @@ the host:
 
 1. Load project config on host (pure Go, no tools needed - `loadProject()`
    already works)
-2. Determine if any targets are image recipes
-3. Enter container for non-image recipe deps only:
+2. Determine if any targets are image units
+3. Enter container for non-image unit deps only:
    `ExecInContainer(["build", "--skip-images", ...])`
 4. After container returns, run image assembly on host via bwrap
 
@@ -204,7 +204,7 @@ VBR/ldlinux.sys files are already in the rootfs and get included via
 1. `go build ./...` - compiles
 2. `go test ./...` - passes
 3. `yoe build base-image` on host:
-   - Deps build in container (non-image recipes)
+   - Deps build in container (non-image units)
    - Image assembly runs on host via bwrap
    - Output files in `build/base-image/output/` owned by real user (not root)
 4. `ls -la build/base-image/output/` - verify file ownership is current user
@@ -212,8 +212,8 @@ VBR/ldlinux.sys files are already in the rootfs and get included via
 
 ## Decisions
 
-1. **Recipe build file ownership**: Deferred. Image assembly is the immediate
-   pain point. Recipe builds stay in the container as-is. Long-term, all builds
+1. **Unit build file ownership**: Deferred. Image assembly is the immediate
+   pain point. Unit builds stay in the container as-is. Long-term, all builds
    move to host via bwrap + Tier 1 build root.
 
 2. **bwrap availability**: Fall back to container-based image building with a

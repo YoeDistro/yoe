@@ -27,11 +27,11 @@ func TestAssemble(t *testing.T) {
 	os.MkdirAll(overlayDir, 0755)
 	os.WriteFile(filepath.Join(overlayDir, "config.toml"), []byte("key = \"value\"\n"), 0644)
 
-	recipe := &yoestar.Recipe{
+	unit := &yoestar.Unit{
 		Name:     "test-image",
 		Version:  "1.0.0",
 		Class:    "image",
-		Packages: []string{"openssh", "myapp"},
+		Artifacts: []string{"openssh", "myapp"},
 		Hostname: "yoe-test",
 		Timezone: "UTC",
 		Locale:   "en_US.UTF-8",
@@ -43,7 +43,7 @@ func TestAssemble(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := Assemble(recipe, proj, projectDir, outputDir, &buf); err != nil {
+	if err := Assemble(unit, proj, projectDir, outputDir, &buf); err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
 
@@ -108,9 +108,9 @@ func TestApplyConfig_Empty(t *testing.T) {
 	rootfs := filepath.Join(t.TempDir(), "rootfs")
 	os.MkdirAll(rootfs, 0755)
 
-	recipe := &yoestar.Recipe{Name: "empty"}
+	unit := &yoestar.Unit{Name: "empty"}
 	var buf bytes.Buffer
-	if err := applyConfig(rootfs, recipe, &buf); err != nil {
+	if err := applyConfig(rootfs, unit, &buf); err != nil {
 		t.Fatalf("applyConfig: %v", err)
 	}
 	// Should succeed with no config to apply

@@ -14,28 +14,28 @@ import (
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
-// Prepare sets up the build source directory for a recipe:
+// Prepare sets up the build source directory for a unit:
 // 1. Fetches source (from cache or network)
-// 2. Extracts into build/<recipe>/src/ as a git repo with "upstream" tag
-// 3. Applies patches from the recipe as git commits
+// 2. Extracts into build/<unit>/src/ as a git repo with "upstream" tag
+// 3. Applies patches from the unit as git commits
 //
 // If the source directory already exists with local commits beyond upstream,
 // it is left untouched (yoe dev workflow).
-func Prepare(projectDir string, recipe *yoestar.Recipe) (string, error) {
-	srcDir := filepath.Join(projectDir, "build", recipe.Name, "src")
+func Prepare(projectDir string, unit *yoestar.Unit) (string, error) {
+	srcDir := filepath.Join(projectDir, "build", unit.Name, "src")
 
 	// If source dir exists and has local commits, don't touch it (dev mode)
 	if hasLocalCommits(srcDir) {
-		fmt.Printf("Using local source for %s (has commits beyond upstream)\n", recipe.Name)
+		fmt.Printf("Using local source for %s (has commits beyond upstream)\n", unit.Name)
 		return srcDir, nil
 	}
 
-	if recipe.Source == "" {
-		return "", fmt.Errorf("recipe %q has no source", recipe.Name)
+	if unit.Source == "" {
+		return "", fmt.Errorf("unit %q has no source", unit.Name)
 	}
 
 	// Fetch source into cache
-	cachedPath, err := Fetch(recipe)
+	cachedPath, err := Fetch(unit)
 	if err != nil {
 		return "", err
 	}
@@ -47,8 +47,8 @@ func Prepare(projectDir string, recipe *yoestar.Recipe) (string, error) {
 	}
 
 	// Extract or checkout
-	if isGitURL(recipe.Source) {
-		if err := checkoutGit(cachedPath, srcDir, recipe); err != nil {
+	if isGitURL(unit.Source) {
+		if err := checkoutGit(cachedPath, srcDir, unit); err != nil {
 			return "", err
 		}
 		// Git source is already a repo — just tag current HEAD as upstream
@@ -66,7 +66,7 @@ func Prepare(projectDir string, recipe *yoestar.Recipe) (string, error) {
 	}
 
 	// Apply patches
-	if err := applyPatches(projectDir, srcDir, recipe); err != nil {
+	if err := applyPatches(projectDir, srcDir, unit); err != nil {
 		return "", err
 	}
 
@@ -92,13 +92,13 @@ func hasLocalCommits(srcDir string) bool {
 	return count != "0"
 }
 
-func checkoutGit(barePath, srcDir string, recipe *yoestar.Recipe) error {
+func checkoutGit(barePath, srcDir string, unit *yoestar.Unit) error {
 	// Determine ref to checkout
 	ref := "HEAD"
-	if recipe.Tag != "" {
-		ref = recipe.Tag
-	} else if recipe.Branch != "" {
-		ref = recipe.Branch
+	if unit.Tag != "" {
+		ref = unit.Tag
+	} else if unit.Branch != "" {
+		ref = unit.Branch
 	}
 
 	// Clone from bare cache into srcDir
@@ -237,8 +237,8 @@ func initGitRepo(srcDir string) error {
 	return nil
 }
 
-func applyPatches(projectDir, srcDir string, recipe *yoestar.Recipe) error {
-	for _, patchFile := range recipe.Patches {
+func applyPatches(projectDir, srcDir string, unit *yoestar.Unit) error {
+	for _, patchFile := range unit.Patches {
 		patchPath := filepath.Join(projectDir, patchFile)
 		if _, err := os.Stat(patchPath); os.IsNotExist(err) {
 			return fmt.Errorf("patch file not found: %s", patchFile)

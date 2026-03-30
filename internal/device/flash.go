@@ -12,19 +12,19 @@ import (
 )
 
 // Flash writes an image to a block device.
-func Flash(proj *yoestar.Project, recipeName, devicePath, projectDir string, dryRun bool, w io.Writer) error {
-	recipe, ok := proj.Recipes[recipeName]
+func Flash(proj *yoestar.Project, unitName, devicePath, projectDir string, dryRun bool, w io.Writer) error {
+	unit, ok := proj.Units[unitName]
 	if !ok {
-		return fmt.Errorf("recipe %q not found", recipeName)
+		return fmt.Errorf("unit %q not found", unitName)
 	}
-	if recipe.Class != "image" {
-		return fmt.Errorf("recipe %q is not an image (class=%q)", recipeName, recipe.Class)
+	if unit.Class != "image" {
+		return fmt.Errorf("unit %q is not an image (class=%q)", unitName, unit.Class)
 	}
 
 	// Find the built image
-	imgPath := findImage(projectDir, recipeName)
+	imgPath := findImage(projectDir, unitName)
 	if imgPath == "" {
-		return fmt.Errorf("no built image found for %q — run yoe build %s first", recipeName, recipeName)
+		return fmt.Errorf("no built image found for %q — run yoe build %s first", unitName, unitName)
 	}
 
 	// Safety checks
@@ -67,17 +67,17 @@ func Flash(proj *yoestar.Project, recipeName, devicePath, projectDir string, dry
 	return nil
 }
 
-func findImage(projectDir, recipeName string) string {
-	outputDir := filepath.Join(projectDir, "build", recipeName, "output")
+func findImage(projectDir, unitName string) string {
+	outputDir := filepath.Join(projectDir, "build", unitName, "output")
 
 	// Check for tar.gz first
-	tarPath := filepath.Join(outputDir, recipeName+".img.tar.gz")
+	tarPath := filepath.Join(outputDir, unitName+".img.tar.gz")
 	if _, err := os.Stat(tarPath); err == nil {
 		return tarPath
 	}
 
 	// Check for raw image
-	imgPath := filepath.Join(outputDir, recipeName+".img")
+	imgPath := filepath.Join(outputDir, unitName+".img")
 	if _, err := os.Stat(imgPath); err == nil {
 		return imgPath
 	}

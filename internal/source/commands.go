@@ -10,20 +10,20 @@ import (
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
-// FetchAll downloads sources for all recipes (or specific ones).
-func FetchAll(projectDir string, recipeNames []string, w io.Writer) error {
+// FetchAll downloads sources for all units (or specific ones).
+func FetchAll(projectDir string, unitNames []string, w io.Writer) error {
 	proj, err := yoestar.LoadProject(projectDir)
 	if err != nil {
 		return err
 	}
 
-	recipes := filterRecipes(proj, recipeNames)
-	for _, recipe := range recipes {
-		if recipe.Source == "" {
+	units := filterUnits(proj, unitNames)
+	for _, unit := range units {
+		if unit.Source == "" {
 			continue
 		}
-		if _, err := Fetch(recipe); err != nil {
-			return fmt.Errorf("fetching %s: %w", recipe.Name, err)
+		if _, err := Fetch(unit); err != nil {
+			return fmt.Errorf("fetching %s: %w", unit.Name, err)
 		}
 	}
 
@@ -42,22 +42,22 @@ func ListSources(projectDir string, w io.Writer) error {
 		return err
 	}
 
-	fmt.Fprintf(w, "%-20s %-10s %s\n", "Recipe", "Status", "Source")
-	for _, recipe := range proj.Recipes {
-		if recipe.Source == "" {
+	fmt.Fprintf(w, "%-20s %-10s %s\n", "Unit", "Status", "Source")
+	for _, unit := range proj.Units {
+		if unit.Source == "" {
 			continue
 		}
 
 		status := "missing"
-		if isCached(cacheDir, recipe) {
+		if isCached(cacheDir, unit) {
 			status = "cached"
 		}
 
-		src := recipe.Source
+		src := unit.Source
 		if len(src) > 60 {
 			src = src[:57] + "..."
 		}
-		fmt.Fprintf(w, "%-20s %-10s %s\n", recipe.Name, status, src)
+		fmt.Fprintf(w, "%-20s %-10s %s\n", unit.Name, status, src)
 	}
 
 	return nil
@@ -71,15 +71,15 @@ func VerifyAll(projectDir string, w io.Writer) error {
 	}
 
 	allOk := true
-	for _, recipe := range proj.Recipes {
-		if recipe.Source == "" || recipe.SHA256 == "" {
+	for _, unit := range proj.Units {
+		if unit.Source == "" || unit.SHA256 == "" {
 			continue
 		}
-		if err := Verify(recipe); err != nil {
-			fmt.Fprintf(w, "FAIL  %s: %v\n", recipe.Name, err)
+		if err := Verify(unit); err != nil {
+			fmt.Fprintf(w, "FAIL  %s: %v\n", unit.Name, err)
 			allOk = false
 		} else {
-			fmt.Fprintf(w, "OK    %s\n", recipe.Name)
+			fmt.Fprintf(w, "OK    %s\n", unit.Name)
 		}
 	}
 
@@ -116,31 +116,31 @@ func CleanSources(w io.Writer) error {
 	return nil
 }
 
-func filterRecipes(proj *yoestar.Project, names []string) []*yoestar.Recipe {
+func filterUnits(proj *yoestar.Project, names []string) []*yoestar.Unit {
 	if len(names) == 0 {
-		result := make([]*yoestar.Recipe, 0, len(proj.Recipes))
-		for _, r := range proj.Recipes {
+		result := make([]*yoestar.Unit, 0, len(proj.Units))
+		for _, r := range proj.Units {
 			result = append(result, r)
 		}
 		return result
 	}
 
-	result := make([]*yoestar.Recipe, 0, len(names))
+	result := make([]*yoestar.Unit, 0, len(names))
 	for _, name := range names {
-		if r, ok := proj.Recipes[name]; ok {
+		if r, ok := proj.Units[name]; ok {
 			result = append(result, r)
 		}
 	}
 	return result
 }
 
-func isCached(cacheDir string, recipe *yoestar.Recipe) bool {
-	urlHash := fmt.Sprintf("%x", sha256.Sum256([]byte(recipe.Source)))
-	if isGitURL(recipe.Source) {
+func isCached(cacheDir string, unit *yoestar.Unit) bool {
+	urlHash := fmt.Sprintf("%x", sha256.Sum256([]byte(unit.Source)))
+	if isGitURL(unit.Source) {
 		_, err := os.Stat(filepath.Join(cacheDir, urlHash+".git"))
 		return err == nil
 	}
-	ext := guessExt(recipe.Source)
+	ext := guessExt(unit.Source)
 	_, err := os.Stat(filepath.Join(cacheDir, urlHash+ext))
 	return err == nil
 }

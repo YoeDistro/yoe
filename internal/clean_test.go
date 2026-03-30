@@ -56,11 +56,11 @@ func TestRunClean_All(t *testing.T) {
 	}
 }
 
-func TestRunClean_Recipes(t *testing.T) {
+func TestRunClean_Units(t *testing.T) {
 	proj := t.TempDir()
 	buildDir := filepath.Join(proj, "build")
 
-	// Create build dirs for two recipes.
+	// Create build dirs for two units.
 	for _, r := range []string{"openssl", "busybox"} {
 		if err := os.MkdirAll(filepath.Join(buildDir, r), 0o755); err != nil {
 			t.Fatal(err)
@@ -69,7 +69,7 @@ func TestRunClean_Recipes(t *testing.T) {
 
 	// Clean only openssl.
 	if err := RunClean(proj, false, []string{"openssl"}); err != nil {
-		t.Fatalf("RunClean recipes: %v", err)
+		t.Fatalf("RunClean units: %v", err)
 	}
 
 	if _, err := os.Stat(filepath.Join(buildDir, "openssl")); !os.IsNotExist(err) {

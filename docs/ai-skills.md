@@ -9,11 +9,11 @@ the skills (AI-driven workflows) that ship with Yoe-NG.
 
 Embedded Linux development has a steep learning curve — not because the concepts
 are hard, but because there are many concepts and they interact in non-obvious
-ways. An AI assistant that understands recipes, dependencies, machine
+ways. An AI assistant that understands units, dependencies, machine
 definitions, build isolation, and packaging can:
 
 - **Lower the barrier to entry.** A developer can describe what they want in
-  natural language and get working recipes, machine definitions, and image
+  natural language and get working units, machine definitions, and image
   configurations.
 - **Reduce debugging time.** Build failures in embedded systems often involve
   subtle interactions between toolchain flags, dependency ordering, and
@@ -28,39 +28,39 @@ definitions, build isolation, and packaging can:
 
 ## Skill Categories
 
-### Recipe Development
+### Unit Development
 
-#### `/new-recipe`
+#### `/new-unit`
 
-Create a new recipe from a description or upstream URL. The AI determines the
+Create a new unit from a description or upstream URL. The AI determines the
 build system (autotools, cmake, meson, etc.), fetches the source to inspect it,
 identifies dependencies, and generates a complete `.star` file.
 
 ```
-/new-recipe https://github.com/example/myapp
-/new-recipe "I need an MQTT broker for IoT devices"
-/new-recipe "add libcurl with HTTP/2 support"
+/new-unit https://github.com/example/myapp
+/new-unit "I need an MQTT broker for IoT devices"
+/new-unit "add libcurl with HTTP/2 support"
 ```
 
-#### `/update-recipe <name>`
+#### `/update-unit <name>`
 
-Bump a recipe to the latest upstream version. Checks for new releases, updates
+Bump a unit to the latest upstream version. Checks for new releases, updates
 the version and sha256, runs a test build, and reports any patch conflicts or
 dependency changes.
 
 ```
-/update-recipe openssl
-/update-recipe --all --dry-run
+/update-unit openssl
+/update-unit --all --dry-run
 ```
 
-#### `/audit-recipe <name>`
+#### `/audit-unit <name>`
 
-Review a recipe for common issues: missing runtime dependencies, incorrect
+Review a unit for common issues: missing runtime dependencies, incorrect
 license, unnecessary build dependencies, suboptimal configure flags, missing
 sub-package splits.
 
 ```
-/audit-recipe openssh
+/audit-unit openssh
 ```
 
 ### Image & Machine Configuration
@@ -79,7 +79,7 @@ applicable).
 
 #### `/new-image`
 
-Design an image recipe interactively. Asks about the use case (gateway, HMI,
+Design an image unit interactively. Asks about the use case (gateway, HMI,
 headless sensor, development), suggests appropriate packages, configures
 services, and generates the `.star` file.
 
@@ -90,7 +90,7 @@ services, and generates the `.star` file.
 
 #### `/image-size`
 
-Analyze an image recipe and estimate the installed size. Break down by package,
+Analyze an image unit and estimate the installed size. Break down by package,
 identify the largest contributors, and suggest ways to reduce size (remove debug
 packages, switch to smaller alternatives, strip unnecessary features).
 
@@ -104,7 +104,7 @@ packages, switch to smaller alternatives, strip unnecessary features).
 #### `/why <package>`
 
 Trace why a package is included in an image. Shows the full dependency chain
-from image recipe to the specific package, including which packages pull it in
+from image unit to the specific package, including which packages pull it in
 as a runtime dependency.
 
 ```
@@ -136,7 +136,7 @@ suggests a fix.
 /diagnose  # diagnose the most recent failure
 ```
 
-#### `/build-log <recipe>`
+#### `/build-log <unit>`
 
 Summarize a build log — highlight warnings, errors, and anything unusual. Filter
 out noise (compiler progress, make output) and surface what matters.
@@ -150,7 +150,7 @@ out noise (compiler progress, make output) and surface what matters.
 
 #### `/cve-check`
 
-Scan recipes against known CVEs. Reports which packages have outstanding
+Scan units against known CVEs. Reports which packages have outstanding
 vulnerabilities, their severity, and whether newer upstream versions fix them.
 
 ```
@@ -184,20 +184,20 @@ world-readable sensitive files, default passwords.
 
 #### `/new-layer`
 
-Scaffold a new layer with LAYER.star, directory structure, and example recipes.
+Scaffold a new layer with LAYER.star, directory structure, and example units.
 
 ```
 /new-layer vendor-bsp "BSP layer for our custom board"
-/new-layer product "Product-specific recipes and images"
+/new-layer product "Product-specific units and images"
 ```
 
 #### `/layer-diff`
 
-Compare two versions of a layer. Show what recipes changed, what versions
-bumped, what new recipes were added, and what was removed.
+Compare two versions of a layer. Show what units changed, what versions
+bumped, what new units were added, and what was removed.
 
 ```
-/layer-diff @recipes-core v1.0.0 v1.1.0
+/layer-diff @units-core v1.0.0 v1.1.0
 ```
 
 ### SDK & Development
@@ -213,9 +213,9 @@ highlighting, and verify the toolchain works.
 /sdk-setup --for rust  # set up Rust cross-development
 ```
 
-#### `/devshell <recipe>`
+#### `/devshell <unit>`
 
-Drop into an interactive development shell for a recipe — the same build
+Drop into an interactive development shell for a unit — the same build
 environment that `yoe build` uses, but interactive. Useful for debugging
 configure issues or testing build commands manually.
 
@@ -261,6 +261,6 @@ Each skill:
 - Can create and modify `.star` files with the user's approval
 - Runs in the context of the current project directory
 
-Skills that modify files (like `/new-recipe` or `/update-recipe`) always show
+Skills that modify files (like `/new-unit` or `/update-unit`) always show
 the proposed changes and ask for confirmation before writing. Skills that only
 read and analyze (like `/why` or `/diagnose`) run without confirmation.

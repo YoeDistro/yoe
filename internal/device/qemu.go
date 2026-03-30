@@ -21,14 +21,14 @@ type QEMUOptions struct {
 }
 
 // RunQEMU launches an image in QEMU.
-func RunQEMU(proj *yoestar.Project, recipeName, machineName, projectDir string, opts QEMUOptions, w io.Writer) error {
-	// Find the image recipe
-	recipe, ok := proj.Recipes[recipeName]
+func RunQEMU(proj *yoestar.Project, unitName, machineName, projectDir string, opts QEMUOptions, w io.Writer) error {
+	// Find the image unit
+	unit, ok := proj.Units[unitName]
 	if !ok {
-		return fmt.Errorf("recipe %q not found", recipeName)
+		return fmt.Errorf("unit %q not found", unitName)
 	}
-	if recipe.Class != "image" {
-		return fmt.Errorf("recipe %q is not an image", recipeName)
+	if unit.Class != "image" {
+		return fmt.Errorf("unit %q is not an image", unitName)
 	}
 
 	// Find the machine
@@ -41,9 +41,9 @@ func RunQEMU(proj *yoestar.Project, recipeName, machineName, projectDir string, 
 	}
 
 	// Find the built image
-	imgPath := findImage(projectDir, recipeName)
+	imgPath := findImage(projectDir, unitName)
 	if imgPath == "" {
-		return fmt.Errorf("no built image for %q — run yoe build %s first", recipeName, recipeName)
+		return fmt.Errorf("no built image for %q — run yoe build %s first", unitName, unitName)
 	}
 
 	qemuBin := qemuBinary(machine.Arch)

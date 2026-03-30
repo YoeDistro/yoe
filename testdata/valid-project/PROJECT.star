@@ -13,6 +13,6 @@ project(
     ),
     sources = sources(go_proxy = "https://proxy.golang.org"),
     layers = [
-        layer("github.com/yoe/recipes-core", ref = "v1.0.0"),
+        layer("github.com/yoe/units-core", ref = "v1.0.0"),
     ],
 )

@@ -24,7 +24,7 @@ type view int
 const (
 	viewMain view = iota
 	viewMachines
-	viewRecipes
+	viewUnits
 )
 
 type model struct {
@@ -33,7 +33,7 @@ type model struct {
 	cursor     int
 	view       view
 	machines   []string
-	recipes    []string
+	units      []string
 	selMachine string
 	selImage   string
 	width      int
@@ -48,10 +48,10 @@ type menuItem struct {
 
 func mainMenu() []menuItem {
 	return []menuItem{
-		{"b", "Build all recipes"},
+		{"b", "Build all units"},
 		{"i", "Build image"},
 		{"m", "Select machine"},
-		{"r", "Browse recipes"},
+		{"r", "Browse units"},
 		{"c", "Config"},
 		{"q", "Quit"},
 	}
@@ -60,7 +60,7 @@ func mainMenu() []menuItem {
 // Run launches the TUI.
 func Run(proj *yoestar.Project, projectDir string) error {
 	machines := sortedKeys(proj.Machines)
-	recipes := sortedKeys(proj.Recipes)
+	units := sortedKeys(proj.Units)
 
 	selMachine := proj.Defaults.Machine
 	selImage := proj.Defaults.Image
@@ -69,7 +69,7 @@ func Run(proj *yoestar.Project, projectDir string) error {
 		proj:       proj,
 		projectDir: projectDir,
 		machines:   machines,
-		recipes:    recipes,
+		units:      units,
 		selMachine: selMachine,
 		selImage:   selImage,
 	}
@@ -101,8 +101,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selMachine = sel
 				m.message = fmt.Sprintf("Machine set to %s", sel)
 			})
-		case viewRecipes:
-			return m.updateList(msg, m.recipes, nil)
+		case viewUnits:
+			return m.updateList(msg, m.units, nil)
 		}
 	}
 
@@ -128,7 +128,7 @@ func (m model) updateMain(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursor = 0
 		return m, nil
 	case "r":
-		m.view = viewRecipes
+		m.view = viewUnits
 		m.cursor = 0
 		return m, nil
 	case "c":
@@ -176,8 +176,8 @@ func (m model) View() string {
 	b.WriteString(fmt.Sprintf("  Machine: %s    Image: %s\n",
 		headerStyle.Render(m.selMachine),
 		headerStyle.Render(m.selImage)))
-	b.WriteString(fmt.Sprintf("  Machines: %d    Recipes: %d\n",
-		len(m.machines), len(m.recipes)))
+	b.WriteString(fmt.Sprintf("  Machines: %d    Units: %d\n",
+		len(m.machines), len(m.units)))
 	b.WriteString("\n")
 
 	switch m.view {
@@ -204,10 +204,10 @@ func (m model) View() string {
 			b.WriteString(fmt.Sprintf("  %s%s %s\n", cursor, style.Render(name), dimStyle.Render(arch)))
 		}
 		b.WriteString(dimStyle.Render("\n  ↑↓/jk navigate  enter select  esc back"))
-	case viewRecipes:
-		b.WriteString(headerStyle.Render("  Recipes:"))
+	case viewUnits:
+		b.WriteString(headerStyle.Render("  Units:"))
 		b.WriteString("\n\n")
-		for i, name := range m.recipes {
+		for i, name := range m.units {
 			cursor := "  "
 			style := dimStyle
 			if i == m.cursor {
@@ -215,7 +215,7 @@ func (m model) View() string {
 				style = selectedStyle
 			}
 			class := ""
-			if r, ok := m.proj.Recipes[name]; ok {
+			if r, ok := m.proj.Units[name]; ok {
 				class = r.Class
 			}
 			b.WriteString(fmt.Sprintf("  %s%-20s %s\n", cursor, style.Render(name), dimStyle.Render("["+class+"]")))
