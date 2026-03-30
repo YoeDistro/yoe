@@ -37,6 +37,10 @@ and starting over.
   log tail. The `yoe tui` subcommand has been removed.
 - **Build events** — `build.Options.OnEvent` callback notifies callers (e.g.,
   the TUI) as each unit transitions through cached/building/done/failed states.
+- **Per-unit sysroots** — each unit's build sysroot is assembled from only its
+  transitive `deps`, not every previously built unit. Fixes busybox symlinks
+  shadowing container tools (e.g., musl-linked `expr` breaking autoconf).
+- **Run from TUI** — press `r` on an image unit to launch it in QEMU.
 
 ## [0.2.10] - 2026-03-30
 
