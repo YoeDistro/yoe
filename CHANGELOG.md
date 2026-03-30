@@ -18,9 +18,9 @@ and this project adheres to
   container-build pattern. Existing cached layers are not fetched/updated, so
   there is no added latency on subsequent runs. Explicit `yoe layer sync` is
   still available to update layers.
-- **TUI quit confirmation** — quitting the TUI with `q` or `ctrl+c` while
-  builds are running now prompts for confirmation before cancelling them and
-  exiting, preventing accidental loss of in-progress builds.
+- **TUI confirmation prompts** — quitting (`q`/`ctrl+c`) and cancelling a build
+  (`x`) now prompt for confirmation when builds are active, preventing accidental
+  loss of in-progress builds.
 - **Fix build cancellation not stopping containers** — cancelling a build (via
   TUI quit or `ctrl+c` on the CLI) now explicitly stops the Docker container
   (`docker stop`) instead of only killing the CLI client, which left containers
