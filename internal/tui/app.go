@@ -224,7 +224,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
-		// Kill running builds
+		// Cancel all running builds before quitting
+		for name, cancel := range m.cancels {
+			cancel()
+			delete(m.cancels, name)
+		}
 		return m, tea.Quit
 
 	case "up", "k":
