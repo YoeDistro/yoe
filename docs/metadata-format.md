@@ -1,8 +1,8 @@
 # Unit & Configuration Format
 
 Yoe-NG uses [Starlark](https://github.com/google/starlark-go) — a deterministic,
-sandboxed dialect of Python — for all build definitions. Units, classes,
-machine definitions, and project configuration are all `.star` files. See
+sandboxed dialect of Python — for all build definitions. Units, classes, machine
+definitions, and project configuration are all `.star` files. See
 [Build Languages](build-languages.md) for the rationale behind this choice.
 
 ## Units vs. Packages
@@ -23,8 +23,8 @@ units; a device only ever sees packages.
 
 ### Sub-packages
 
-A single unit can produce multiple `.apk` packages. This is the same concept
-as Yocto's `PACKAGES` splitting and Debian's binary packages — one source build
+A single unit can produce multiple `.apk` packages. This is the same concept as
+Yocto's `PACKAGES` splitting and Debian's binary packages — one source build
 produces granular installable units:
 
 | Sub-package | Contents                               | Typical consumer        |
@@ -172,10 +172,10 @@ machine(
 
 ### Image Unit (`units/<name>.star`)
 
-An image is a unit that assembles a root filesystem from packages and produces
-a disk image. Image units use the `image()` class function instead of
-`unit()`. They participate in the same DAG, use the same caching, and are
-built with `yoe build`.
+An image is a unit that assembles a root filesystem from packages and produces a
+disk image. Image units use the `image()` class function instead of `unit()`.
+They participate in the same DAG, use the same caching, and are built with
+`yoe build`.
 
 ```python
 load("//classes/image.star", "image")
@@ -421,8 +421,8 @@ def autotools(name, version, source, configure_args=[], **kwargs):
     )
 ```
 
-See [per-unit containers plan](superpowers/plans/per-unit-containers.md) for
-the full design.
+See [per-unit containers plan](superpowers/plans/per-unit-containers.md) for the
+full design.
 
 ### Application Unit (`units/<name>.star`)
 
@@ -448,8 +448,8 @@ go_binary(
 
 Language-specific classes handle the build details — `go_binary()` sets up
 `GOMODCACHE`, runs `go build`, and packages the result. Similar classes exist
-for Rust (`rust_binary()`), Zig (`zig_binary()`), Python (`python_unit()`),
-and Node.js (`node_unit()`).
+for Rust (`rust_binary()`), Zig (`zig_binary()`), Python (`python_unit()`), and
+Node.js (`node_unit()`).
 
 ### Project Configuration (`PROJECT.star`)
 
@@ -504,18 +504,18 @@ _what to build_.
 
 These ship with `yoe` and cover common build patterns:
 
-| Class              | Description                                   |
-| ------------------ | --------------------------------------------- |
+| Class           | Description                                   |
+| --------------- | --------------------------------------------- |
 | `unit()`        | Generic package — custom build steps as shell |
-| `autotools()`      | configure / make / make install               |
-| `cmake()`          | CMake build                                   |
-| `meson()`          | Meson + Ninja build                           |
-| `go_binary()`      | Go application                                |
-| `rust_binary()`    | Rust application (Cargo)                      |
-| `zig_binary()`     | Zig application                               |
+| `autotools()`   | configure / make / make install               |
+| `cmake()`       | CMake build                                   |
+| `meson()`       | Meson + Ninja build                           |
+| `go_binary()`   | Go application                                |
+| `rust_binary()` | Rust application (Cargo)                      |
+| `zig_binary()`  | Zig application                               |
 | `python_unit()` | Python package (pip/uv)                       |
 | `node_unit()`   | Node.js package (npm/pnpm)                    |
-| `image()`          | Root filesystem image assembly                |
+| `image()`       | Root filesystem image assembly                |
 
 ### Class Composition
 
@@ -581,8 +581,8 @@ def my_go_service(name, version, source, **kwargs):
 ### Extensibility: Starlark and Go
 
 Starlark is not a standalone language — it runs embedded inside the `yoe` Go
-binary. Every built-in function (`unit()`, `machine()`, `image()`, etc.) is a
-Go function registered into the Starlark environment. When Starlark code calls
+binary. Every built-in function (`unit()`, `machine()`, `image()`, etc.) is a Go
+function registered into the Starlark environment. When Starlark code calls
 `unit(name="openssh", ...)`, it executes Go code that has full access to the
 host runtime.
 
@@ -848,19 +848,19 @@ function call to find all modifications.
   clean `git rebase` for patch updates, natural `yoe dev` workflow (edit,
   commit, extract patches), and no SHA256 to maintain. Use
   `source = "https://...git"` with a `tag` to pin the version.
-- **One file per unit** — each unit is its own `.star` file. This keeps
-  diffs clean and makes it easy to add/remove components.
-- **Units and packages are separate concerns** — units are
-  version-controlled build instructions; packages are binary artifacts. This
-  separation enables building once and deploying many times, sharing packages
-  across teams, and on-device incremental updates via `apk`.
+- **One file per unit** — each unit is its own `.star` file. This keeps diffs
+  clean and makes it easy to add/remove components.
+- **Units and packages are separate concerns** — units are version-controlled
+  build instructions; packages are binary artifacts. This separation enables
+  building once and deploying many times, sharing packages across teams, and
+  on-device incremental updates via `apk`.
 - **Classes as functions** — build patterns (autotools, cmake, go) are Starlark
   functions, not a type system. Multiple classes compose through function calls.
   This is simpler and more flexible than Yocto's class inheritance.
-- **Unified unit directory** — system packages, application packages, and
-  images all live in `units/`. The class function determines the output:
-  `unit()` / `autotools()` / etc. produce `.apk` files, `image()` produces
-  disk images. One concept (unit), one directory, one DAG.
+- **Unified unit directory** — system packages, application packages, and images
+  all live in `units/`. The class function determines the output: `unit()` /
+  `autotools()` / etc. produce `.apk` files, `image()` produces disk images. One
+  concept (unit), one directory, one DAG.
 - **apk for image assembly** — image units declare their packages as
   dependencies. `yoe build <image>` creates a clean rootfs and runs `apk add` to
   populate it from the repository, exactly like Alpine's image builder. This

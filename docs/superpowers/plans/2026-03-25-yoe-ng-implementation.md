@@ -10,8 +10,8 @@ assembles root filesystem images, and manages an embedded Linux distribution —
 simpler alternative to Yocto.
 
 **Architecture:** Single Go binary with stdlib CLI (no framework — switch/case
-dispatch like brun), go.starlark.net for unit/config evaluation, bubblewrap
-for build isolation, and apk-tools for package management. Two-phase
+dispatch like brun), go.starlark.net for unit/config evaluation, bubblewrap for
+build isolation, and apk-tools for package management. Two-phase
 resolve-then-build model inspired by Bazel/GN. Content-addressed caching at
 every layer.
 
@@ -32,13 +32,13 @@ on any dev machine). Phases 4+ require Linux with bubblewrap and apk-tools.
 | 1     | CLI Foundation                | —          | **DONE** — `yoe init/config/clean/layer`, Starlark engine, all builtins                |
 | 2     | Dependency Resolution         | 1          | **DONE** — DAG, topo sort, hashing, `desc/refs/graph`, `dev`, custom commands, patches |
 | 2.5   | Layer Management & Engine     | 1          | `yoe layer sync`, load() resolution, remove class builtins, recursive discovery        |
-| 2.6   | units-core Layer (Phase 1)  | 2.5        | Layer skeleton, Starlark classes, toolchain units                                    |
-| 2.7   | units-core Layer (Phase 2)  | 2.6, 6     | Base system units, QEMU machines, base/dev images                                    |
-| 2.8   | units-core Layer (Phase 3)  | 2.7        | Essential libs, crypto/TLS, networking, debug tools                                    |
+| 2.6   | units-core Layer (Phase 1)    | 2.5        | Layer skeleton, Starlark classes, toolchain units                                      |
+| 2.7   | units-core Layer (Phase 2)    | 2.6, 6     | Base system units, QEMU machines, base/dev images                                      |
+| 2.8   | units-core Layer (Phase 3)    | 2.7        | Essential libs, crypto/TLS, networking, debug tools                                    |
 | 3     | Source Management             | 1          | `yoe source fetch/list/verify/clean`, content-addressed cache                          |
 | 4     | Build Execution               | 2, 3       | `yoe build` with bubblewrap isolation, build step execution                            |
 | 5     | Package Creation & Repository | 4          | APK package creation, `yoe repo` commands, local repository                            |
-| 6     | Image Assembly                | 5          | Image unit builds — rootfs via apk, overlays, disk image generation                  |
+| 6     | Image Assembly                | 5          | Image unit builds — rootfs via apk, overlays, disk image generation                    |
 | 7     | Device Interaction            | 6          | `yoe flash`, `yoe run` (QEMU with KVM)                                                 |
 | 8     | TUI                           | 2          | `yoe tui` — Bubble Tea interactive interface                                           |
 | 9     | Bootstrap                     | 5          | `yoe bootstrap stage0/stage1` — self-hosting toolchain                                 |
@@ -1779,8 +1779,7 @@ git commit -m "fix: integration test fixes for phase 1"
 and their transitive dependencies from `LAYER.star` files. Also make the engine
 changes required to support Starlark-based classes in layers.
 
-See
-[units-core Layer Design](../specs/2026-03-26-units-core-layer-design.md)
+See [units-core Layer Design](../specs/2026-03-26-units-core-layer-design.md)
 for the full specification of what the base layer contains and the engine
 changes needed.
 
@@ -1805,8 +1804,8 @@ changes needed.
   `@layer-name//path` relative to named layer's root
 - Add `package_extend()` primitive for modifier classes like `systemd_service()`
 - Add `bootstrap` flag to `unit()` for stage 0/1 toolchain units
-- Change unit discovery from `units/*.star` to `units/**/*.star` for
-  categorized subdirectories
+- Change unit discovery from `units/*.star` to `units/**/*.star` for categorized
+  subdirectories
 
 **Depends on:** Phase 1 (LayerRef/LayerInfo types, Starlark engine, project
 loader)
@@ -1891,8 +1890,8 @@ source modifications (`yoe dev`) and skip re-fetch when present.
 
 ## Phase 5: Package Creation, Repository & Cache (detailed plan TBD)
 
-**Goal:** Create .apk artifacts from build output, manage a local repository, and
-provide S3-compatible remote cache for sharing builds across CI/team.
+**Goal:** Create .apk artifacts from build output, manage a local repository,
+and provide S3-compatible remote cache for sharing builds across CI/team.
 
 **Key components:**
 
@@ -1913,9 +1912,9 @@ provide S3-compatible remote cache for sharing builds across CI/team.
 ## Phase 6: Image Assembly (detailed plan TBD)
 
 **Goal:** Implement the image unit build path — when `yoe build` encounters a
-unit with `image()` class, assemble a bootable disk image from packages
-instead of compiling source code. No separate `yoe image` command; images are
-built through the same `yoe build` pipeline.
+unit with `image()` class, assemble a bootable disk image from packages instead
+of compiling source code. No separate `yoe image` command; images are built
+through the same `yoe build` pipeline.
 
 **Key components:**
 
@@ -1964,12 +1963,11 @@ user namespaces (bubblewrap), mkfs.ext4, mkfs.vfat, systemd-repart
 
 ## Phase 2.6: units-core Layer Phase 1 — Skeleton + Classes + Toolchain (detailed plan TBD)
 
-**Goal:** Create the `layers/units-core/` directory with the layer manifest,
-all Starlark class files, and the toolchain/build-tool units. This is the
-foundation that all other units build on.
+**Goal:** Create the `layers/units-core/` directory with the layer manifest, all
+Starlark class files, and the toolchain/build-tool units. This is the foundation
+that all other units build on.
 
-See
-[units-core Layer Design](../specs/2026-03-26-units-core-layer-design.md)
+See [units-core Layer Design](../specs/2026-03-26-units-core-layer-design.md)
 for the full specification.
 
 **Key deliverables:**
@@ -2040,9 +2038,9 @@ an existing toolchain, then rebuild with own toolchain.
 - `internal/bootstrap/stage0.go` — cross-pollination from Alpine
 - `internal/bootstrap/stage1.go` — self-hosting rebuild
 - `cmd/yoe/main.go` — add `bootstrap` command to switch statement
-- Bootstrap unit set from `layers/units-core/units/toolchain/` — units
-  with `bootstrap = True` (glibc, binutils, gcc, linux-headers) plus base
-  units (busybox, apk-tools, bubblewrap)
+- Bootstrap unit set from `layers/units-core/units/toolchain/` — units with
+  `bootstrap = True` (glibc, binutils, gcc, linux-headers) plus base units
+  (busybox, apk-tools, bubblewrap)
 
 **Depends on:** Phase 5 (package creation and repository), Phase 2.6 (toolchain
 units exist in units-core)

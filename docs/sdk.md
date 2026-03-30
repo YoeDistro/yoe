@@ -36,8 +36,8 @@ architecture differs from their workstation.
 
 ## SDK as a Unit
 
-An SDK is just another unit class. It produces a development environment
-instead of a package or disk image:
+An SDK is just another unit class. It produces a development environment instead
+of a package or disk image:
 
 ```python
 load("//classes/sdk.star", "sdk")

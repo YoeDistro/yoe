@@ -75,8 +75,8 @@ yoe init my-project --machine beaglebone-black
 
 ### `yoe build`
 
-Builds one or more units. Package units (`unit()`, `autotools()`, etc.)
-produce `.apk` packages and publish them to the local repository. Image units
+Builds one or more units. Package units (`unit()`, `autotools()`, etc.) produce
+`.apk` packages and publish them to the local repository. Image units
 (`image()`) assemble a root filesystem and produce a disk image. The class
 function used in the `.star` file determines the behavior — the command is the
 same for both.
@@ -446,8 +446,8 @@ yoe config resolve --machine beaglebone-black --image base
 
 ### `yoe desc`
 
-Describes a unit, showing its resolved configuration, dependencies, build
-inputs hash, and package output. Inspired by GN's `gn desc`.
+Describes a unit, showing its resolved configuration, dependencies, build inputs
+hash, and package output. Inspired by GN's `gn desc`.
 
 ```sh
 # Show full details of a unit
@@ -593,15 +593,15 @@ a command, it checks `commands/*.star` before printing "unknown command".
 Vendor BSP layers can ship custom commands (e.g., `flash-emmc`, `enter-dfu`)
 that become available when the layer is added to the project.
 
-**Key difference from unit evaluation:** Unit `.star` files are sandboxed —
-no I/O, deterministic. Command `.star` files have full I/O access via
-`ctx.shell()` because they are actions, not build definitions.
+**Key difference from unit evaluation:** Unit `.star` files are sandboxed — no
+I/O, deterministic. Command `.star` files have full I/O access via `ctx.shell()`
+because they are actions, not build definitions.
 
 ### `yoe dev`
 
-Work with unit source code directly. Every unit's build directory is a git
-repo — upstream source is committed with an `upstream` tag, and existing patches
-are applied as commits on top. Local edits are just git commits.
+Work with unit source code directly. Every unit's build directory is a git repo
+— upstream source is committed with an `upstream` tag, and existing patches are
+applied as commits on top. Local edits are just git commits.
 
 There is no "dev mode" to enter or exit. If the build directory has commits
 beyond `upstream`, `yoe build` uses them directly instead of re-fetching source.
@@ -630,11 +630,11 @@ yoe dev status
 
 **Subcommands:**
 
-| Subcommand                 | Description                                                                                     |
-| -------------------------- | ----------------------------------------------------------------------------------------------- |
+| Subcommand               | Description                                                                                   |
+| ------------------------ | --------------------------------------------------------------------------------------------- |
 | `yoe dev extract <unit>` | Run `git format-patch upstream..HEAD`, write to `patches/<unit>/`, print updated patches list |
-| `yoe dev diff <unit>`    | Show `git log upstream..HEAD` — your local commits                                              |
-| `yoe dev status`           | List all units with commits beyond upstream                                                   |
+| `yoe dev diff <unit>`    | Show `git log upstream..HEAD` — your local commits                                            |
+| `yoe dev status`         | List all units with commits beyond upstream                                                   |
 
 **Rebasing on upstream updates:**
 
@@ -696,9 +696,9 @@ yoe clean openssh
    topologically sorts this graph and builds in order, parallelizing where the
    DAG allows.
 
-2. **Install-time** — unit `runtime_deps` entries are written into the
-   `.apk`'s `.PKGINFO`. When `apk add` runs during image assembly, it pulls in
-   runtime dependencies automatically.
+2. **Install-time** — unit `runtime_deps` entries are written into the `.apk`'s
+   `.PKGINFO`. When `apk add` runs during image assembly, it pulls in runtime
+   dependencies automatically.
 
 This means:
 
@@ -733,13 +733,13 @@ This is resolved during the graph resolution phase (phase 1) so the full
 resolved config for every unit is known before any build starts. Use
 `yoe desc <unit> --config` to inspect the resolved configuration.
 
-**Design note: unit-level, not task-level dependencies.** Unlike BitBake,
-which models dependencies between individual tasks across units (e.g.,
-`B:do_configure` depends on `A:do_install`), `yoe` treats each unit as an
-atomic unit — unit A depends on unit B means B must be fully built before A
-starts. This is a deliberate simplicity trade-off. BitBake's task-level graph
-enables fine-grained parallelism (start fetching C while B is still compiling)
-and per-task caching (sstate), but it is also the primary source of Yocto's
+**Design note: unit-level, not task-level dependencies.** Unlike BitBake, which
+models dependencies between individual tasks across units (e.g.,
+`B:do_configure` depends on `A:do_install`), `yoe` treats each unit as an atomic
+unit — unit A depends on unit B means B must be fully built before A starts.
+This is a deliberate simplicity trade-off. BitBake's task-level graph enables
+fine-grained parallelism (start fetching C while B is still compiling) and
+per-task caching (sstate), but it is also the primary source of Yocto's
 debugging complexity. Unit-level dependencies are easier to reason about, and
 the parallelism loss is minor since independent units still build concurrently
 across the DAG. Per-unit caching via content-addressed `.apk` hashes provides
@@ -762,9 +762,9 @@ Builds are cached at multiple levels:
    details on S3 configuration, cache signing, and the multi-level fallback
    chain.
 
-Cache invalidation is hash-based, not timestamp-based. Changing a unit,
-updating a source, or rebuilding a dependency all produce a new hash and trigger
-a rebuild. Use `yoe build --dry-run` to see what would be rebuilt and why, or
+Cache invalidation is hash-based, not timestamp-based. Changing a unit, updating
+a source, or rebuilding a dependency all produce a new hash and trigger a
+rebuild. Use `yoe build --dry-run` to see what would be rebuilt and why, or
 `yoe cache stats` to review hit/miss rates from the last build.
 
 ## Example Workflow

@@ -9,8 +9,8 @@ the skills (AI-driven workflows) that ship with Yoe-NG.
 
 Embedded Linux development has a steep learning curve — not because the concepts
 are hard, but because there are many concepts and they interact in non-obvious
-ways. An AI assistant that understands units, dependencies, machine
-definitions, build isolation, and packaging can:
+ways. An AI assistant that understands units, dependencies, machine definitions,
+build isolation, and packaging can:
 
 - **Lower the barrier to entry.** A developer can describe what they want in
   natural language and get working units, machine definitions, and image
@@ -44,8 +44,8 @@ identifies dependencies, and generates a complete `.star` file.
 
 #### `/update-unit <name>`
 
-Bump a unit to the latest upstream version. Checks for new releases, updates
-the version and sha256, runs a test build, and reports any patch conflicts or
+Bump a unit to the latest upstream version. Checks for new releases, updates the
+version and sha256, runs a test build, and reports any patch conflicts or
 dependency changes.
 
 ```
@@ -104,8 +104,8 @@ packages, switch to smaller alternatives, strip unnecessary features).
 #### `/why <package>`
 
 Trace why a package is included in an image. Shows the full dependency chain
-from image unit to the specific package, including which packages pull it in
-as a runtime dependency.
+from image unit to the specific package, including which packages pull it in as
+a runtime dependency.
 
 ```
 /why libssl
@@ -193,8 +193,8 @@ Scaffold a new layer with LAYER.star, directory structure, and example units.
 
 #### `/layer-diff`
 
-Compare two versions of a layer. Show what units changed, what versions
-bumped, what new units were added, and what was removed.
+Compare two versions of a layer. Show what units changed, what versions bumped,
+what new units were added, and what was removed.
 
 ```
 /layer-diff @units-core v1.0.0 v1.1.0
@@ -261,6 +261,6 @@ Each skill:
 - Can create and modify `.star` files with the user's approval
 - Runs in the context of the current project directory
 
-Skills that modify files (like `/new-unit` or `/update-unit`) always show
-the proposed changes and ask for confirmation before writing. Skills that only
-read and analyze (like `/why` or `/diagnose`) run without confirmation.
+Skills that modify files (like `/new-unit` or `/update-unit`) always show the
+proposed changes and ask for confirmation before writing. Skills that only read
+and analyze (like `/why` or `/diagnose`) run without confirmation.

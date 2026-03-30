@@ -2,9 +2,9 @@
 name: audit-unit
 description: >
   This skill should be used when the user asks to "audit a unit", "review a
-  unit", "check a unit", "/audit-unit", or wants to verify that a unit
-  follows best practices and has no common issues. Reviews a unit for
-  correctness, completeness, and quality.
+  unit", "check a unit", "/audit-unit", or wants to verify that a unit follows
+  best practices and has no common issues. Reviews a unit for correctness,
+  completeness, and quality.
 ---
 
 # Audit a Unit
@@ -42,11 +42,11 @@ Verify the unit's dependency lists:
   library via `pkg-config` or `find_package`, it should be in `deps`.
 - **Missing runtime deps** — if the built binary links against a shared library,
   that library's unit should be in `runtime_deps`.
-- **Dep has no unit** — every dependency must be built from source as a
-  unit. If a dep is listed but has no corresponding `.star` unit file, flag
-  it. If a dep is satisfied only because it happens to be in the container's
-  base image (Alpine artifacts), that is a bug — it needs its own unit. Never
-  rely on `apk add` in the Dockerfile for library dependencies.
+- **Dep has no unit** — every dependency must be built from source as a unit. If
+  a dep is listed but has no corresponding `.star` unit file, flag it. If a dep
+  is satisfied only because it happens to be in the container's base image
+  (Alpine artifacts), that is a bug — it needs its own unit. Never rely on
+  `apk add` in the Dockerfile for library dependencies.
 - **Unnecessary deps** — check if any listed deps are actually unused by the
   build.
 - **Circular deps** — verify no dependency cycles exist via `yoe graph`.

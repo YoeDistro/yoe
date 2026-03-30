@@ -33,18 +33,18 @@ capable but carries significant complexity.
 
 **Key differences:**
 
-|                     | Yocto                                        | Yoe-NG                                          |
-| ------------------- | -------------------------------------------- | ----------------------------------------------- |
-| Build system        | BitBake (Python)                             | `yoe` (Go)                                      |
-| Package format      | rpm / deb / ipk                              | apk                                             |
-| Config format       | BitBake units (.bb/.bbappend)              | Starlark (Python-like)                          |
-| Cross-compilation   | Required, central design assumption          | None — native builds only                       |
-| Dependency model    | Task-level DAG (do_fetch → do_compile → ...) | Unit-level DAG (simpler, atomic per-unit)   |
-| Language ecosystems | Wrapped in units                           | Native toolchains (go modules, cargo, etc.)     |
-| Learning curve      | Steep — weeks to become productive           | Shallow — Starlark (Python-like)                |
+|                     | Yocto                                        | Yoe-NG                                        |
+| ------------------- | -------------------------------------------- | --------------------------------------------- |
+| Build system        | BitBake (Python)                             | `yoe` (Go)                                    |
+| Package format      | rpm / deb / ipk                              | apk                                           |
+| Config format       | BitBake units (.bb/.bbappend)                | Starlark (Python-like)                        |
+| Cross-compilation   | Required, central design assumption          | None — native builds only                     |
+| Dependency model    | Task-level DAG (do_fetch → do_compile → ...) | Unit-level DAG (simpler, atomic per-unit)     |
+| Language ecosystems | Wrapped in units                             | Native toolchains (go modules, cargo, etc.)   |
+| Learning curve      | Steep — weeks to become productive           | Shallow — Starlark (Python-like)              |
 | Build caching       | sstate (per-task, hash-based, complex setup) | Per-unit `.apk` hashes in S3-compatible cache |
-| Multi-image support | Yes — multiple images from one project       | Yes — image inheritance + machine matrix        |
-| On-device updates   | Possible but complex (smart image)           | Built-in via apk repositories                   |
+| Multi-image support | Yes — multiple images from one project       | Yes — image inheritance + machine matrix      |
+| On-device updates   | Possible but complex (smart image)           | Built-in via apk repositories                 |
 
 **When to use Yocto instead:** when you need extremely fine-grained control over
 every component, must support exotic architectures with no native build
@@ -138,7 +138,7 @@ looks like.
 | Target            | Containers, small servers         | Custom embedded hardware                             |
 | BSP support       | Generic x86/ARM images            | Per-board machine definitions                        |
 | Image assembly    | `alpine-make-rootfs`              | `yoe build <image>` with machine + partition support |
-| Build system      | `abuild` + APKBUILD shell scripts | `yoe build` + Starlark units                       |
+| Build system      | `abuild` + APKBUILD shell scripts | `yoe build` + Starlark units                         |
 | Kernel management | Generic kernels                   | Per-machine kernel config, device trees              |
 | OTA updates       | Standard apk upgrade              | apk + full image update + rollback                   |
 
@@ -178,7 +178,7 @@ transparency directly influences Yoe-NG's design.
 | Target            | Desktop/server, x86-first | Embedded, multi-arch            |
 | Package manager   | pacman                    | apk                             |
 | Package format    | tar.zst + .PKGINFO        | apk (tar.gz + .PKGINFO)         |
-| Build definitions | PKGBUILD (bash)           | Starlark units                |
+| Build definitions | PKGBUILD (bash)           | Starlark units                  |
 | Reproducibility   | Not a goal                | Content-addressed builds        |
 | Image assembly    | Manual (pacstrap)         | Automated (`yoe build <image>`) |
 | Administration    | Interactive (hands-on)    | Declarative (config-driven)     |
@@ -276,7 +276,7 @@ tooling design.
 | Purpose                | C/C++ meta-build system | Embedded Linux distribution builder |
 | Output                 | Ninja build files       | `.apk` packages and disk images     |
 | Config language        | GN (custom)             | Starlark (Python-like)              |
-| Dependency granularity | Source file / target    | Unit (package)                    |
+| Dependency granularity | Source file / target    | Unit (package)                      |
 | Build execution        | Ninja                   | `yoe` directly                      |
 | Introspection          | `gn desc`, `gn refs`    | `yoe desc`, `yoe refs`, `yoe graph` |
 
@@ -319,9 +319,8 @@ This is not a technology problem — it's an ecosystem problem that Linux
 Foundation backing solves. No amount of technical superiority overcomes "the
 silicon vendor gives us a Yocto BSP and supports it."
 
-**Package count.** Yocto has thousands of units, Buildroot has ~2800. Yoe-NG
-has a handful. Need curl, dbus, python3, or ffmpeg? You have to write the
-unit.
+**Package count.** Yocto has thousands of units, Buildroot has ~2800. Yoe-NG has
+a handful. Need curl, dbus, python3, or ffmpeg? You have to write the unit.
 
 **Configuration UX.** Buildroot's `make menuconfig` is a killer feature —
 visual, discoverable, searchable. You can explore what's available without
@@ -368,10 +367,10 @@ content-addressed `.apk` cache in S3-compatible storage is conceptually simpler:
 push packages to a bucket, pull them on other machines. CI builds once,
 developers reuse the output.
 
-**AI-assisted unit generation.** If an AI can generate a working Starlark
-unit from a project URL faster than porting a Yocto unit, the small package
-count stops mattering. Starlark is far more tractable for AI than BitBake's
-metadata format.
+**AI-assisted unit generation.** If an AI can generate a working Starlark unit
+from a project URL faster than porting a Yocto unit, the small package count
+stops mattering. Starlark is far more tractable for AI than BitBake's metadata
+format.
 
 ### The Alpine Linux Precedent
 
@@ -387,9 +386,9 @@ Buildroot is too limited.
    afterthoughts. These are the differentiator. A Go developer should go from "I
    have a binary" to "I have a bootable image on custom hardware" in minutes.
 
-2. **BSP tooling** — machine definitions, kernel/bootloader units,
-   `yoe flash`, `yoe run`. This is what desktop distros lack and what justifies
-   Yoe-NG's existence as a build system rather than just another distro.
+2. **BSP tooling** — machine definitions, kernel/bootloader units, `yoe flash`,
+   `yoe run`. This is what desktop distros lack and what justifies Yoe-NG's
+   existence as a build system rather than just another distro.
 
 3. **Shared build cache** — the S3-backed package cache is a major advantage
    over Buildroot. Make it trivial to set up so teams see the value immediately.

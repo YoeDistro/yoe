@@ -104,15 +104,15 @@ That's it. Everything else is inside the container.
 
 | Tool    | Package    | Used by                        | Purpose                                                            |
 | ------- | ---------- | ------------------------------ | ------------------------------------------------------------------ |
-| `bwrap` | bubblewrap | `internal/build/sandbox.go`    | Per-unit build isolation (namespace sandbox)                     |
-| `bash`  | bash       | `internal/build/sandbox.go`    | Execute unit build step shell commands                           |
+| `bwrap` | bubblewrap | `internal/build/sandbox.go`    | Per-unit build isolation (namespace sandbox)                       |
+| `bash`  | bash       | `internal/build/sandbox.go`    | Execute unit build step shell commands                             |
 | `git`   | git        | `internal/source/`, `dev.go`   | Clone/fetch repos, manage workspaces, apply/extract patches        |
 | `tar`   | tar        | `internal/source/workspace.go` | Extract `.tar.xz` archives (`.tar.gz`/`.bz2` handled by Go stdlib) |
 | `nproc` | coreutils  | `internal/build/sandbox.go`    | Detect CPU count for `$NPROC` build variable                       |
 | `uname` | coreutils  | `internal/build/sandbox.go`    | Detect host architecture for `$ARCH` variable                      |
-| `make`  | make       | Unit build steps             | C/C++ builds                                                       |
-| `gcc`   | gcc        | Unit build steps             | C compilation                                                      |
-| `g++`   | g++        | Unit build steps             | C++ compilation                                                    |
+| `make`  | make       | Unit build steps               | C/C++ builds                                                       |
+| `gcc`   | gcc        | Unit build steps               | C compilation                                                      |
+| `g++`   | g++        | Unit build steps               | C++ compilation                                                    |
 | `patch` | patch      | Fallback for patch application | When `git apply` is not suitable                                   |
 
 **Called indirectly** (by user-defined build steps, not by `yoe` itself):
@@ -147,9 +147,9 @@ This build root is:
 
 ### Tier 2: Per-Unit Isolation
 
-Each unit builds in an isolated environment with only its declared
-dependencies. This ensures hermetic builds — a unit cannot accidentally depend
-on a tool it didn't declare.
+Each unit builds in an isolated environment with only its declared dependencies.
+This ensures hermetic builds — a unit cannot accidentally depend on a tool it
+didn't declare.
 
 ```sh
 # yoe creates a minimal environment for each unit build
@@ -238,9 +238,8 @@ built by Yoe-NG's own toolchain. The Alpine dependency is gone.
 
 ### Stage 2: Normal Operation
 
-From this point on, all builds use the Yoe-NG build root. New units build
-inside Tier 2 isolated environments. The bootstrap is a one-time cost per
-architecture.
+From this point on, all builds use the Yoe-NG build root. New units build inside
+Tier 2 isolated environments. The bootstrap is a one-time cost per architecture.
 
 ```sh
 # Normal development — no bootstrap needed
@@ -515,8 +514,8 @@ S3 API, and works in air-gapped environments.
 
 |                   | Nix                          | Yocto sstate               | Yoe-NG                          |
 | ----------------- | ---------------------------- | -------------------------- | ------------------------------- |
-| Cache granularity | Per derivation output        | Per task                   | Per unit                      |
-| Key computation   | Full derivation hash         | Task hash + signatures     | Unit input hash (SHA256)      |
+| Cache granularity | Per derivation output        | Per task                   | Per unit                        |
+| Key computation   | Full derivation hash         | Task hash + signatures     | Unit input hash (SHA256)        |
 | Object size       | Closures (can be 1GB+)       | Individual task outputs    | Single `.apk` file              |
 | Remote backend    | Cachix, nix-serve, S3        | sstate-mirror (HTTP/S3)    | Any S3-compatible               |
 | Setup complexity  | Moderate (Cachix simplifies) | High (mirrors, hashequiv)  | Low (just a bucket URL)         |

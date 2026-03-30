@@ -1,8 +1,8 @@
 # Build & Configuration Languages
 
-An analysis of embeddable languages for defining units, build rules, and
-project configuration in Yoe-NG. This informs the choice of how users express
-_what to build_ and _how to build it_.
+An analysis of embeddable languages for defining units, build rules, and project
+configuration in Yoe-NG. This informs the choice of how users express _what to
+build_ and _how to build it_.
 
 ## The Problem
 
@@ -427,8 +427,7 @@ my-project/
 
 TOML is eliminated entirely. Units, classes, machines, and project config are
 all `.star` files. The Go `yoe` binary provides the built-in functions
-(`unit()`, `image()`, `machine()`, `project()`, etc.) that Starlark code
-calls.
+(`unit()`, `image()`, `machine()`, `project()`, etc.) that Starlark code calls.
 
 ## Starlark Ecosystem & Adoption
 

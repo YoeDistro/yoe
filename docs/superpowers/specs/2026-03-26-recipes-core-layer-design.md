@@ -6,9 +6,9 @@ Yoe-NG project depends on.
 
 ## Location
 
-`layers/units-core/` in the main yoe-ng repository. Will be extracted to its
-own Git repo (`github.com/yoe/units-core`) once stable. During development,
-projects reference it as a local layer override:
+`layers/units-core/` in the main yoe-ng repository. Will be extracted to its own
+Git repo (`github.com/yoe/units-core`) once stable. During development, projects
+reference it as a local layer override:
 
 ```python
 # PROJECT.star
@@ -236,14 +236,13 @@ def systemd_service(name, unit, conffiles = [], wants = [], after = []):
 different build paths (rootfs assembly vs. source compilation). The
 `classes/image.star` and `classes/sdk.star` files in the layer are thin wrappers
 that re-export the primitive with layer-specific defaults (e.g., default
-partition layouts, default base packages). Units can use the primitive
-directly or use the class wrapper.
+partition layouts, default base packages). Units can use the primitive directly
+or use the class wrapper.
 
 ## Unit Conventions
 
-1. **One unit per `.star` file**, named after the package. `zlib.star`
-   produces the `zlib` package (plus automatic `-dev`, `-doc`, `-dbg`
-   sub-packages).
+1. **One unit per `.star` file**, named after the package. `zlib.star` produces
+   the `zlib` package (plus automatic `-dev`, `-doc`, `-dbg` sub-packages).
 
 2. **Units use layer classes via `load()`:**
 
@@ -261,15 +260,15 @@ directly or use the class wrapper.
    Within the layer, `//` is relative to the layer root. Downstream projects
    loading from this layer use `@units-core//classes/autotools.star`.
 
-3. **Default sub-packages** apply automatically (`-dev`, `-doc`, `-dbg`).
-   Units only declare `subpackages` for custom splits (e.g., openssh-server
-   vs. openssh-client).
+3. **Default sub-packages** apply automatically (`-dev`, `-doc`, `-dbg`). Units
+   only declare `subpackages` for custom splits (e.g., openssh-server vs.
+   openssh-client).
 
 4. **Version pinning** — each unit pins an exact upstream version and sha256.
    Version bumps are explicit commits.
 
-5. **Toolchain units** may set `bootstrap = True` to indicate they can be
-   built with a foreign toolchain during stage 0/1 bootstrap.
+5. **Toolchain units** may set `bootstrap = True` to indicate they can be built
+   with a foreign toolchain during stage 0/1 bootstrap.
 
 ## Unit Examples
 
@@ -606,16 +605,16 @@ Moving classes from Go builtins to Starlark files requires these changes to the
      not in a layer)
    - `@layer-name//path` — relative to the named layer's root
 
-3. **Evaluate layers before project units.** The loader must fetch/cache
-   layers (per `yoe layer sync`), then make their files available for `load()`
+3. **Evaluate layers before project units.** The loader must fetch/cache layers
+   (per `yoe layer sync`), then make their files available for `load()`
    resolution before evaluating project units.
 
 4. **Add `package_extend()` primitive.** Needed for `systemd_service()` and
    similar modifier classes that add metadata to an existing package without
    creating a new one.
 
-5. **Add `bootstrap` flag to `unit()`.** Marks units that participate in
-   stage 0/1 bootstrap and can be built with a foreign toolchain.
+5. **Add `bootstrap` flag to `unit()`.** Marks units that participate in stage
+   0/1 bootstrap and can be built with a foreign toolchain.
 
-6. **Recursive unit discovery.** The current loader globs `units/*.star`.
-   With categorized subdirectories, it needs to glob `units/**/*.star`.
+6. **Recursive unit discovery.** The current loader globs `units/*.star`. With
+   categorized subdirectories, it needs to glob `units/**/*.star`.

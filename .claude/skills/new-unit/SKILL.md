@@ -1,10 +1,10 @@
 ---
 name: new-unit
 description: >
-  This skill should be used when the user asks to "create a unit", "add a
-  unit", "new unit", "package something", "/new-unit", or provides a URL
-  or project name to be packaged for Yoe. Generates a complete Starlark .star
-  unit file from a source URL or description.
+  This skill should be used when the user asks to "create a unit", "add a unit",
+  "new unit", "package something", "/new-unit", or provides a URL or project
+  name to be packaged for Yoe. Generates a complete Starlark .star unit file
+  from a source URL or description.
 ---
 
 # Create a New Unit
@@ -23,21 +23,21 @@ upstream projects and suggest one, confirming with the user before proceeding.
 
 ### Step 2: Research Existing Packaging
 
-Before writing the unit from scratch, check how other distributions package
-the same software. These are valuable references for configure flags,
-dependencies, patches, and known pitfalls:
+Before writing the unit from scratch, check how other distributions package the
+same software. These are valuable references for configure flags, dependencies,
+patches, and known pitfalls:
 
 - **Alpine Linux (APKBUILD)** — search
   `https://gitlab.alpinelinux.org/alpine/aports` for the package. Alpine is
   closest to Yoe's packaging model (apk, musl/glibc, minimal). Pay attention to
   `makedepends`, `depends`, and `configure` flags.
 - **Yocto/OpenEmbedded (bitbake units)** — search
-  `https://layers.openembedded.org` or the OE-Core layer. Yocto units often
-  have well-tested configure flags and patch sets for embedded use.
+  `https://layers.openembedded.org` or the OE-Core layer. Yocto units often have
+  well-tested configure flags and patch sets for embedded use.
 - **Buildroot** — search
   `https://github.com/buildroot/buildroot/tree/master/package` for the package.
-  Buildroot units are simple and often reveal minimal configure flags needed
-  for embedded targets.
+  Buildroot units are simple and often reveal minimal configure flags needed for
+  embedded targets.
 
 Extract useful information: required dependencies, recommended configure flags,
 known patches, and license details. Do not blindly copy — adapt to Yoe's
@@ -58,8 +58,8 @@ Fetch and inspect the upstream source to determine:
 
 3. **Dependencies** — scan `configure.ac`, `CMakeLists.txt`, `go.mod`,
    `pkg-config` requires, or `#include` directives to identify build and runtime
-   dependencies. Cross-reference against existing units in the project's
-   layers and the findings from Step 2.
+   dependencies. Cross-reference against existing units in the project's layers
+   and the findings from Step 2.
 
 4. **License** — check `LICENSE`, `COPYING`, or source headers. Use SPDX
    identifiers (e.g., `MIT`, `Apache-2.0`, `GPL-2.0-or-later`).
@@ -76,8 +76,8 @@ If one exists, inform the user and suggest `/update-unit` instead.
 
 ### Step 5: Generate the Unit
 
-Write a `.star` file following the conventions of existing units in the
-project. Use the appropriate class:
+Write a `.star` file following the conventions of existing units in the project.
+Use the appropriate class:
 
 **Autotools example:**
 
@@ -152,11 +152,11 @@ unit(
 
 ### Step 6: Choose the File Location
 
-Place the unit in the appropriate category directory within the project's
-layer or the units-core layer:
+Place the unit in the appropriate category directory within the project's layer
+or the units-core layer:
 
-| Category    | Directory              | Examples               |
-| ----------- | ---------------------- | ---------------------- |
+| Category    | Directory            | Examples               |
+| ----------- | -------------------- | ---------------------- |
 | Libraries   | `units/libs/`        | zlib, openssl, ncurses |
 | Networking  | `units/net/`         | openssh, curl          |
 | Base system | `units/base/`        | busybox, linux         |
@@ -201,8 +201,8 @@ and build tool the unit needs must exist as a unit:
 
 - If a dependency already has a unit, add it to `deps` (and `runtime_deps` if
   it's a shared library needed at runtime).
-- If no unit exists for the dependency, **create one first** before writing
-  the unit that depends on it. Use this same workflow recursively.
+- If no unit exists for the dependency, **create one first** before writing the
+  unit that depends on it. Use this same workflow recursively.
 - For non-essential build-time features (doc generation, man pages, GUI
   bindings), prefer disabling them via configure flags over adding deps.
 
@@ -212,8 +212,8 @@ and build tool the unit needs must exist as a unit:
   distributions' units to find them.
 - Do not hardcode absolute paths in build commands — use `$PREFIX`, `$DESTDIR`,
   `$NPROC` environment variables.
-- Do not add a unit to `units-core` unless it's truly a core system
-  component. Project-specific units go in the project's own layer.
+- Do not add a unit to `units-core` unless it's truly a core system component.
+  Project-specific units go in the project's own layer.
 - Do not skip the test build step.
-- Do not install missing tools or libraries in the Dockerfile — create units
-  for them instead.
+- Do not install missing tools or libraries in the Dockerfile — create units for
+  them instead.

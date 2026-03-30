@@ -3,15 +3,15 @@ name: update-unit
 description: >
   This skill should be used when the user asks to "update a unit", "bump a
   unit", "upgrade a unit", "update to latest version", "/update-unit", or
-  mentions that a unit needs a version bump. Bumps a unit to the latest
-  upstream version with a test build.
+  mentions that a unit needs a version bump. Bumps a unit to the latest upstream
+  version with a test build.
 ---
 
 # Update a Unit
 
-Bump an existing unit to the latest upstream release. Updates the version,
-tag, and sha256 (if applicable), checks for patch conflicts or dependency
-changes, and verifies with a test build.
+Bump an existing unit to the latest upstream release. Updates the version, tag,
+and sha256 (if applicable), checks for patch conflicts or dependency changes,
+and verifies with a test build.
 
 ## Workflow
 

@@ -9,11 +9,10 @@ Yoe-NG is a next-generation embedded Linux distribution builder — a simpler
 alternative to Yocto. The project has a working Go CLI (`yoe`) that builds
 artifacts from Starlark units inside a Docker container, creates bootable disk
 images, and runs them in QEMU. A `units-core` layer provides Starlark classes
-and units for a minimal Linux system (busybox, kernel, openssl, openssh,
-etc.).
+and units for a minimal Linux system (busybox, kernel, openssl, openssh, etc.).
 
-Core design: Go CLI (`yoe`) + Starlark units/config + apk artifacts +
-bubblewrap sandbox inside Docker. Native builds only (no cross-compilation).
+Core design: Go CLI (`yoe`) + Starlark units/config + apk artifacts + bubblewrap
+sandbox inside Docker. Native builds only (no cross-compilation).
 
 ## Container as Build Worker
 
@@ -104,8 +103,7 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
   disabling via configure flags is also acceptable.
 - **Build sysroot** — after each unit builds, its output is installed into
   `build/sysroot/` so subsequent units can find deps' headers/libraries
-- **Starlark** for all units and config (Python-like, deterministic,
-  sandboxed)
+- **Starlark** for all units and config (Python-like, deterministic, sandboxed)
 - **Classes as functions** — build patterns (autotools, cmake, go) are Starlark
   functions in the layer, not Go builtins. Autotools class auto-runs
   `autoreconf` for git sources missing `./configure`.

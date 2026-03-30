@@ -75,8 +75,8 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
   just system integration. Good tooling for kernel, applications, and BSPs
   (similar to Yocto's scope, but simpler).
 - **Simple** — one Go binary, one language (Starlark), one package format (apk)
-- **Easy to get started** — AI guides you through project setup, unit
-  creation, and image configuration
+- **Easy to get started** — AI guides you through project setup, unit creation,
+  and image configuration
 - **Tooling written in Go** — single static binary, no runtime dependencies, TUI
   built with [Bubble Tea](https://github.com/charmbracelet/bubbletea), fast
   enough, trivial to distribute
@@ -91,15 +91,15 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
 - **Modern languages** (Go, Rust, Zig, Python, JavaScript) — uses native
   language package managers, caches packages where possible
 - **No cross compilation** — native builds on modern ARM/RISC-V hardware
-- **Starlark for units and build rules** — Python-like, deterministic,
-  sandboxed (see [Build Languages](docs/build-languages.md))
+- **Starlark for units and build rules** — Python-like, deterministic, sandboxed
+  (see [Build Languages](docs/build-languages.md))
 - **Leverage existing ecosystems** — integrate with language-native build
   systems rather than reimplementing them
 - **64-bit only** — x86, ARM, RISC-V
 - **Granular packaging** (like Yocto/Debian) — one unit can produce multiple
   sub-packages (`-dev`, `-doc`, `-dbg`, custom splits)
-- **Composable layers** — pull in units/packages using GitHub URLs; vendor
-  BSP, product, and core layers compose through Starlark `load()` function calls
+- **Composable layers** — pull in units/packages using GitHub URLs; vendor BSP,
+  product, and core layers compose through Starlark `load()` function calls
 - **Image-based device management** — full image updates, OSTree, BDiff
 - **Good SDK story** — binary SDKs, pre-built packages like Chromium
 - **Parallel** — no global lock or global resource, support running concurrent
@@ -108,8 +108,8 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
 
 ## 📚 Documentation
 
-- [AI Skills](docs/ai-skills.md) — AI-driven workflows for unit creation,
-  build debugging, security auditing, and more
+- [AI Skills](docs/ai-skills.md) — AI-driven workflows for unit creation, build
+  debugging, security auditing, and more
 - [The `yoe` Tool](docs/yoe-tool.md) — CLI reference for building, imaging, and
   flashing
 - [Unit & Configuration Format](docs/metadata-format.md) — Starlark unit and
@@ -122,8 +122,8 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
   Alpine, Arch, and NixOS
 - [Build Languages](docs/build-languages.md) — analysis of Starlark, CUE, Nix,
   and other embeddable languages for unit definitions
-- [Units Roadmap](docs/units-roadmap.md) — existing units and what's
-  needed for a complete base system
+- [Units Roadmap](docs/units-roadmap.md) — existing units and what's needed for
+  a complete base system
 
 ## 💡 Inspirations
 
@@ -255,8 +255,8 @@ between **units** and **packages** — these are separate concepts:
 - **Units** are build-time definitions (Starlark `.star` files in the project
   tree) that describe _how_ to build software. See
   [Unit & Configuration Format](docs/metadata-format.md).
-- **Packages** are installable artifacts (`.apk` files) that units produce.
-  They are what gets installed into root filesystem images and onto devices.
+- **Packages** are installable artifacts (`.apk` files) that units produce. They
+  are what gets installed into root filesystem images and onto devices.
 
 This separation means units are a development/CI concern, while packages are a
 deployment/device concern. You can build packages once and install them on many

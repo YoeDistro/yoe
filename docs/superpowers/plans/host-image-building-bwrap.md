@@ -212,9 +212,9 @@ VBR/ldlinux.sys files are already in the rootfs and get included via
 
 ## Decisions
 
-1. **Unit build file ownership**: Deferred. Image assembly is the immediate
-   pain point. Unit builds stay in the container as-is. Long-term, all builds
-   move to host via bwrap + Tier 1 build root.
+1. **Unit build file ownership**: Deferred. Image assembly is the immediate pain
+   point. Unit builds stay in the container as-is. Long-term, all builds move to
+   host via bwrap + Tier 1 build root.
 
 2. **bwrap availability**: Fall back to container-based image building with a
    warning if bwrap is not on the host. Keeps backward compat.

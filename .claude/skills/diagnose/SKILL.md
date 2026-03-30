@@ -9,9 +9,9 @@ description: >
 
 # Diagnose Build Failures
 
-Analyze and fix unit build failures through an iterative read-fix-rebuild
-loop. This skill reads the build log, identifies the root cause, applies a fix
-to the unit or source, and rebuilds until the unit succeeds.
+Analyze and fix unit build failures through an iterative read-fix-rebuild loop.
+This skill reads the build log, identifies the root cause, applies a fix to the
+unit or source, and rebuilds until the unit succeeds.
 
 ## When to Use
 
@@ -44,8 +44,8 @@ hundreds of lines up), read more context as needed.
 
 ### Step 3: Read the Unit
 
-Load the unit's `.star` file to understand what's being built, its
-dependencies, build class, configure args, and any custom build steps:
+Load the unit's `.star` file to understand what's being built, its dependencies,
+build class, configure args, and any custom build steps:
 
 ```
 Find and read layers/**/units/**/<unit>.star
@@ -56,8 +56,8 @@ Find and read layers/**/units/**/<unit>.star
 Common failure categories in order of likelihood:
 
 1. **Missing dependency** — compiler error for a missing header or library.
-   Check if the required package is in the unit's `deps` list. Check if the
-   dep is built and installed to `build/sysroot/`. If the dep has no unit yet,
+   Check if the required package is in the unit's `deps` list. Check if the dep
+   is built and installed to `build/sysroot/`. If the dep has no unit yet,
    **create one** — do not install it in the Dockerfile via `apk add`. Every
    library the system needs must be built from source as a unit.
 2. **Missing build tool** — a tool required during the build (e.g., `makeinfo`,
@@ -82,12 +82,12 @@ Common failure categories in order of likelihood:
 
 Based on the root cause, apply the appropriate fix:
 
-- **Missing dep**: Add to the unit's `deps` list in the `.star` file. If no
-  unit exists for the dependency, create one first. Never install the missing
-  library in the Dockerfile.
+- **Missing dep**: Add to the unit's `deps` list in the `.star` file. If no unit
+  exists for the dependency, create one first. Never install the missing library
+  in the Dockerfile.
 - **Missing build tool**: If non-essential (docs, man pages), disable via
-  configure flags. If essential, create a new unit for the tool and add it as
-  a dep. **Never modify the Dockerfile to install artifacts.**
+  configure flags. If essential, create a new unit for the tool and add it as a
+  dep. **Never modify the Dockerfile to install artifacts.**
 - **Configure flag**: Adjust `configure_args` in the unit
 - **Patch conflict**: Update or remove the conflicting patch
 - **Source issue**: Check if the source needs updating or the extraction failed
@@ -114,9 +114,9 @@ fixing a missing header reveals a missing library).
 
 ## Iteration Rules
 
-- **Maximum 5 iterations** before stopping to reassess with the user. If a
-  unit fails 5 times with different errors, there may be a deeper issue (wrong
-  source version, fundamentally incompatible configuration).
+- **Maximum 5 iterations** before stopping to reassess with the user. If a unit
+  fails 5 times with different errors, there may be a deeper issue (wrong source
+  version, fundamentally incompatible configuration).
 - **Never apply the same fix twice.** If an attempted fix didn't resolve the
   error, revert it and try a different approach.
 - **Read the actual error, not just the exit code.** Build systems often print
@@ -127,24 +127,24 @@ fixing a missing header reveals a missing library).
 
 ## Key Paths
 
-| Path                                 | Contents                            |
-| ------------------------------------ | ----------------------------------- |
-| `build/<unit>/build.log`           | Full build output                   |
-| `build/<unit>/src/`                | Extracted source tree               |
-| `build/<unit>/destdir/`            | Install staging directory           |
-| `build/sysroot/`                     | Shared sysroot (deps' headers/libs) |
-| `layers/**/units/**/<unit>.star` | Unit definition                   |
+| Path                             | Contents                            |
+| -------------------------------- | ----------------------------------- |
+| `build/<unit>/build.log`         | Full build output                   |
+| `build/<unit>/src/`              | Extracted source tree               |
+| `build/<unit>/destdir/`          | Install staging directory           |
+| `build/sysroot/`                 | Shared sysroot (deps' headers/libs) |
+| `layers/**/units/**/<unit>.star` | Unit definition                     |
 
 ## What NOT to Do
 
 - Do not modify files in `build/sysroot/` directly — it's populated
   automatically from built artifacts.
-- Do not modify source files in `build/<unit>/src/` as a permanent fix —
-  changes there are lost on rebuild. Instead, create a patch in the unit.
+- Do not modify source files in `build/<unit>/src/` as a permanent fix — changes
+  there are lost on rebuild. Instead, create a patch in the unit.
 - Do not skip the build log. Always read it before proposing a fix.
 - Do not take shortcuts to make the build pass (e.g., disabling features,
   removing configure checks) without explaining the trade-off and getting user
   approval.
 - Do not install missing tools or libraries in the Dockerfile. The container
-  provides only the minimal bootstrap toolchain. If a unit needs a tool,
-  create a unit for it.
+  provides only the minimal bootstrap toolchain. If a unit needs a tool, create
+  a unit for it.

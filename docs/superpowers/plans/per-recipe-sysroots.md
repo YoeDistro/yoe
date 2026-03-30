@@ -10,29 +10,28 @@ build container. When a unit like util-linux builds, autoconf's `expr` calls
 resolve to the sysroot's broken busybox symlink instead of the container's GNU
 coreutils `expr`, causing an infinite loop and fd exhaustion.
 
-The root cause is architectural: the sysroot should only contain artifacts from a
-unit's declared `deps`, not from every previously-built unit.
+The root cause is architectural: the sysroot should only contain artifacts from
+a unit's declared `deps`, not from every previously-built unit.
 
 ## Design
 
 **Per-unit sysroots populated only from declared `deps`.**
 
-Instead of one shared `build/sysroot/`, each unit gets its own sysroot
-assembled from only its dependency chain. The DAG already knows each unit's
-deps and the topological order guarantees deps are built before dependents.
+Instead of one shared `build/sysroot/`, each unit gets its own sysroot assembled
+from only its dependency chain. The DAG already knows each unit's deps and the
+topological order guarantees deps are built before dependents.
 
 ### How it works
 
-1. After a unit builds, its destdir contents are stored in a per-unit
-   staging area: `build/<unit>/sysroot-stage/` (a copy or hardlink of
-   destdir).
+1. After a unit builds, its destdir contents are stored in a per-unit staging
+   area: `build/<unit>/sysroot-stage/` (a copy or hardlink of destdir).
 
-2. Before building a unit, its sysroot is assembled by merging the
-   sysroot-stage directories of all transitive `deps` (not `runtime_deps`, not
-   image `artifacts`) into `build/<unit>/sysroot/`.
+2. Before building a unit, its sysroot is assembled by merging the sysroot-stage
+   directories of all transitive `deps` (not `runtime_deps`, not image
+   `artifacts`) into `build/<unit>/sysroot/`.
 
-3. The sandbox mounts this per-unit sysroot at `/build/sysroot` (read-only,
-   same as today). No env var changes needed.
+3. The sandbox mounts this per-unit sysroot at `/build/sysroot` (read-only, same
+   as today). No env var changes needed.
 
 4. The shared `build/sysroot/` directory is removed.
 
@@ -51,28 +50,27 @@ build/util-linux/sysroot/ contains:
 
 If A depends on B which depends on C, A's sysroot contains B + C. This is
 already computable from the DAG via the dependency graph. The resolver's
-`dag.go` has `Node.Deps` for direct deps; transitive closure is a simple
-graph walk.
+`dag.go` has `Node.Deps` for direct deps; transitive closure is a simple graph
+walk.
 
 ## Files to modify
 
-| File | Change |
-|------|--------|
-| `internal/build/executor.go` | Replace shared sysroot with per-unit sysroot assembly |
-| `internal/build/sandbox.go` | Remove `InstallToSysroot()`, add `AssembleSysroot()` and `StageSysroot()` |
-| `internal/resolve/dag.go` | Add `TransitiveDeps(name)` helper to compute full dep closure |
+| File                         | Change                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------- |
+| `internal/build/executor.go` | Replace shared sysroot with per-unit sysroot assembly                     |
+| `internal/build/sandbox.go`  | Remove `InstallToSysroot()`, add `AssembleSysroot()` and `StageSysroot()` |
+| `internal/resolve/dag.go`    | Add `TransitiveDeps(name)` helper to compute full dep closure             |
 
 ### executor.go changes
 
 In `buildOne()`:
 
-- **Before building**: call `AssembleSysroot()` to merge transitive deps'
-  staged outputs into `build/<unit>/sysroot/`
+- **Before building**: call `AssembleSysroot()` to merge transitive deps' staged
+  outputs into `build/<unit>/sysroot/`
 - **After building**: call `StageSysroot()` to copy destdir to
-  `build/<unit>/sysroot-stage/` (replacing the current `InstallToSysroot`
-  call)
-- Pass `build/<unit>/sysroot` as the sysroot path in `SandboxConfig`
-  instead of the shared `build/sysroot`
+  `build/<unit>/sysroot-stage/` (replacing the current `InstallToSysroot` call)
+- Pass `build/<unit>/sysroot` as the sysroot path in `SandboxConfig` instead of
+  the shared `build/sysroot`
 
 ```go
 // Before build: assemble sysroot from deps
@@ -161,16 +159,17 @@ func (d *DAG) TransitiveDeps(name string) []string {
 
 - The content-addressed hash already includes dependency hashes, so cache
   invalidation is unchanged.
-- The per-unit sysroot is rebuilt from staged dirs on each build; it's
-  not cached independently.
-- `sysroot-stage/` is part of the build dir and persists across builds
-  (same lifecycle as destdir).
+- The per-unit sysroot is rebuilt from staged dirs on each build; it's not
+  cached independently.
+- `sysroot-stage/` is part of the build dir and persists across builds (same
+  lifecycle as destdir).
 
 ## Performance consideration
 
-Assembling per-unit sysroots via `cp -a` for each unit adds I/O. For
-units with many transitive deps, this could be noticeable. Mitigations
-(implement later if needed):
+Assembling per-unit sysroots via `cp -a` for each unit adds I/O. For units with
+many transitive deps, this could be noticeable. Mitigations (implement later if
+needed):
+
 - Use hardlinks (`cp -al`) instead of copies (same filesystem)
 - Use overlayfs to layer deps (avoids copying entirely)
 
@@ -186,7 +185,7 @@ Start with `cp -a` for correctness; optimize if profiling shows it matters.
    yoe build base-image
    ```
 3. Verify no shared sysroot exists: `ls build/sysroot` should fail
-4. Verify per-unit sysroots: `ls build/util-linux/sysroot/` should contain
-   only ncurses + zlib artifacts
+4. Verify per-unit sysroots: `ls build/util-linux/sysroot/` should contain only
+   ncurses + zlib artifacts
 5. Verify busybox symlinks don't appear in other units' sysroots
 6. `yoe build --force util-linux` succeeds (the original bug)
