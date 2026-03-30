@@ -523,7 +523,7 @@ func (m model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	default:
-		m.message = "Cancelled"
+		m.message = ""
 	}
 	return m, nil
 }
