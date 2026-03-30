@@ -372,7 +372,9 @@ func loadProject() *yoestar.Project {
 	if dir == "" {
 		dir = "."
 	}
-	proj, err := yoestar.LoadProject(dir)
+	proj, err := yoestar.LoadProject(dir,
+		yoestar.WithLayerSync(layer.SyncIfNeeded),
+	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

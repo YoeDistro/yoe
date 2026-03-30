@@ -8,6 +8,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Auto-sync layers** — `yoe build` and other commands that load the project
+  now automatically clone missing layers on first use, matching the lazy
+  container-build pattern. Existing cached layers are not fetched/updated, so
+  there is no added latency on subsequent runs. Explicit `yoe layer sync` is
+  still available to update layers.
+
 ## [0.3.1] - 2026-03-30
 
 **ALL UNITS ARE NOW BUILDING**
