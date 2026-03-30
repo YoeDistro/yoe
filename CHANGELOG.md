@@ -8,6 +8,19 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-03-30
+
+- **meson build system support** — added samurai (ninja-compatible build tool),
+  meson, and kmod recipes. Container updated to v11 with python3 and
+  py3-setuptools for meson. Build environment now sets `PYTHONPATH` to the
+  sysroot so Python packages installed by recipes are discoverable.
+- **Container versioning note** — CLAUDE.md now documents that both
+  `Dockerfile.build` and `internal/container.go` must be bumped together.
+- **gettext recipe** — builds GNU gettext from source as a recipe instead of
+  relying on the container. Provides `autopoint` needed by packages like xz that
+  use gettext macros in their autotools build.
+- **Sysroot binaries on PATH** — `/build/sysroot/usr/bin` is now prepended to
+  `PATH` during builds, so executables from dependency recipes are discoverable.
 - Autotools class respects explicit `build` steps — no longer prepends default
   autoreconf/configure when a recipe provides its own build commands.
 - **Claude Code plugin** — added `.claude/` plugin with AI skills for recipe

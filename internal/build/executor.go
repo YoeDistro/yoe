@@ -161,10 +161,12 @@ func buildOne(proj *yoestar.Project, recipe *yoestar.Recipe, hash string, opts O
 		"NPROC":           NProc(),
 		"ARCH":            opts.Arch,
 		"HOME":            "/tmp",
+		"PATH":            "/build/sysroot/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 		"PKG_CONFIG_PATH": "/build/sysroot/usr/lib/pkgconfig:/usr/lib/pkgconfig",
 		"CFLAGS":          "-I/build/sysroot/usr/include",
 		"CPPFLAGS":        "-I/build/sysroot/usr/include",
 		"LDFLAGS":         "-L/build/sysroot/usr/lib",
+		"PYTHONPATH":      "/build/sysroot/usr/lib/python3.12/site-packages",
 	}
 
 	// Execute each build step inside the container with bwrap
