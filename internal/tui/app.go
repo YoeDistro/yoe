@@ -574,10 +574,10 @@ func (m model) viewUnits() string {
 	if m.searching {
 		b.WriteString(fmt.Sprintf("  /%s▌", m.searchText))
 	} else {
-		help := "  b build  e edit  d diagnose  l log  c clean  / search  q quit"
+		help := "  b build  x cancel  e edit  d diagnose  l log  c clean  / search  q quit"
 		if m.cursor < len(m.units) {
 			if u, ok := m.proj.Units[m.units[m.cursor]]; ok && u.Class == "image" {
-				help = "  b build  r run  e edit  d diagnose  l log  c clean  / search  q quit"
+				help = "  b build  x cancel  r run  e edit  d diagnose  l log  c clean  / search  q quit"
 			}
 		}
 		b.WriteString(helpStyle.Render(help))
