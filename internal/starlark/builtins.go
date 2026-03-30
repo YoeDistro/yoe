@@ -37,17 +37,6 @@ func (e *Engine) builtins() starlark.StringDict {
 
 // --- Helper: extract keyword args ---
 
-func kwBool(kwargs []starlark.Tuple, key string) bool {
-	for _, kv := range kwargs {
-		if string(kv[0].(starlark.String)) == key {
-			if b, ok := kv[1].(starlark.Bool); ok {
-				return bool(b)
-			}
-		}
-	}
-	return false
-}
-
 func kwString(kwargs []starlark.Tuple, key string) string {
 	for _, kv := range kwargs {
 		if string(kv[0].(starlark.String)) == key {
@@ -371,8 +360,7 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 		GoPackage:     kwString(kwargs, "package"),
 		Services:      kwStringList(kwargs, "services"),
 		Conffiles:     kwStringList(kwargs, "conffiles"),
-		NoSysroot:     kwBool(kwargs, "no_sysroot"),
-		Artifacts:      kwStringList(kwargs, "artifacts"),
+		Artifacts:     kwStringList(kwargs, "artifacts"),
 		Exclude:       kwStringList(kwargs, "exclude"),
 		Hostname:      kwString(kwargs, "hostname"),
 		Timezone:      kwString(kwargs, "timezone"),

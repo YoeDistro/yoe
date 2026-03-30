@@ -29,7 +29,7 @@ func CacheDir() (string, error) {
 
 // Fetch downloads the source for a unit into the cache.
 // Returns the path to the cached source (tarball or bare git repo).
-func Fetch(unit *yoestar.Unit) (string, error) {
+func Fetch(unit *yoestar.Unit, w io.Writer) (string, error) {
 	cacheDir, err := CacheDir()
 	if err != nil {
 		return "", err
@@ -40,13 +40,13 @@ func Fetch(unit *yoestar.Unit) (string, error) {
 	}
 
 	if isGitURL(unit.Source) {
-		return fetchGit(cacheDir, unit)
+		return fetchGit(cacheDir, unit, w)
 	}
-	return fetchHTTP(cacheDir, unit)
+	return fetchHTTP(cacheDir, unit, w)
 }
 
 // fetchHTTP downloads a tarball and caches it by URL hash.
-func fetchHTTP(cacheDir string, unit *yoestar.Unit) (string, error) {
+func fetchHTTP(cacheDir string, unit *yoestar.Unit, w io.Writer) (string, error) {
 	// Cache key: sha256 of URL
 	urlHash := fmt.Sprintf("%x", sha256.Sum256([]byte(unit.Source)))
 	ext := guessExt(unit.Source)
@@ -57,7 +57,7 @@ func fetchHTTP(cacheDir string, unit *yoestar.Unit) (string, error) {
 		return cachedPath, nil
 	}
 
-	fmt.Printf("Fetching %s...\n", unit.Source)
+	fmt.Fprintf(w, "Fetching %s...\n", unit.Source)
 
 	resp, err := http.Get(unit.Source)
 	if err != nil {
@@ -103,7 +103,7 @@ func fetchHTTP(cacheDir string, unit *yoestar.Unit) (string, error) {
 // fetchGit clones or updates a bare git repo in the cache.
 // Uses shallow clone by default (only the pinned tag/branch) to avoid
 // downloading full history. For the Linux kernel this is ~4GB vs ~200MB.
-func fetchGit(cacheDir string, unit *yoestar.Unit) (string, error) {
+func fetchGit(cacheDir string, unit *yoestar.Unit, w io.Writer) (string, error) {
 	// Cache key: sha256 of repo URL + ref (different tags get different clones)
 	ref := unit.Tag
 	if ref == "" {
@@ -117,7 +117,7 @@ func fetchGit(cacheDir string, unit *yoestar.Unit) (string, error) {
 	barePath := filepath.Join(cacheDir, urlHash+".git")
 
 	if _, err := os.Stat(barePath); os.IsNotExist(err) {
-		fmt.Printf("Cloning %s (ref: %s)...\n", unit.Source, ref)
+		fmt.Fprintf(w, "Cloning %s (ref: %s)...\n", unit.Source, ref)
 
 		// Shallow clone of just the ref we need
 		args := []string{"clone", "--bare", "--depth", "1"}
@@ -134,7 +134,7 @@ func fetchGit(cacheDir string, unit *yoestar.Unit) (string, error) {
 		}
 	} else {
 		// Repo already cached — fetch the specific ref if needed
-		fmt.Printf("Using cached %s (ref: %s)\n", unit.Source, ref)
+		fmt.Fprintf(w, "Using cached %s (ref: %s)\n", unit.Source, ref)
 	}
 
 	return barePath, nil

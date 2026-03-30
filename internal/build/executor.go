@@ -73,6 +73,18 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		}
 	}
 
+	// Pre-scan: emit cached/waiting status for all units so the TUI
+	// can show the full build queue before any work starts.
+	for _, name := range order {
+		hash := hashes[name]
+		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
+		if !forceThis && !opts.NoCache && IsBuildCached(opts.ProjectDir, name, hash) {
+			notify(name, "cached")
+		} else {
+			notify(name, "waiting")
+		}
+	}
+
 	// Build in order
 	for _, name := range order {
 		unit := proj.Units[name]
@@ -85,7 +97,6 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		if !forceThis && !opts.NoCache {
 			if IsBuildCached(opts.ProjectDir, name, hash) {
 				fmt.Fprintf(w, "%-20s [cached] %s\n", name, hash[:12])
-				notify(name, "cached")
 				continue
 			}
 		}
@@ -93,8 +104,16 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		fmt.Fprintf(w, "%-20s [building]\n", name)
 		notify(name, "building")
 
-		if err := buildOne(proj, unit, hash, opts, w); err != nil {
+		if err := buildOne(proj, dag, unit, hash, opts, w); err != nil {
 			notify(name, "failed")
+			// Show which remaining units are blocked by this failure
+			blocked := blockedUnits(dag, name, order)
+			if len(blocked) > 0 {
+				fmt.Fprintf(w, "  the following units depend on %s and cannot be built:\n", name)
+				for _, b := range blocked {
+					fmt.Fprintf(w, "    - %s\n", b)
+				}
+			}
 			return fmt.Errorf("building %s: %w", name, err)
 		}
 
@@ -107,7 +126,7 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 	return nil
 }
 
-func buildOne(proj *yoestar.Project, unit *yoestar.Unit, hash string, opts Options, w io.Writer) error {
+func buildOne(proj *yoestar.Project, dag *resolve.DAG, unit *yoestar.Unit, hash string, opts Options, w io.Writer) error {
 	buildDir := UnitBuildDir(opts.ProjectDir, unit.Name)
 	EnsureDir(buildDir)
 
@@ -154,7 +173,7 @@ func buildOne(proj *yoestar.Project, unit *yoestar.Unit, hash string, opts Optio
 	// Prepare source (fetch + extract + patch, or reuse dev source).
 	// Units without a source field (e.g., musl) skip this step.
 	if unit.Source != "" {
-		if _, err := source.Prepare(opts.ProjectDir, unit); err != nil {
+		if _, err := source.Prepare(opts.ProjectDir, unit, w); err != nil {
 			return fmt.Errorf("preparing source: %w", err)
 		}
 	} else {
@@ -168,10 +187,11 @@ func buildOne(proj *yoestar.Project, unit *yoestar.Unit, hash string, opts Optio
 		return nil
 	}
 
-	// Build environment.
-	// The sysroot at /build/sysroot contains headers/libs from built deps.
-	sysroot := SysrootDir(opts.ProjectDir)
-	EnsureDir(sysroot)
+	// Assemble per-unit sysroot from transitive deps
+	sysroot := filepath.Join(buildDir, "sysroot")
+	if err := AssembleSysroot(sysroot, dag, unit.Name, opts.ProjectDir); err != nil {
+		return fmt.Errorf("assembling sysroot: %w", err)
+	}
 	env := map[string]string{
 		"PREFIX":          "/usr",
 		"DESTDIR":         "/build/destdir",
@@ -221,10 +241,9 @@ func buildOne(proj *yoestar.Project, unit *yoestar.Unit, hash string, opts Optio
 			return fmt.Errorf("publishing to repo: %w", err)
 		}
 
-		// Install into the shared sysroot so subsequent builds can find
-		// this package's headers, libraries, and pkg-config files.
-		if err := InstallToSysroot(destDir, sysroot); err != nil {
-			fmt.Fprintf(w, "  (warning: sysroot install failed: %v)\n", err)
+		// Stage destdir for downstream units' per-unit sysroots
+		if err := StageSysroot(destDir, buildDir); err != nil {
+			fmt.Fprintf(w, "  (warning: sysroot staging failed: %v)\n", err)
 		}
 	}
 
@@ -304,6 +323,27 @@ func filterBuildOrder(dag *resolve.DAG, fullOrder []string, names []string) ([]s
 		}
 	}
 	return filtered, nil
+}
+
+// blockedUnits returns units remaining in the build order that transitively
+// depend on the failed unit.
+func blockedUnits(dag *resolve.DAG, failed string, order []string) []string {
+	rdeps, err := dag.RdepsOf(failed)
+	if err != nil {
+		return nil
+	}
+	rdepSet := make(map[string]bool, len(rdeps))
+	for _, r := range rdeps {
+		rdepSet[r] = true
+	}
+	// Return in build order for clarity
+	var blocked []string
+	for _, name := range order {
+		if rdepSet[name] {
+			blocked = append(blocked, name)
+		}
+	}
+	return blocked
 }
 
 func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[string]string, opts Options, requested map[string]bool) error {

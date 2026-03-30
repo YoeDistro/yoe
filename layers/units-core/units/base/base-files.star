@@ -39,10 +39,21 @@ def base_files(name = "base-files", users = None):
             + "::sysinit:/bin/mount -t proc proc /proc\n"
             + "::sysinit:/bin/mount -t sysfs sys /sys\n"
             + "::sysinit:/bin/hostname -F /etc/hostname\n"
+            + "::sysinit:/etc/init.d/rcS\n"
             + "ttyS0::respawn:/sbin/getty -L ttyS0 115200 vt100\n"
             + "::ctrlaltdel:/sbin/reboot\n"
             + "::shutdown:/bin/umount -a -r\n"
             + "INITTAB",
+
+            # rcS script — runs all init scripts in /etc/init.d/
+            "mkdir -p $DESTDIR/etc/init.d",
+            "cat > $DESTDIR/etc/init.d/rcS << 'RCS'\n"
+            + "#!/bin/sh\n"
+            + "for s in /etc/init.d/S*; do\n"
+            + "    [ -x \"$s\" ] && \"$s\" start\n"
+            + "done\n"
+            + "RCS",
+            "chmod +x $DESTDIR/etc/init.d/rcS",
 
             # Boot configuration (extlinux for QEMU serial console)
             "mkdir -p $DESTDIR/boot/extlinux",

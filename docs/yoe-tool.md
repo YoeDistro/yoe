@@ -541,13 +541,13 @@ units with their build status.
 
 #### Status indicators
 
-| Indicator        | Color          | Meaning                      |
-| ---------------- | -------------- | ---------------------------- |
-| (none)           | —              | Never built                  |
-| `● cached`       | dim/gray       | Built and cached             |
-| `● waiting`      | yellow         | Queued, deps building first  |
-| `▌building...`   | flashing green | Actively compiling           |
-| `● failed`       | red            | Last build failed            |
+| Indicator      | Color          | Meaning                     |
+| -------------- | -------------- | --------------------------- |
+| (none)         | —              | Never built                 |
+| `● cached`     | dim/gray       | Built and cached            |
+| `● waiting`    | yellow         | Queued, deps building first |
+| `▌building...` | flashing green | Actively compiling          |
+| `● failed`     | red            | Last build failed           |
 
 When you build a unit, its dependencies appear as "waiting" (yellow), then
 transition to "building" (flashing green) as the executor reaches them. Multiple
@@ -579,12 +579,12 @@ Pressing Enter on a unit shows a split-pane detail view:
 - **BUILD LOG** (bottom) — tail of the unit's `build.log`, updated in real time
   during a build
 
-| Key   | Action                            |
-| ----- | --------------------------------- |
-| `Esc` | Return to unit list               |
-| `b`   | Build this unit in background     |
-| `d`   | Launch `claude diagnose`          |
-| `l`   | Open build log in `$EDITOR`       |
+| Key   | Action                        |
+| ----- | ----------------------------- |
+| `Esc` | Return to unit list           |
+| `b`   | Build this unit in background |
+| `d`   | Launch `claude diagnose`      |
+| `l`   | Open build log in `$EDITOR`   |
 
 #### Search
 

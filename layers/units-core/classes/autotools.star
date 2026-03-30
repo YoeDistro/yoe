@@ -6,8 +6,10 @@ def autotools(name, version, source, sha256="", deps=[], runtime_deps=[],
             # Run autoreconf if configure doesn't exist (git sources)
             "test -f configure || autoreconf -fi",
             "./configure --prefix=$PREFIX " + " ".join(configure_args),
-            "make -j$NPROC",
-            "make DESTDIR=$DESTDIR install",
+            # Override maintainer-mode tools so make doesn't try to re-run
+            # versioned autotools (e.g. aclocal-1.16) that aren't in the container
+            "make -j$NPROC ACLOCAL=true AUTOCONF=true AUTOMAKE=true AUTOHEADER=true MAKEINFO=true",
+            "make DESTDIR=$DESTDIR install ACLOCAL=true AUTOCONF=true AUTOMAKE=true AUTOHEADER=true MAKEINFO=true",
         ]
     unit(
         name=name, version=version, source=source, sha256=sha256,

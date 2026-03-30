@@ -121,7 +121,6 @@ type Unit struct {
 	Services    []string
 	Conffiles   []string
 	Environment map[string]string
-	NoSysroot   bool // skip sysroot install (target-only units like busybox)
 
 	// Image-specific (class == "image")
 	Artifacts  []string // artifacts to install in rootfs

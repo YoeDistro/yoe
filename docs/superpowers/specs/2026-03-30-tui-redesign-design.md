@@ -3,10 +3,11 @@
 ## Context
 
 The current TUI is a basic menu-driven interface that doesn't do much — it shows
-a main menu with options like "Build all" and "Browse units" but doesn't actually
-run builds or interact with the build system. The goal is to make the TUI the
-primary interactive interface: a unit list with inline build status, background
-builds, and quick-action keys for editing, diagnosing, and adding units.
+a main menu with options like "Build all" and "Browse units" but doesn't
+actually run builds or interact with the build system. The goal is to make the
+TUI the primary interactive interface: a unit list with inline build status,
+background builds, and quick-action keys for editing, diagnosing, and adding
+units.
 
 Running `yoe` with no arguments launches the TUI (the `yoe tui` subcommand has
 been removed).
@@ -35,30 +36,30 @@ unit name, class, and build status:
 
 ### Status Indicators
 
-| Indicator             | Color          | Meaning                         |
-| --------------------- | -------------- | ------------------------------- |
-| (none)                | —              | Never built                     |
-| `● cached`            | dim/gray       | Built and cached                |
-| `▌building...`        | flashing green | Build subprocess running        |
-| `● failed`            | red            | Last build failed               |
+| Indicator      | Color          | Meaning                  |
+| -------------- | -------------- | ------------------------ |
+| (none)         | —              | Never built              |
+| `● cached`     | dim/gray       | Built and cached         |
+| `▌building...` | flashing green | Build subprocess running |
+| `● failed`     | red            | Last build failed        |
 
-"Flashing green" means the indicator toggles visibility on a 500ms tick, creating
-a blinking effect while the build is in progress.
+"Flashing green" means the indicator toggles visibility on a 500ms tick,
+creating a blinking effect while the build is in progress.
 
 ### Key Bindings
 
-| Key        | Action                                                      |
-| ---------- | ----------------------------------------------------------- |
-| `b`        | Build selected unit in background                           |
-| `e`        | Open unit's `.star` file in `$EDITOR`                       |
-| `d`        | Launch `claude /diagnose <unit>` (suspend TUI)              |
-| `l`        | Open unit's build log in `$EDITOR`                          |
-| `a`        | Launch `claude /new-unit` (suspend TUI)                     |
-| `Enter`    | Show live log tail for the selected unit                    |
-| `B`        | Build all units in background                               |
-| `j/k`      | Navigate up/down                                            |
-| `↑/↓`      | Navigate up/down                                            |
-| `q`        | Quit                                                        |
+| Key     | Action                                         |
+| ------- | ---------------------------------------------- |
+| `b`     | Build selected unit in background              |
+| `e`     | Open unit's `.star` file in `$EDITOR`          |
+| `d`     | Launch `claude /diagnose <unit>` (suspend TUI) |
+| `l`     | Open unit's build log in `$EDITOR`             |
+| `a`     | Launch `claude /new-unit` (suspend TUI)        |
+| `Enter` | Show live log tail for the selected unit       |
+| `B`     | Build all units in background                  |
+| `j/k`   | Navigate up/down                               |
+| `↑/↓`   | Navigate up/down                               |
+| `q`     | Quit                                           |
 
 ### Initial Status Detection
 
@@ -90,11 +91,11 @@ The view shows the last ~20 lines of `build/<unit>/build.log`, updating on a
 
 Key bindings in detail view:
 
-| Key   | Action                            |
-| ----- | --------------------------------- |
-| `Esc` | Return to unit list               |
-| `b`   | Build this unit in background     |
-| `d`   | Launch Claude diagnose (suspend)  |
+| Key   | Action                           |
+| ----- | -------------------------------- |
+| `Esc` | Return to unit list              |
+| `b`   | Build this unit in background    |
+| `d`   | Launch Claude diagnose (suspend) |
 
 ## Background Builds
 
@@ -118,12 +119,12 @@ The `e`, `d`, `l`, and `a` keys all suspend the TUI using Bubble Tea's
 releases the terminal to the child process. When the child exits, the TUI
 resumes with its full state intact.
 
-| Key | Command                                            |
-| --- | -------------------------------------------------- |
-| `e` | `$EDITOR <path-to-unit.star>`                      |
-| `d` | `claude /diagnose <unit>`                          |
-| `l` | `$EDITOR build/<unit>/build.log`                   |
-| `a` | `claude /new-unit`                                 |
+| Key | Command                          |
+| --- | -------------------------------- |
+| `e` | `$EDITOR <path-to-unit.star>`    |
+| `d` | `claude /diagnose <unit>`        |
+| `l` | `$EDITOR build/<unit>/build.log` |
+| `a` | `claude /new-unit`               |
 
 For `e`, the TUI locates the unit's `.star` file by searching
 `layers/**/units/**/<name>.star`.
@@ -177,10 +178,10 @@ A 500ms ticker drives the flashing indicator and log tail refresh.
 
 ## Files to Modify
 
-| File                    | Change                                           |
-| ----------------------- | ------------------------------------------------ |
-| `internal/tui/app.go`   | Rewrite: unit list view, background builds, etc. |
-| `cmd/yoe/main.go`       | Already done: no-args launches TUI               |
+| File                  | Change                                           |
+| --------------------- | ------------------------------------------------ |
+| `internal/tui/app.go` | Rewrite: unit list view, background builds, etc. |
+| `cmd/yoe/main.go`     | Already done: no-args launches TUI               |
 
 ## Verification
 

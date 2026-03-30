@@ -93,6 +93,8 @@ func GenerateDiskImage(rootfs, imgPath string, unit *yoestar.Unit, projectDir st
 			if err := yoe.RunInContainer(yoe.ContainerRunConfig{
 				Command:    ddCmd,
 				ProjectDir: projectDir,
+				Stdout:     w,
+				Stderr:     w,
 			}); err != nil {
 				return fmt.Errorf("dd partition %s: %w", p.Label, err)
 			}
@@ -154,6 +156,8 @@ func partitionImage(imgPath string, partitions []yoestar.Partition, projectDir s
 	return yoe.RunInContainer(yoe.ContainerRunConfig{
 		Command:    cmd,
 		ProjectDir: projectDir,
+		Stdout:     w,
+		Stderr:     w,
 	})
 }
 
@@ -175,6 +179,8 @@ func createVfatPartition(partImg string, sizeMB int, rootfs string, p yoestar.Pa
 	if err := yoe.RunInContainer(yoe.ContainerRunConfig{
 		Command:    mkfsCmd,
 		ProjectDir: projectDir,
+		Stdout:     w,
+		Stderr:     w,
 	}); err != nil {
 		return fmt.Errorf("mkfs.vfat: %w", err)
 	}
@@ -192,6 +198,8 @@ func createVfatPartition(partImg string, sizeMB int, rootfs string, p yoestar.Pa
 			if err := yoe.RunInContainer(yoe.ContainerRunConfig{
 				Command:    mcopyCmd,
 				ProjectDir: projectDir,
+				Stdout:     w,
+				Stderr:     w,
 			}); err != nil {
 				fmt.Fprintf(w, "    mcopy %s: %v\n", filepath.Base(f), err)
 			} else {
@@ -240,6 +248,8 @@ func createExt4Partition(partImg string, sizeMB int, rootfs string, p yoestar.Pa
 	if err := yoe.RunInContainer(yoe.ContainerRunConfig{
 		Command:    mkfsCmd,
 		ProjectDir: projectDir,
+		Stdout:     w,
+		Stderr:     w,
 	}); err != nil {
 		return fmt.Errorf("mkfs.ext4 -d: %w", err)
 	}
@@ -315,6 +325,8 @@ extlinux --install /mnt/extlinux/boot/extlinux`,
 		Command:    extlinuxScript,
 		ProjectDir: projectDir,
 		NoUser:     true,
+		Stdout:     w,
+		Stderr:     w,
 	}); err != nil {
 		fmt.Fprintf(w, "  extlinux install failed: %v\n", err)
 		return nil // non-fatal — image still has the files, just no VBR

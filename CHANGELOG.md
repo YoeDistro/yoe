@@ -8,6 +8,38 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-03-30
+
+**ALL UNITS ARE NOW BUILDING**
+
+- **Per-unit sysroots** — each unit's build sysroot is assembled from only its
+  transitive `deps`, not every previously built unit. Fixes busybox symlinks
+  shadowing container tools (e.g., musl-linked `expr` breaking autoconf).
+- **Run from TUI** — press `r` on an image unit to launch it in QEMU.
+- **Log writer plumbing** — container stdout/stderr in image assembly and source
+  fetch/prepare output now route through the build log writer instead of
+  os.Stdout. Fixes TUI alt-screen corruption during background builds.
+- **Autotools maintainer-mode override** — `make` invocations pass
+  `ACLOCAL=true AUTOCONF=true AUTOMAKE=true AUTOHEADER=true MAKEINFO=true` to
+  prevent re-running versioned autotools (e.g., `aclocal-1.16`) that aren't in
+  the container. Fixes gawk and similar packages.
+- **rcS init script** — `base-files` now includes `/etc/init.d/rcS` which runs
+  all `/etc/init.d/S*` scripts at boot.
+- **network-config unit** — new unit that configures a network interface via an
+  init script.
+- **Build failure context** — when a unit fails, the output now lists all
+  downstream units blocked by the failure. The TUI shows cached units in blue
+  and displays the full build queue (waiting/cached) before work begins.
+- **dev-image** — added `kmod` and `util-linux` to the development image.
+- **Image rootfs dep fix** — image assembly now follows only `runtime_deps` when
+  resolving packages, not build-time `deps`. Fixes build-only packages (e.g.,
+  gettext via xz) being installed into the rootfs and overflowing the partition.
+
+## [0.3.0] - 2026-03-30
+
+**THIS RELEASE DOES NOT WORK** - this release is only to capture rename and TUI
+updates. Wait for a future one to do any work.
+
 **BREAKING CHANGE** - due to rename, recommend deleting any external projects
 and starting over.
 
@@ -19,9 +51,9 @@ and starting over.
 - **`yoe log`** — view build logs from the command line. Shows the most recent
   build log by default, or a specific unit's log with `yoe log <unit>`. Use `-e`
   to open the log in `$EDITOR`.
-- **`yoe diagnose`** — launch Claude Code with the `/diagnose` skill to
-  analyze a build failure. Uses the most recent build log by default, or a
-  specific unit's log with `yoe diagnose <unit>`.
+- **`yoe diagnose`** — launch Claude Code with the `/diagnose` skill to analyze
+  a build failure. Uses the most recent build log by default, or a specific
+  unit's log with `yoe diagnose <unit>`.
 - **TUI rewrite** — `yoe` with no args launches an interactive unit list with
   inline build status (cached/waiting/building/failed). Builds run in-process
   via `build.BuildUnits()` with real-time status events — dependencies show as
