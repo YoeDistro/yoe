@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"sort"
 
@@ -178,8 +180,12 @@ func cmdBuild(args []string) {
 		}
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
 	proj := loadProject()
 	opts := build.Options{
+		Ctx:        ctx,
 		Force:      force,
 		Clean:      clean,
 		NoCache:    noCache,
