@@ -141,6 +141,10 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	buildDir := UnitBuildDir(opts.ProjectDir, unit.Name)
 	EnsureDir(buildDir)
 
+	// Remove the cache marker before starting so a cancelled or failed
+	// build does not leave a stale marker that makes it appear cached.
+	os.Remove(CacheMarkerPath(opts.ProjectDir, unit.Name, hash))
+
 	// Open build log. In verbose mode, tee to terminal + log file.
 	// In normal mode, log only — on error, print the log path.
 	logPath := filepath.Join(buildDir, "build.log")
