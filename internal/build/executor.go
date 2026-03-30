@@ -166,6 +166,7 @@ func buildOne(proj *yoestar.Project, unit *yoestar.Unit, hash string, opts Optio
 		"CFLAGS":          "-I/build/sysroot/usr/include",
 		"CPPFLAGS":        "-I/build/sysroot/usr/include",
 		"LDFLAGS":         "-L/build/sysroot/usr/lib",
+		"LD_LIBRARY_PATH": "/build/sysroot/usr/lib",
 		"PYTHONPATH":      "/build/sysroot/usr/lib/python3.12/site-packages",
 	}
 

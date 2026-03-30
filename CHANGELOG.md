@@ -16,6 +16,12 @@ and starting over.
   `unit()`, the image field `packages` is now `artifacts`, and the `recipes/`
   directory in layers is now `units/`. The `recipes-core` layer is now
   `units-core`. The Go `internal/packaging` package is now `internal/artifact`.
+- **`yoe log`** — view build logs from the command line. Shows the most recent
+  build log by default, or a specific unit's log with `yoe log <unit>`. Use `-e`
+  to open the log in `$EDITOR`.
+- **`yoe diagnose`** — launch Claude Code with the `/diagnose` skill to
+  analyze a build failure. Uses the most recent build log by default, or a
+  specific unit's log with `yoe diagnose <unit>`.
 
 ## [0.2.10] - 2026-03-30
 

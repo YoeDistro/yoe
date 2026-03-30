@@ -67,6 +67,8 @@ func main() {
 		cmdGraph(args)
 	case "log":
 		cmdLog(args)
+	case "diagnose":
+		cmdDiagnose(args)
 	case "clean":
 		cmdClean(args)
 	default:
@@ -98,6 +100,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  graph                   Visualize the dependency DAG\n")
 	fmt.Fprintf(os.Stderr, "  tui                     Launch the interactive TUI\n")
 	fmt.Fprintf(os.Stderr, "  log [unit] [-e]         Show build log (most recent, or specific unit; -e to edit)\n")
+	fmt.Fprintf(os.Stderr, "  diagnose [unit]         Launch Claude Code to diagnose a build failure\n")
 	fmt.Fprintf(os.Stderr, "  clean                   Remove build artifacts\n")
 	fmt.Fprintf(os.Stderr, "  update                  Update yoe to the latest release\n")
 	fmt.Fprintf(os.Stderr, "  version                 Display version information\n")
@@ -340,12 +343,15 @@ func cmdConfig(args []string) {
 
 func cmdClean(args []string) {
 	all := false
+	force := false
 	var units []string
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "-all", "--all":
 			all = true
+		case "--force", "-f":
+			force = true
 		default:
 			units = append(units, args[i])
 		}
@@ -356,7 +362,7 @@ func cmdClean(args []string) {
 		dir = "."
 	}
 
-	if err := yoe.RunClean(dir, all, units); err != nil {
+	if err := yoe.RunClean(dir, all, force, units); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -560,6 +566,47 @@ func cmdLog(args []string) {
 		os.Exit(1)
 	}
 	os.Stdout.Write(data)
+}
+
+func cmdDiagnose(args []string) {
+	var unitName string
+	for _, a := range args {
+		unitName = a
+	}
+
+	dir := projectDir()
+	var logPath string
+
+	if unitName != "" {
+		logPath = filepath.Join(dir, "build", unitName, "build.log")
+	} else {
+		logPath = findLatestBuildLog(dir)
+	}
+
+	if logPath == "" {
+		fmt.Fprintln(os.Stderr, "No build logs found")
+		os.Exit(1)
+	}
+
+	if _, err := os.Stat(logPath); err != nil {
+		fmt.Fprintf(os.Stderr, "Build log not found: %s\n", logPath)
+		os.Exit(1)
+	}
+
+	claudePath, err := exec.LookPath("claude")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error: claude not found in PATH")
+		os.Exit(1)
+	}
+
+	prompt := fmt.Sprintf("diagnose %s", logPath)
+	cmd := exec.Command(claudePath, prompt)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		os.Exit(1)
+	}
 }
 
 func findLatestBuildLog(projectDir string) string {

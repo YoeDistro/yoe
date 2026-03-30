@@ -22,7 +22,7 @@ func TestRunClean_Default(t *testing.T) {
 	}
 
 	// Default clean removes build but preserves repo.
-	if err := RunClean(proj, false, nil); err != nil {
+	if err := RunClean(proj, false, true, nil); err != nil {
 		t.Fatalf("RunClean default: %v", err)
 	}
 
@@ -45,7 +45,7 @@ func TestRunClean_All(t *testing.T) {
 		}
 	}
 
-	if err := RunClean(proj, true, nil); err != nil {
+	if err := RunClean(proj, true, true, nil); err != nil {
 		t.Fatalf("RunClean all: %v", err)
 	}
 
@@ -68,7 +68,7 @@ func TestRunClean_Units(t *testing.T) {
 	}
 
 	// Clean only openssl.
-	if err := RunClean(proj, false, []string{"openssl"}); err != nil {
+	if err := RunClean(proj, false, true, []string{"openssl"}); err != nil {
 		t.Fatalf("RunClean units: %v", err)
 	}
 
@@ -84,7 +84,7 @@ func TestRunClean_NoBuildDir(t *testing.T) {
 	proj := t.TempDir()
 
 	// Should succeed even when build dir does not exist.
-	if err := RunClean(proj, false, nil); err != nil {
+	if err := RunClean(proj, false, true, nil); err != nil {
 		t.Fatalf("RunClean on missing build dir: %v", err)
 	}
 }

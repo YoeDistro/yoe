@@ -45,7 +45,7 @@ def users_commands(users):
         )
         if u["password"]:
             cmds.append(
-                "PW=$(LD_LIBRARY_PATH=/build/sysroot/usr/lib openssl passwd -6 '" +
+                "PW=$(openssl passwd -6 '" +
                 u["password"] + "') && " +
                 "echo '" + u["name"] + ":'\"$PW\"':0:0:99999:7:::' >> $DESTDIR/etc/shadow",
             )
