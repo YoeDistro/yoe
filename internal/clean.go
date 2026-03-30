@@ -1,16 +1,18 @@
 package internal
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
-func RunClean(projectDir string, all bool, recipes []string) error {
+func RunClean(projectDir string, all bool, force bool, units []string) error {
 	buildDir := filepath.Join(projectDir, "build")
 
-	if len(recipes) > 0 {
-		for _, r := range recipes {
+	if len(units) > 0 {
+		for _, r := range units {
 			dir := filepath.Join(buildDir, r)
 			if err := os.RemoveAll(dir); err != nil {
 				return fmt.Errorf("removing %s: %w", dir, err)
@@ -21,6 +23,13 @@ func RunClean(projectDir string, all bool, recipes []string) error {
 	}
 
 	if all {
+		if !force {
+			fmt.Print("Remove all build artifacts and packages? [y/N] ")
+			if !confirmYes() {
+				fmt.Println("Aborted")
+				return nil
+			}
+		}
 		dirs := []string{buildDir, filepath.Join(projectDir, "repo")}
 		for _, dir := range dirs {
 			if err := os.RemoveAll(dir); err != nil {
@@ -29,6 +38,13 @@ func RunClean(projectDir string, all bool, recipes []string) error {
 		}
 		fmt.Println("Cleaned all build artifacts, packages, and sources")
 	} else {
+		if !force {
+			fmt.Print("Remove all build intermediates? [y/N] ")
+			if !confirmYes() {
+				fmt.Println("Aborted")
+				return nil
+			}
+		}
 		if err := os.RemoveAll(buildDir); err != nil {
 			return fmt.Errorf("removing %s: %w", buildDir, err)
 		}
@@ -36,4 +52,12 @@ func RunClean(projectDir string, all bool, recipes []string) error {
 	}
 
 	return nil
+}
+
+func confirmYes() bool {
+	scanner := bufio.NewScanner(os.Stdin)
+	if !scanner.Scan() {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(scanner.Text()), "y")
 }

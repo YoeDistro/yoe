@@ -4,7 +4,7 @@ Yoe-NG is an **AI-native embedded Linux distribution builder** — a simpler
 alternative to Yocto, designed from the ground up to be driven by AI assistants.
 
 Every operation has a CLI equivalent, but the primary workflow is
-conversational: describe what you need, and the AI generates recipes, configures
+conversational: describe what you need, and the AI generates units, configures
 machines, traces dependencies, diagnoses build failures, and audits security —
 all with full understanding of your project's dependency graph and build state.
 
@@ -23,7 +23,7 @@ sudo mv yoe /usr/local/bin/
 yoe init yoe-test
 cd yoe-test
 
-# Fetch layers (downloads recipes-core)
+# Fetch layers (downloads units-core)
 yoe layer sync
 
 # Build the base image (builds all required packages, then assembles the image)
@@ -49,12 +49,12 @@ image assembly, device trees, bootloaders. Traditional build systems manage this
 complexity through documentation that developers must read and internalize.
 
 Yoe-NG takes a different approach: **the build system is the documentation.**
-Starlark recipes are readable by both humans and AI. The dependency graph is
+Starlark units are readable by both humans and AI. The dependency graph is
 queryable. Build logs are structured. An AI assistant that understands all of
 this can:
 
-- **Create recipes from a URL or description** —
-  `/new-recipe https://github.com/example/myapp`
+- **Create units from a URL or description** —
+  `/new-unit https://github.com/example/myapp`
 - **Diagnose build failures** by reading logs and the dependency graph —
   `/diagnose openssh`
 - **Trace why a package is in your image** — `/why libssl`
@@ -75,8 +75,8 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
   just system integration. Good tooling for kernel, applications, and BSPs
   (similar to Yocto's scope, but simpler).
 - **Simple** — one Go binary, one language (Starlark), one package format (apk)
-- **Easy to get started** — AI guides you through project setup, recipe
-  creation, and image configuration
+- **Easy to get started** — AI guides you through project setup, unit creation,
+  and image configuration
 - **Tooling written in Go** — single static binary, no runtime dependencies, TUI
   built with [Bubble Tea](https://github.com/charmbracelet/bubbletea), fast
   enough, trivial to distribute
@@ -91,15 +91,15 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
 - **Modern languages** (Go, Rust, Zig, Python, JavaScript) — uses native
   language package managers, caches packages where possible
 - **No cross compilation** — native builds on modern ARM/RISC-V hardware
-- **Starlark for recipes and build rules** — Python-like, deterministic,
-  sandboxed (see [Build Languages](docs/build-languages.md))
+- **Starlark for units and build rules** — Python-like, deterministic, sandboxed
+  (see [Build Languages](docs/build-languages.md))
 - **Leverage existing ecosystems** — integrate with language-native build
   systems rather than reimplementing them
 - **64-bit only** — x86, ARM, RISC-V
-- **Granular packaging** (like Yocto/Debian) — one recipe can produce multiple
+- **Granular packaging** (like Yocto/Debian) — one unit can produce multiple
   sub-packages (`-dev`, `-doc`, `-dbg`, custom splits)
-- **Composable layers** — pull in recipes/packages using GitHub URLs; vendor
-  BSP, product, and core layers compose through Starlark `load()` function calls
+- **Composable layers** — pull in units/packages using GitHub URLs; vendor BSP,
+  product, and core layers compose through Starlark `load()` function calls
 - **Image-based device management** — full image updates, OSTree, BDiff
 - **Good SDK story** — binary SDKs, pre-built packages like Chromium
 - **Parallel** — no global lock or global resource, support running concurrent
@@ -108,11 +108,11 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
 
 ## 📚 Documentation
 
-- [AI Skills](docs/ai-skills.md) — AI-driven workflows for recipe creation,
-  build debugging, security auditing, and more
+- [AI Skills](docs/ai-skills.md) — AI-driven workflows for unit creation, build
+  debugging, security auditing, and more
 - [The `yoe` Tool](docs/yoe-tool.md) — CLI reference for building, imaging, and
   flashing
-- [Recipe & Configuration Format](docs/metadata-format.md) — Starlark recipe and
+- [Unit & Configuration Format](docs/metadata-format.md) — Starlark unit and
   configuration spec
 - [Build Environment](docs/build-environment.md) — bootstrap, host tools, and
   build isolation
@@ -121,9 +121,9 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
 - [Comparisons](docs/comparisons.md) — how Yoe-NG relates to Yocto, Buildroot,
   Alpine, Arch, and NixOS
 - [Build Languages](docs/build-languages.md) — analysis of Starlark, CUE, Nix,
-  and other embeddable languages for recipe definitions
-- [Recipes Roadmap](docs/recipes-roadmap.md) — existing recipes and what's
-  needed for a complete base system
+  and other embeddable languages for unit definitions
+- [Units Roadmap](docs/units-roadmap.md) — existing units and what's needed for
+  a complete base system
 
 ## 💡 Inspirations
 
@@ -161,14 +161,14 @@ Yoe-NG asks: what if we started fresh with these assumptions?
 
 - **AI changes the interface.** The hardest part of embedded Linux is knowing
   what to configure and how. An AI assistant that understands the build system
-  can guide developers through recipe creation, debug build failures, and audit
+  can guide developers through unit creation, debug build failures, and audit
   security — without requiring them to memorize a build system's quirks.
 - **Native compilation is fast enough.** With modern hardware (including
   powerful ARM/RISC-V boards and cloud CI), cross-compilation is no longer a
   hard requirement for most workloads.
 - **Language-native package managers work.** Go modules, Cargo, npm, and pip
   already handle dependency resolution and reproducibility. Wrapping them in
-  another layer (recipes, bbappends) adds friction without proportional benefit.
+  another layer (units, bbappends) adds friction without proportional benefit.
 - **Simpler tooling is better tooling.** A single Go binary with a TUI is easier
   to install, maintain, and extend than a Python-based build system with
   thousands of metadata files.
@@ -228,14 +228,15 @@ This is where Yoe-NG tooling (written in Go) provides value — similar to what
 
 The Yoe-NG CLI tool handles:
 
-- **TUI** — interactive interface for common workflows (configure a build,
-  select a machine, build an image, flash to SD card).
+- **TUI** — run `yoe` with no arguments for an interactive unit list with inline
+  build status, background builds, search, and quick actions (edit, diagnose,
+  clean).
 - **Build orchestration** — invoke language-native build tools in the right
   order, manage caching, assemble outputs. See
   [The `yoe` Tool](docs/yoe-tool.md) for the full CLI reference.
 - **Machine/distro configuration** — define target boards and distribution
   profiles in Starlark. See
-  [Recipe & Configuration Format](docs/metadata-format.md) for the full
+  [Unit & Configuration Format](docs/metadata-format.md) for the full
   specification.
 
 Why Go:
@@ -250,17 +251,17 @@ Why Go:
 
 Yoe-NG uses [apk](https://wiki.alpinelinux.org/wiki/Alpine_Package_Keeper)
 (Alpine Package Keeper) as its package manager. It is important to distinguish
-between **recipes** and **packages** — these are separate concepts:
+between **units** and **packages** — these are separate concepts:
 
-- **Recipes** are build-time definitions (Starlark `.star` files in the project
+- **Units** are build-time definitions (Starlark `.star` files in the project
   tree) that describe _how_ to build software. See
-  [Recipe & Configuration Format](docs/metadata-format.md).
-- **Packages** are installable artifacts (`.apk` files) that recipes produce.
-  They are what gets installed into root filesystem images and onto devices.
+  [Unit & Configuration Format](docs/metadata-format.md).
+- **Packages** are installable artifacts (`.apk` files) that units produce. They
+  are what gets installed into root filesystem images and onto devices.
 
-This separation means recipes are a development/CI concern, while packages are a
+This separation means units are a development/CI concern, while packages are a
 deployment/device concern. You can build packages once and install them on many
-devices without needing the recipe tree.
+devices without needing the unit tree.
 
 Why apk over pacman or opkg:
 
@@ -277,7 +278,7 @@ Why apk over pacman or opkg:
   package repository, enabling incremental OTA updates (install only changed
   packages) alongside full image updates.
 
-The Yoe-NG build tooling invokes recipes to produce `.apk` packages, which are
+The Yoe-NG build tooling invokes units to produce `.apk` packages, which are
 published to a repository. Image assembly then uses `apk` to install packages
 into a root filesystem, just as Alpine does.
 
@@ -320,13 +321,13 @@ This is a deliberate trade-off:
   relevant mainly for high-assurance supply-chain contexts.
 - **Functional equivalence** gets the practical benefits — reliable caching,
   hermetic builds, provenance tracking — without the patching burden. Bubblewrap
-  isolation prevents host contamination. Content-addressed input hashing (recipe
+  isolation prevents host contamination. Content-addressed input hashing (unit
   - source + dependency hashes) ensures cache hits are reliable. Starlark
     evaluation is deterministic by design. The remaining non-determinism
     (timestamps, ordering within packages) doesn't affect functionality or
     caching.
 
 The caching model does not depend on output determinism. Cache keys are computed
-from _inputs_ (recipe content, source hash, dependency `.apk` hashes, build
+from _inputs_ (unit content, source hash, dependency `.apk` hashes, build
 flags), not _outputs_. If inputs haven't changed, the cached output is used
 regardless of whether a fresh build would produce identical bytes.

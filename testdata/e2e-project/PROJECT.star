@@ -7,6 +7,6 @@ project(
     layers = [
         layer("github.com/YoeDistro/yoe-ng",
               local = "../..",
-              path = "layers/recipes-core"),
+              path = "layers/units-core"),
     ],
 )

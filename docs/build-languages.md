@@ -1,14 +1,14 @@
 # Build & Configuration Languages
 
-An analysis of embeddable languages for defining recipes, build rules, and
-project configuration in Yoe-NG. This informs the choice of how users express
-_what to build_ and _how to build it_.
+An analysis of embeddable languages for defining units, build rules, and project
+configuration in Yoe-NG. This informs the choice of how users express _what to
+build_ and _how to build it_.
 
 ## The Problem
 
 Yoe-NG needs a way for users to define:
 
-- **Recipes** — what to build, from what source, with what dependencies
+- **Units** — what to build, from what source, with what dependencies
 - **Classes/rules** — how to build (autotools, cmake, go, image assembly)
 - **Project config** — cache locations, remote repos, layer references
 - **Machine definitions** — architecture, kernel, bootloader, partitions
@@ -22,9 +22,9 @@ a language.
 
 ## Requirements
 
-1. **Simple for the common case** — defining a package recipe should be as
+1. **Simple for the common case** — defining a package unit should be as
    readable as a TOML file
-2. **Composable** — layers, overlays, and recipe extensions without modifying
+2. **Composable** — layers, overlays, and unit extensions without modifying
    originals
 3. **Expressive when needed** — conditionals, loops, helper functions for
    complex build logic
@@ -47,7 +47,7 @@ hermetic, and embeddable. The Go implementation
 ([go.starlark.net](https://github.com/google/starlark-go)) is maintained by
 Google.
 
-**Example recipe:**
+**Example unit:**
 
 ```python
 load("//classes/autotools.star", "autotools")
@@ -79,11 +79,11 @@ autotools(
 - The `load()` system adds a dependency resolution layer for build files
   themselves
 
-**Composability model:** Function calls and macros. A base recipe exports a
+**Composability model:** Function calls and macros. A base unit exports a
 configurable function; layers call it with overrides. Explicit but verbose:
 
 ```python
-# recipes-core/openssh.star — base recipe as a function
+# units-core/openssh.star — base unit as a function
 def openssh(extra_deps=[], extra_configure_args=[], **overrides):
     autotools(
         name = "openssh",
@@ -94,7 +94,7 @@ def openssh(extra_deps=[], extra_configure_args=[], **overrides):
     )
 
 # vendor-bsp/openssh.star — vendor layer extends it
-load("//recipes-core/openssh.star", "openssh")
+load("//units-core/openssh.star", "openssh")
 openssh(extra_deps=["vendor-crypto"])
 ```
 
@@ -110,7 +110,7 @@ configurations in separate files and CUE merges them, checking constraints
 automatically. Types and values exist on a single lattice; a type is just a
 constraint on a value.
 
-**Example recipe:**
+**Example unit:**
 
 ```cue
 openssh: {
@@ -161,7 +161,7 @@ Nickel is explicitly designed to be "Nix, but simpler." It has contracts
 (gradual typing), merge semantics (like Nix's `//` operator), and a Python-like
 syntax. It aims to be the configuration language Nix should have been.
 
-**Example recipe:**
+**Example unit:**
 
 ```nickel
 {
@@ -205,10 +205,10 @@ priority annotations.
 A templating language that extends JSON with variables, conditionals, imports,
 functions, and object composition via the `+` operator.
 
-**Example recipe:**
+**Example unit:**
 
 ```jsonnet
-local base = import 'recipes-core/openssh.jsonnet';
+local base = import 'units-core/openssh.jsonnet';
 
 base {
   deps+: ['vendor-crypto'],
@@ -243,7 +243,7 @@ object, override or append fields. Straightforward and explicit.
 
 Lightweight embeddable scripting language. Luau (Roblox) adds gradual typing.
 
-**Example recipe:**
+**Example unit:**
 
 ```lua
 autotools {
@@ -284,7 +284,7 @@ composition pattern.
 A pure, lazy, functional language designed for package management and system
 configuration.
 
-**Example recipe:**
+**Example unit:**
 
 ```nix
 { stdenv, zlib, openssl }:
@@ -347,9 +347,9 @@ indirection makes debugging non-trivial.
    language on this list has been tested as thoroughly in the build system
    domain.
 
-2. **One language for everything.** Recipes, classes, project config, machine
+2. **One language for everything.** Units, classes, project config, machine
    definitions — all Starlark. No TOML + shell + something-else stack. Simple
-   recipes read like declarative config; complex classes use real control flow.
+   units read like declarative config; complex classes use real control flow.
 
 3. **Go-native.** The `go.starlark.net` library embeds directly in the `yoe`
    binary. No FFI, no subprocess, no external runtime.
@@ -370,7 +370,7 @@ indirection makes debugging non-trivial.
   you can grep for the function call. In Nix, you'd have to trace overlay
   evaluation order.
 
-- No built-in constraint validation — recipe validation happens in Go code (the
+- No built-in constraint validation — unit validation happens in Go code (the
   `yoe` engine) rather than in the language itself. CUE's constraint system is
   elegant, but adding a second language isn't worth it.
 
@@ -380,9 +380,9 @@ Yoe-NG's layer system (vendor BSP layers, product layers) works through
 Starlark's function composition:
 
 ```python
-# Layer 1: recipes-core/openssh.star
+# Layer 1: units-core/openssh.star
 def openssh(extra_deps=[], **overrides):
-    package(
+    unit(
         name = "openssh",
         version = "9.6p1",
         deps = ["zlib", "openssl"] + extra_deps,
@@ -390,7 +390,7 @@ def openssh(extra_deps=[], **overrides):
     )
 
 # Layer 2: vendor-bsp/openssh.star
-load("//recipes-core/openssh.star", "openssh")
+load("//units-core/openssh.star", "openssh")
 openssh(extra_deps=["vendor-crypto"])
 
 # Layer 3: product/openssh.star (further customization)
@@ -412,11 +412,11 @@ my-project/
 │   ├── beaglebone-black.star
 │   ├── raspberrypi4.star
 │   └── qemu-arm64.star
-├── recipes/
-│   ├── openssh.star          # package recipe
-│   ├── myapp.star            # app recipe (Go)
-│   ├── base-image.star       # image recipe
-│   └── dev-image.star        # image recipe (extends base)
+├── units/
+│   ├── openssh.star          # package unit
+│   ├── myapp.star            # app unit (Go)
+│   ├── base-image.star       # image unit
+│   └── dev-image.star        # image unit (extends base)
 ├── classes/                  # reusable build rule functions
 │   ├── autotools.star
 │   ├── cmake.star
@@ -425,10 +425,9 @@ my-project/
 └── overlays/
 ```
 
-TOML is eliminated entirely. Recipes, classes, machines, and project config are
+TOML is eliminated entirely. Units, classes, machines, and project config are
 all `.star` files. The Go `yoe` binary provides the built-in functions
-(`package()`, `image()`, `machine()`, `project()`, etc.) that Starlark code
-calls.
+(`unit()`, `image()`, `machine()`, `project()`, etc.) that Starlark code calls.
 
 ## Starlark Ecosystem & Adoption
 
@@ -488,8 +487,8 @@ new trail.
   macro (`systemd_autotools()`)? Both work; the question is which to encourage
   as convention.
 - **Machine-specific conditionals:** Should machine properties be available as
-  Starlark globals during recipe evaluation, or passed explicitly? Globals are
+  Starlark globals during unit evaluation, or passed explicitly? Globals are
   convenient but reduce hermeticity.
 - **REPL / interactive evaluation:** Should `yoe` provide a Starlark REPL for
-  debugging recipe evaluation? Bazel has `bazel query`; a similar introspection
-  tool would help users understand how their recipes resolve.
+  debugging unit evaluation? Bazel has `bazel query`; a similar introspection
+  tool would help users understand how their units resolve.

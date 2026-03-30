@@ -7,13 +7,12 @@ code in this repository.
 
 Yoe-NG is a next-generation embedded Linux distribution builder — a simpler
 alternative to Yocto. The project has a working Go CLI (`yoe`) that builds
-packages from Starlark recipes inside a Docker container, creates bootable disk
-images, and runs them in QEMU. A `recipes-core` layer provides Starlark classes
-and recipes for a minimal Linux system (busybox, kernel, openssl, openssh,
-etc.).
+artifacts from Starlark units inside a Docker container, creates bootable disk
+images, and runs them in QEMU. A `units-core` layer provides Starlark classes
+and units for a minimal Linux system (busybox, kernel, openssl, openssh, etc.).
 
-Core design: Go CLI (`yoe`) + Starlark recipes/config + apk packages +
-bubblewrap sandbox inside Docker. Native builds only (no cross-compilation).
+Core design: Go CLI (`yoe`) + Starlark units/config + apk artifacts + bubblewrap
+sandbox inside Docker. Native builds only (no cross-compilation).
 
 ## Container as Build Worker
 
@@ -36,10 +35,10 @@ needed.**
 
 - `cmd/yoe/main.go` — CLI entry point with command dispatch
 - `internal/` — core Go packages (starlark, build, resolve, source, image,
-  packaging, repo, device, tui, bootstrap, layer, config)
+  artifact, repo, device, tui, bootstrap, layer, config)
 - `containers/Dockerfile.build` — the build container (Tier 0), embedded in the
   binary via `containers/embed.go`
-- `layers/recipes-core/` — base layer with classes, recipes, machines, images
+- `layers/units-core/` — base layer with classes, units, machines, images
 - `testdata/` — test fixtures including e2e-project
 - `envsetup.sh` — shell functions (source it, don't execute)
 - `docs/` — design documents (README.md, yoe-tool.md, metadata-format.md,
@@ -47,13 +46,13 @@ needed.**
 
 ### Layer structure
 
-The `recipes-core` layer lives at `layers/recipes-core/` in this repo. Projects
-reference it with `path = "layers/recipes-core"`:
+The `units-core` layer lives at `layers/units-core/` in this repo. Projects
+reference it with `path = "layers/units-core"`:
 
 ```python
 layer("git@github.com:YoeDistro/yoe-ng.git",
       ref = "main",
-      path = "layers/recipes-core")
+      path = "layers/units-core")
 ```
 
 The `path` field tells yoe the layer's `LAYER.star` is in a subdirectory of the
@@ -95,32 +94,31 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
 - **Container-only builds** — host provides only `yoe` + Git + Docker; all tools
   live in the container
 - **No installing packages in the container** — if a build fails because a tool
-  or library is missing from the container, the fix is to write a recipe that
+  or library is missing from the container, the fix is to write a unit that
   builds it from source (and add it as a `deps` entry), not to install it via
   `apk add` in the Dockerfile. This applies to both build tools (makeinfo,
   bison, help2man) and libraries (zlib, ncurses, libffi). The Dockerfile
   provides only the minimal bootstrap toolchain (gcc, binutils, make, etc.);
-  everything else is a recipe. For non-essential features (docs, man pages),
+  everything else is a unit. For non-essential features (docs, man pages),
   disabling via configure flags is also acceptable.
-- **Build sysroot** — after each package builds, its output is installed into
-  `build/sysroot/` so subsequent recipes can find deps' headers/libraries
-- **Starlark** for all recipes and config (Python-like, deterministic,
-  sandboxed)
+- **Build sysroot** — after each unit builds, its output is installed into
+  `build/sysroot/` so subsequent units can find deps' headers/libraries
+- **Starlark** for all units and config (Python-like, deterministic, sandboxed)
 - **Classes as functions** — build patterns (autotools, cmake, go) are Starlark
   functions in the layer, not Go builtins. Autotools class auto-runs
   `autoreconf` for git sources missing `./configure`.
 - **Prefer git sources over tarballs** — shallow clone with tag pinning. Enables
   `yoe dev` workflow (edit, commit, extract patches).
 - **apk** package manager (same as Alpine, but with glibc)
-- **bubblewrap** for per-recipe build isolation inside the container
+- **bubblewrap** for per-unit build isolation inside the container
 - **Layer path** — layers can live in a subdirectory of a repo via the `path`
   field on `layer()`. Layer name is derived from the path's last component.
-- **Image deps in DAG** — image recipes' `packages` list is treated as
+- **Image deps in DAG** — image units' `artifacts` list is treated as
   dependencies so `yoe build dev-image` automatically builds all required
-  packages first
+  artifacts first
 - **Native builds only** — no cross-compilation
 - **Label-based references** —
-  `load("@recipes-core//classes/autotools.star", "autotools")`, `//` relative to
+  `load("@units-core//classes/autotools.star", "autotools")`, `//` relative to
   layer root when inside a layer
 - **Two-phase build** — resolve DAG then execute (inspired by GN)
 - **Content-addressed caching** — input hash determines output

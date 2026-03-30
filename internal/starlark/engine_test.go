@@ -89,7 +89,7 @@ func TestEvalMachineQEMU(t *testing.T) {
 machine(
     name = "qemu-x86_64",
     arch = "x86_64",
-    kernel = kernel(recipe = "linux-qemu", cmdline = "console=ttyS0"),
+    kernel = kernel(unit = "linux-qemu", cmdline = "console=ttyS0"),
     qemu = qemu_config(machine = "q35", cpu = "host", memory = "1G", firmware = "ovmf"),
 )
 `
@@ -109,9 +109,9 @@ machine(
 	}
 }
 
-func TestEvalPackageRecipe(t *testing.T) {
+func TestEvalUnitDef(t *testing.T) {
 	src := `
-package(
+unit(
     name = "openssh",
     version = "9.6p1",
     source = "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.6p1.tar.gz",
@@ -128,16 +128,16 @@ package(
 )
 `
 	eng := NewEngine()
-	if err := eng.ExecString("recipes/openssh.star", src); err != nil {
+	if err := eng.ExecString("units/openssh.star", src); err != nil {
 		t.Fatalf("ExecString: %v", err)
 	}
-	recipes := eng.Recipes()
-	r, ok := recipes["openssh"]
+	units := eng.Units()
+	r, ok := units["openssh"]
 	if !ok {
-		t.Fatal("recipe 'openssh' not found")
+		t.Fatal("unit 'openssh' not found")
 	}
-	if r.Class != "package" {
-		t.Errorf("Class = %q, want %q", r.Class, "package")
+	if r.Class != "unit" {
+		t.Errorf("Class = %q, want %q", r.Class, "unit")
 	}
 	if r.Version != "9.6p1" {
 		t.Errorf("Version = %q, want %q", r.Version, "9.6p1")
@@ -153,7 +153,7 @@ package(
 	}
 }
 
-func TestEvalAutotoolsRecipe(t *testing.T) {
+func TestEvalAutotoolsUnit(t *testing.T) {
 	src := `
 autotools(
     name = "zlib",
@@ -163,16 +163,16 @@ autotools(
 )
 `
 	eng := NewEngine()
-	if err := eng.ExecString("recipes/zlib.star", src); err != nil {
+	if err := eng.ExecString("units/zlib.star", src); err != nil {
 		t.Fatalf("ExecString: %v", err)
 	}
-	r := eng.Recipes()["zlib"]
+	r := eng.Units()["zlib"]
 	if r.Class != "autotools" {
 		t.Errorf("Class = %q, want %q", r.Class, "autotools")
 	}
 }
 
-func TestEvalGoBinaryRecipe(t *testing.T) {
+func TestEvalGoBinaryUnit(t *testing.T) {
 	src := `
 go_binary(
     name = "myapp",
@@ -183,10 +183,10 @@ go_binary(
 )
 `
 	eng := NewEngine()
-	if err := eng.ExecString("recipes/myapp.star", src); err != nil {
+	if err := eng.ExecString("units/myapp.star", src); err != nil {
 		t.Fatalf("ExecString: %v", err)
 	}
-	r := eng.Recipes()["myapp"]
+	r := eng.Units()["myapp"]
 	if r.Class != "go" {
 		t.Errorf("Class = %q, want %q", r.Class, "go")
 	}
@@ -195,12 +195,12 @@ go_binary(
 	}
 }
 
-func TestEvalImageRecipe(t *testing.T) {
+func TestEvalImageUnit(t *testing.T) {
 	src := `
 image(
     name = "base-image",
     version = "1.0.0",
-    packages = ["openssh", "myapp"],
+    artifacts = ["openssh", "myapp"],
     hostname = "yoe",
     services = ["sshd"],
     partitions = [
@@ -210,19 +210,19 @@ image(
 )
 `
 	eng := NewEngine()
-	if err := eng.ExecString("recipes/base-image.star", src); err != nil {
+	if err := eng.ExecString("units/base-image.star", src); err != nil {
 		t.Fatalf("ExecString: %v", err)
 	}
-	recipes := eng.Recipes()
-	r, ok := recipes["base-image"]
+	units := eng.Units()
+	r, ok := units["base-image"]
 	if !ok {
-		t.Fatal("recipe 'base-image' not found")
+		t.Fatal("unit 'base-image' not found")
 	}
 	if r.Class != "image" {
 		t.Errorf("Class = %q, want %q", r.Class, "image")
 	}
-	if len(r.Packages) != 2 {
-		t.Errorf("Packages = %v, want 2 entries", r.Packages)
+	if len(r.Artifacts) != 2 {
+		t.Errorf("Packages = %v, want 2 entries", r.Artifacts)
 	}
 	if r.Hostname != "yoe" {
 		t.Errorf("Hostname = %q, want %q", r.Hostname, "yoe")
@@ -247,9 +247,9 @@ func TestEvalInvalidArch(t *testing.T) {
 	}
 }
 
-func TestEvalRecipeWithPatches(t *testing.T) {
+func TestEvalUnitWithPatches(t *testing.T) {
 	src := `
-package(
+unit(
     name = "busybox",
     version = "1.36.1",
     source = "https://busybox.net/downloads/busybox-1.36.1.tar.bz2",
@@ -261,10 +261,10 @@ package(
 )
 `
 	eng := NewEngine()
-	if err := eng.ExecString("recipes/busybox.star", src); err != nil {
+	if err := eng.ExecString("units/busybox.star", src); err != nil {
 		t.Fatalf("ExecString: %v", err)
 	}
-	r := eng.Recipes()["busybox"]
+	r := eng.Units()["busybox"]
 	if len(r.Patches) != 2 {
 		t.Errorf("Patches = %v, want 2 entries", r.Patches)
 	}
@@ -274,11 +274,11 @@ package(
 }
 
 func TestEvalPackageRequiresBuild(t *testing.T) {
-	src := `package(name = "broken", version = "1.0.0")`
+	src := `unit(name = "broken", version = "1.0.0")`
 	eng := NewEngine()
-	err := eng.ExecString("recipes/broken.star", src)
+	err := eng.ExecString("units/broken.star", src)
 	if err == nil {
-		t.Fatal("expected error for package with no build steps, got nil")
+		t.Fatal("expected error for unit with no build steps, got nil")
 	}
 }
 

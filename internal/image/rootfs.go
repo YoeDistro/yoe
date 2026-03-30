@@ -12,8 +12,8 @@ import (
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
-// Assemble creates a root filesystem image from an image recipe.
-func Assemble(recipe *yoestar.Recipe, proj *yoestar.Project, projectDir, outputDir string, w io.Writer) error {
+// Assemble creates a root filesystem image from an image unit.
+func Assemble(unit *yoestar.Unit, proj *yoestar.Project, projectDir, outputDir string, w io.Writer) error {
 	rootfs := filepath.Join(outputDir, "rootfs")
 	os.RemoveAll(rootfs)
 	if err := os.MkdirAll(rootfs, 0755); err != nil {
@@ -23,13 +23,13 @@ func Assemble(recipe *yoestar.Recipe, proj *yoestar.Project, projectDir, outputD
 	// Step 1: Install packages into rootfs — resolve deps so libraries
 	// are included automatically (e.g., openssh pulls in openssl, zlib).
 	repoDir := repo.RepoBaseDir(proj, projectDir)
-	allPackages := resolvePackageDeps(recipe.Packages, proj)
+	allPackages := resolvePackageDeps(unit.Artifacts, proj)
 	if err := installPackages(rootfs, repoDir, allPackages, w); err != nil {
 		return fmt.Errorf("installing packages: %w", err)
 	}
 
 	// Step 2: Apply configuration (hostname, timezone, locale, services)
-	if err := applyConfig(rootfs, recipe, w); err != nil {
+	if err := applyConfig(rootfs, unit, w); err != nil {
 		return fmt.Errorf("applying config: %w", err)
 	}
 
@@ -42,8 +42,8 @@ func Assemble(recipe *yoestar.Recipe, proj *yoestar.Project, projectDir, outputD
 	}
 
 	// Step 4: Generate disk image
-	imgPath := filepath.Join(outputDir, recipe.Name+".img")
-	if err := generateImage(rootfs, imgPath, recipe, projectDir, w); err != nil {
+	imgPath := filepath.Join(outputDir, unit.Name+".img")
+	if err := generateImage(rootfs, imgPath, unit, projectDir, w); err != nil {
 		return fmt.Errorf("generating image: %w", err)
 	}
 
@@ -53,7 +53,7 @@ func Assemble(recipe *yoestar.Recipe, proj *yoestar.Project, projectDir, outputD
 
 // resolvePackageDeps expands a list of package names to include all transitive
 // dependencies (both build and runtime). The returned list is in dependency
-// order (deps before dependents), with image-class recipes excluded.
+// order (deps before dependents), with image-class units excluded.
 func resolvePackageDeps(packages []string, proj *yoestar.Project) []string {
 	seen := make(map[string]bool)
 	var result []string
@@ -65,15 +65,15 @@ func resolvePackageDeps(packages []string, proj *yoestar.Project) []string {
 		}
 		seen[name] = true
 
-		if recipe, ok := proj.Recipes[name]; ok {
-			// Skip image recipes — they aren't installable packages
-			if recipe.Class == "image" {
+		if unit, ok := proj.Units[name]; ok {
+			// Skip image units — they aren't installable artifacts
+			if unit.Class == "image" {
 				return
 			}
-			for _, dep := range recipe.Deps {
+			for _, dep := range unit.Deps {
 				walk(dep)
 			}
-			for _, dep := range recipe.RuntimeDeps {
+			for _, dep := range unit.RuntimeDeps {
 				walk(dep)
 			}
 		}
@@ -133,31 +133,31 @@ func findAPK(repoDir, pkgName string) string {
 	return ""
 }
 
-func applyConfig(rootfs string, recipe *yoestar.Recipe, w io.Writer) error {
-	if recipe.Hostname != "" {
-		fmt.Fprintf(w, "  Setting hostname: %s\n", recipe.Hostname)
+func applyConfig(rootfs string, unit *yoestar.Unit, w io.Writer) error {
+	if unit.Hostname != "" {
+		fmt.Fprintf(w, "  Setting hostname: %s\n", unit.Hostname)
 		os.MkdirAll(filepath.Join(rootfs, "etc"), 0755)
 		os.WriteFile(filepath.Join(rootfs, "etc", "hostname"),
-			[]byte(recipe.Hostname+"\n"), 0644)
+			[]byte(unit.Hostname+"\n"), 0644)
 	}
 
-	if recipe.Timezone != "" {
-		fmt.Fprintf(w, "  Setting timezone: %s\n", recipe.Timezone)
+	if unit.Timezone != "" {
+		fmt.Fprintf(w, "  Setting timezone: %s\n", unit.Timezone)
 		os.MkdirAll(filepath.Join(rootfs, "etc"), 0755)
 		// Create symlink for localtime
 		localtime := filepath.Join(rootfs, "etc", "localtime")
 		os.Remove(localtime)
-		os.Symlink("/usr/share/zoneinfo/"+recipe.Timezone, localtime)
+		os.Symlink("/usr/share/zoneinfo/"+unit.Timezone, localtime)
 	}
 
-	if recipe.Locale != "" {
+	if unit.Locale != "" {
 		os.MkdirAll(filepath.Join(rootfs, "etc"), 0755)
 		os.WriteFile(filepath.Join(rootfs, "etc", "locale.conf"),
-			[]byte("LANG="+recipe.Locale+"\n"), 0644)
+			[]byte("LANG="+unit.Locale+"\n"), 0644)
 	}
 
 	// Enable systemd services
-	for _, svc := range recipe.Services {
+	for _, svc := range unit.Services {
 		fmt.Fprintf(w, "  Enabling service: %s\n", svc)
 		svcDir := filepath.Join(rootfs, "etc", "systemd", "system", "multi-user.target.wants")
 		os.MkdirAll(svcDir, 0755)
@@ -195,7 +195,7 @@ func applyOverlays(rootfs, overlayDir string, w io.Writer) error {
 	})
 }
 
-func generateImage(rootfs, imgPath string, recipe *yoestar.Recipe, projectDir string, w io.Writer) error {
+func generateImage(rootfs, imgPath string, unit *yoestar.Unit, projectDir string, w io.Writer) error {
 	fmt.Fprintln(w, "  Generating disk image...")
-	return GenerateDiskImage(rootfs, imgPath, recipe, projectDir, w)
+	return GenerateDiskImage(rootfs, imgPath, unit, projectDir, w)
 }

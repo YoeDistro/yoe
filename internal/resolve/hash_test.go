@@ -6,8 +6,8 @@ import (
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
-func TestRecipeHash_Deterministic(t *testing.T) {
-	recipe := &yoestar.Recipe{
+func TestUnitHash_Deterministic(t *testing.T) {
+	unit := &yoestar.Unit{
 		Name:    "openssh",
 		Version: "9.6p1",
 		Class:   "package",
@@ -17,8 +17,8 @@ func TestRecipeHash_Deterministic(t *testing.T) {
 		Build:   []string{"make"},
 	}
 
-	h1 := RecipeHash(recipe, "arm64", map[string]string{"zlib": "deadbeef"})
-	h2 := RecipeHash(recipe, "arm64", map[string]string{"zlib": "deadbeef"})
+	h1 := UnitHash(unit, "arm64", map[string]string{"zlib": "deadbeef"})
+	h2 := UnitHash(unit, "arm64", map[string]string{"zlib": "deadbeef"})
 
 	if h1 != h2 {
 		t.Errorf("hash not deterministic: %s != %s", h1, h2)
@@ -28,8 +28,8 @@ func TestRecipeHash_Deterministic(t *testing.T) {
 	}
 }
 
-func TestRecipeHash_ChangesOnInput(t *testing.T) {
-	recipe := &yoestar.Recipe{
+func TestUnitHash_ChangesOnInput(t *testing.T) {
+	unit := &yoestar.Unit{
 		Name:    "openssh",
 		Version: "9.6p1",
 		Class:   "package",
@@ -38,34 +38,34 @@ func TestRecipeHash_ChangesOnInput(t *testing.T) {
 		Build:   []string{"make"},
 	}
 
-	h1 := RecipeHash(recipe, "arm64", map[string]string{"zlib": "aaa"})
+	h1 := UnitHash(unit, "arm64", map[string]string{"zlib": "aaa"})
 
 	// Change dep hash
-	h2 := RecipeHash(recipe, "arm64", map[string]string{"zlib": "bbb"})
+	h2 := UnitHash(unit, "arm64", map[string]string{"zlib": "bbb"})
 	if h1 == h2 {
 		t.Error("hash should change when dependency hash changes")
 	}
 
 	// Change arch
-	h3 := RecipeHash(recipe, "x86_64", map[string]string{"zlib": "aaa"})
+	h3 := UnitHash(unit, "x86_64", map[string]string{"zlib": "aaa"})
 	if h1 == h3 {
 		t.Error("hash should change when arch changes")
 	}
 
 	// Change version
-	recipe2 := *recipe
-	recipe2.Version = "9.7p1"
-	h4 := RecipeHash(&recipe2, "arm64", map[string]string{"zlib": "aaa"})
+	unit2 := *unit
+	unit2.Version = "9.7p1"
+	h4 := UnitHash(&unit2, "arm64", map[string]string{"zlib": "aaa"})
 	if h1 == h4 {
 		t.Error("hash should change when version changes")
 	}
 }
 
 func TestComputeAllHashes(t *testing.T) {
-	proj := makeProject(map[string]*yoestar.Recipe{
-		"zlib":    {Name: "zlib", Version: "1.3", Class: "package", Deps: nil, Build: []string{"make"}},
-		"openssl": {Name: "openssl", Version: "3.0", Class: "package", Deps: []string{"zlib"}, Build: []string{"make"}},
-		"openssh": {Name: "openssh", Version: "9.6", Class: "package", Deps: []string{"zlib", "openssl"}, Build: []string{"make"}},
+	proj := makeProject(map[string]*yoestar.Unit{
+		"zlib":    {Name: "zlib", Version: "1.3", Class: "unit", Deps: nil, Build: []string{"make"}},
+		"openssl": {Name: "openssl", Version: "3.0", Class: "unit", Deps: []string{"zlib"}, Build: []string{"make"}},
+		"openssh": {Name: "openssh", Version: "9.6", Class: "unit", Deps: []string{"zlib", "openssl"}, Build: []string{"make"}},
 	})
 
 	dag, err := BuildDAG(proj)
@@ -92,7 +92,7 @@ func TestComputeAllHashes(t *testing.T) {
 
 	// openssh hash includes openssl hash which includes zlib hash
 	// Changing zlib should cascade
-	proj.Recipes["zlib"].Version = "1.4"
+	proj.Units["zlib"].Version = "1.4"
 	dag2, _ := BuildDAG(proj)
 	hashes2, _ := ComputeAllHashes(dag2, "arm64")
 

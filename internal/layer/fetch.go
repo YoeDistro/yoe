@@ -128,7 +128,7 @@ func ResolveLayerPaths(proj *yoestar.Project, projectRoot string) (map[string]st
 }
 
 // LayerName derives the layer name from a LayerRef.
-// If Path is set, uses the last component of Path (e.g., "layers/recipes-core" → "recipes-core").
+// If Path is set, uses the last component of Path (e.g., "layers/units-core" → "recipes-core").
 // Otherwise uses the last component of URL (e.g., "github.com/yoe/recipes-core" → "recipes-core").
 func LayerName(l yoestar.LayerRef) string {
 	if l.Path != "" {

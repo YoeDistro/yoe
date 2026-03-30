@@ -24,12 +24,12 @@ func TestFetchHTTP(t *testing.T) {
 	cacheDir := t.TempDir()
 	t.Setenv("YOE_CACHE", cacheDir)
 
-	recipe := &yoestar.Recipe{
+	unit := &yoestar.Unit{
 		Name:   "test-pkg",
 		Source: srv.URL + "/test-1.0.tar.gz",
 	}
 
-	path, err := Fetch(recipe)
+	path, err := Fetch(unit)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestFetchHTTP(t *testing.T) {
 
 	// Second fetch should use cache (no network)
 	srv.Close()
-	path2, err := Fetch(recipe)
+	path2, err := Fetch(unit)
 	if err != nil {
 		t.Fatalf("second Fetch (cached): %v", err)
 	}
@@ -57,13 +57,13 @@ func TestFetchHTTP_SHA256Mismatch(t *testing.T) {
 
 	t.Setenv("YOE_CACHE", t.TempDir())
 
-	recipe := &yoestar.Recipe{
+	unit := &yoestar.Unit{
 		Name:   "bad-hash",
 		Source: srv.URL + "/bad.tar.gz",
 		SHA256: "0000000000000000000000000000000000000000000000000000000000000000",
 	}
 
-	_, err := Fetch(recipe)
+	_, err := Fetch(unit)
 	if err == nil {
 		t.Fatal("expected SHA256 mismatch error, got nil")
 	}
@@ -83,13 +83,13 @@ func TestPrepare(t *testing.T) {
 	projectDir := t.TempDir()
 	t.Setenv("YOE_CACHE", filepath.Join(projectDir, "cache"))
 
-	recipe := &yoestar.Recipe{
+	unit := &yoestar.Unit{
 		Name:    "test-pkg",
 		Version: "1.0",
 		Source:  srv.URL + "/test-1.0.tar.gz",
 	}
 
-	srcDir, err := Prepare(projectDir, recipe)
+	srcDir, err := Prepare(projectDir, unit)
 	if err != nil {
 		t.Fatalf("Prepare: %v", err)
 	}
@@ -138,14 +138,14 @@ func TestPrepare_WithPatches(t *testing.T) {
 `
 	os.WriteFile(filepath.Join(patchDir, "fix.patch"), []byte(patchContent), 0644)
 
-	recipe := &yoestar.Recipe{
+	unit := &yoestar.Unit{
 		Name:    "test-pkg",
 		Version: "1.0",
 		Source:  srv.URL + "/test-1.0.tar.gz",
 		Patches: []string{"patches/test-pkg/fix.patch"},
 	}
 
-	srcDir, err := Prepare(projectDir, recipe)
+	srcDir, err := Prepare(projectDir, unit)
 	if err != nil {
 		t.Fatalf("Prepare: %v", err)
 	}
@@ -189,12 +189,12 @@ func TestPrepare_DevMode(t *testing.T) {
 	run(t, srcDir, "git", "commit", "-m", "local change")
 
 	// Prepare should NOT re-fetch — detect local commits
-	recipe := &yoestar.Recipe{
+	unit := &yoestar.Unit{
 		Name:   "test-pkg",
 		Source: "https://example.com/should-not-fetch.tar.gz",
 	}
 
-	result, err := Prepare(projectDir, recipe)
+	result, err := Prepare(projectDir, unit)
 	if err != nil {
 		t.Fatalf("Prepare: %v", err)
 	}
@@ -219,16 +219,16 @@ func TestVerify(t *testing.T) {
 	t.Setenv("YOE_CACHE", t.TempDir())
 
 	// First fetch without hash
-	recipe := &yoestar.Recipe{
+	unit := &yoestar.Unit{
 		Name:   "verify-test",
 		Source: srv.URL + "/test.tar.gz",
 	}
-	Fetch(recipe)
+	Fetch(unit)
 
 	// Verify with correct hash should pass
-	recipe.SHA256 = "24c52016db81c44a26cd82cef57be29e7e547e2b0e8a72e6e2d4ee28b tried0"
+	unit.SHA256 = "24c52016db81c44a26cd82cef57be29e7e547e2b0e8a72e6e2d4ee28b tried0"
 	// Actually compute the real hash
-	err := Verify(recipe)
+	err := Verify(unit)
 	// Will fail because hash doesn't match — that's expected
 	if err == nil {
 		// If it passes, the hash happened to match (unlikely)

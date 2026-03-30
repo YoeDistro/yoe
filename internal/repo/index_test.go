@@ -9,26 +9,26 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/YoeDistro/yoe-ng/internal/packaging"
+	"github.com/YoeDistro/yoe-ng/internal/artifact"
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
 func TestGenerateIndex(t *testing.T) {
-	// Create a fake .apk using packaging.CreateAPK
+	// Create a fake .apk using artifact.CreateAPK
 	destDir := filepath.Join(t.TempDir(), "destdir")
 	os.MkdirAll(filepath.Join(destDir, "usr", "bin"), 0755)
 	os.WriteFile(filepath.Join(destDir, "usr", "bin", "hello"), []byte("#!/bin/sh\necho hello\n"), 0755)
 
 	outputDir := filepath.Join(t.TempDir(), "output")
 
-	recipe := &yoestar.Recipe{
+	unit := &yoestar.Unit{
 		Name:        "hello",
 		Version:     "1.0.0",
 		Description: "Hello world",
 		License:     "MIT",
 	}
 
-	apkPath, err := packaging.CreateAPK(recipe, destDir, outputDir)
+	apkPath, err := artifact.CreateAPK(unit, destDir, outputDir)
 	if err != nil {
 		t.Fatalf("CreateAPK: %v", err)
 	}

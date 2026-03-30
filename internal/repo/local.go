@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/YoeDistro/yoe-ng/internal/packaging"
+	"github.com/YoeDistro/yoe-ng/internal/artifact"
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
@@ -120,7 +120,7 @@ func Info(repoDir, pkgName string, w io.Writer) error {
 	}
 
 	apkPath := filepath.Join(repoDir, match)
-	hash, err := packaging.APKHash(apkPath)
+	hash, err := artifact.APKHash(apkPath)
 	if err != nil {
 		return err
 	}

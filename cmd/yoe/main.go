@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"sort"
 
 	yoe "github.com/YoeDistro/yoe-ng/internal"
 	"github.com/YoeDistro/yoe-ng/internal/bootstrap"
@@ -21,8 +23,8 @@ var version = "dev"
 
 func main() {
 	if len(os.Args) < 2 {
-		printUsage()
-		os.Exit(1)
+		cmdTUI(nil)
+		return
 	}
 
 	command := os.Args[1]
@@ -37,8 +39,6 @@ func main() {
 		cmdInit(args)
 	case "container":
 		cmdContainer(args)
-	case "tui":
-		cmdTUI(args)
 	case "layer":
 		cmdLayer(args)
 	case "build":
@@ -63,6 +63,10 @@ func main() {
 		cmdRefs(args)
 	case "graph":
 		cmdGraph(args)
+	case "log":
+		cmdLog(args)
+	case "diagnose":
+		cmdDiagnose(args)
 	case "clean":
 		cmdClean(args)
 	default:
@@ -78,9 +82,10 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "Usage: %s COMMAND [OPTIONS]\n\n", os.Args[0])
 	fmt.Fprintf(os.Stderr, "Yoe-NG embedded Linux distribution builder\n\n")
 	fmt.Fprintf(os.Stderr, "Commands:\n")
+	fmt.Fprintf(os.Stderr, "  (no args)               Launch the interactive TUI\n")
 	fmt.Fprintf(os.Stderr, "  init <project-dir>      Create a new Yoe-NG project\n")
 	fmt.Fprintf(os.Stderr, "  container               Manage the build container (build, shell, status)\n")
-	fmt.Fprintf(os.Stderr, "  build [recipes...]      Build recipes (--force, --clean, --verbose, --dry-run)\n")
+	fmt.Fprintf(os.Stderr, "  build [units...]      Build units (--force, --clean, --verbose, --dry-run)\n")
 	fmt.Fprintf(os.Stderr, "  dev                     Manage source modifications (extract, diff, status)\n")
 	fmt.Fprintf(os.Stderr, "  flash <device>          Write an image to a device/SD card\n")
 	fmt.Fprintf(os.Stderr, "  run                     Run an image in QEMU\n")
@@ -89,10 +94,11 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  cache                   Manage the build cache (local and remote)\n")
 	fmt.Fprintf(os.Stderr, "  source                  Download and manage source archives/repos\n")
 	fmt.Fprintf(os.Stderr, "  config                  View and edit project configuration\n")
-	fmt.Fprintf(os.Stderr, "  desc <recipe>           Describe a recipe or target\n")
-	fmt.Fprintf(os.Stderr, "  refs <recipe>           Show reverse dependencies\n")
+	fmt.Fprintf(os.Stderr, "  desc <unit>           Describe a unit or target\n")
+	fmt.Fprintf(os.Stderr, "  refs <unit>           Show reverse dependencies\n")
 	fmt.Fprintf(os.Stderr, "  graph                   Visualize the dependency DAG\n")
-	fmt.Fprintf(os.Stderr, "  tui                     Launch the interactive TUI\n")
+	fmt.Fprintf(os.Stderr, "  log [unit] [-e]         Show build log (most recent, or specific unit; -e to edit)\n")
+	fmt.Fprintf(os.Stderr, "  diagnose [unit]         Launch Claude Code to diagnose a build failure\n")
 	fmt.Fprintf(os.Stderr, "  clean                   Remove build artifacts\n")
 	fmt.Fprintf(os.Stderr, "  update                  Update yoe to the latest release\n")
 	fmt.Fprintf(os.Stderr, "  version                 Display version information\n")
@@ -150,7 +156,7 @@ func cmdBuild(args []string) {
 	noCache := false
 	dryRun := false
 	verbose := false
-	var recipes []string
+	var units []string
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -165,9 +171,9 @@ func cmdBuild(args []string) {
 		case "--verbose", "-v":
 			verbose = true
 		case "--all":
-			// build all — recipes stays empty
+			// build all — units stays empty
 		default:
-			recipes = append(recipes, args[i])
+			units = append(units, args[i])
 		}
 	}
 
@@ -182,7 +188,7 @@ func cmdBuild(args []string) {
 		Arch:       build.Arch(),
 	}
 
-	if err := build.BuildRecipes(proj, recipes, opts, os.Stdout); err != nil {
+	if err := build.BuildUnits(proj, units, opts, os.Stdout); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -335,14 +341,17 @@ func cmdConfig(args []string) {
 
 func cmdClean(args []string) {
 	all := false
-	var recipes []string
+	force := false
+	var units []string
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "-all", "--all":
 			all = true
+		case "--force", "-f":
+			force = true
 		default:
-			recipes = append(recipes, args[i])
+			units = append(units, args[i])
 		}
 	}
 
@@ -351,7 +360,7 @@ func cmdClean(args []string) {
 		dir = "."
 	}
 
-	if err := yoe.RunClean(dir, all, recipes); err != nil {
+	if err := yoe.RunClean(dir, all, force, units); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -383,7 +392,7 @@ func defaultArch(proj *yoestar.Project) string {
 
 func cmdDesc(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s desc <recipe>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s desc <unit>\n", os.Args[0])
 		os.Exit(1)
 	}
 	proj := loadProject()
@@ -396,7 +405,7 @@ func cmdDesc(args []string) {
 
 func cmdRefs(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s refs <recipe> [--direct]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s refs <unit> [--direct]\n", os.Args[0])
 		os.Exit(1)
 	}
 	name := args[0]
@@ -436,7 +445,7 @@ func cmdGraph(args []string) {
 
 func cmdDev(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s dev <extract|diff|status> [recipe]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s dev <extract|diff|status> [unit]\n", os.Args[0])
 		os.Exit(1)
 	}
 
@@ -448,7 +457,7 @@ func cmdDev(args []string) {
 	switch args[0] {
 	case "extract":
 		if len(args) < 2 {
-			fmt.Fprintf(os.Stderr, "Usage: %s dev extract <recipe>\n", os.Args[0])
+			fmt.Fprintf(os.Stderr, "Usage: %s dev extract <unit>\n", os.Args[0])
 			os.Exit(1)
 		}
 		if err := yoe.DevExtract(dir, args[1], os.Stdout); err != nil {
@@ -457,7 +466,7 @@ func cmdDev(args []string) {
 		}
 	case "diff":
 		if len(args) < 2 {
-			fmt.Fprintf(os.Stderr, "Usage: %s dev diff <recipe>\n", os.Args[0])
+			fmt.Fprintf(os.Stderr, "Usage: %s dev diff <unit>\n", os.Args[0])
 			os.Exit(1)
 		}
 		if err := yoe.DevDiff(dir, args[1], os.Stdout); err != nil {
@@ -506,6 +515,133 @@ func cmdBootstrap(args []string) {
 	}
 }
 
+func cmdLog(args []string) {
+	edit := false
+	var unitName string
+
+	for _, a := range args {
+		switch a {
+		case "-e", "--edit":
+			edit = true
+		default:
+			unitName = a
+		}
+	}
+
+	dir := projectDir()
+	var logPath string
+
+	if unitName != "" {
+		logPath = filepath.Join(dir, "build", unitName, "build.log")
+	} else {
+		logPath = findLatestBuildLog(dir)
+	}
+
+	if logPath == "" {
+		fmt.Fprintln(os.Stderr, "No build logs found")
+		os.Exit(1)
+	}
+
+	if edit {
+		editor := os.Getenv("EDITOR")
+		if editor == "" {
+			editor = "vi"
+		}
+		cmd := exec.Command(editor, logPath)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	os.Stdout.Write(data)
+}
+
+func cmdDiagnose(args []string) {
+	var unitName string
+	for _, a := range args {
+		unitName = a
+	}
+
+	dir := projectDir()
+	var logPath string
+
+	if unitName != "" {
+		logPath = filepath.Join(dir, "build", unitName, "build.log")
+	} else {
+		logPath = findLatestBuildLog(dir)
+	}
+
+	if logPath == "" {
+		fmt.Fprintln(os.Stderr, "No build logs found")
+		os.Exit(1)
+	}
+
+	if _, err := os.Stat(logPath); err != nil {
+		fmt.Fprintf(os.Stderr, "Build log not found: %s\n", logPath)
+		os.Exit(1)
+	}
+
+	claudePath, err := exec.LookPath("claude")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error: claude not found in PATH")
+		os.Exit(1)
+	}
+
+	prompt := fmt.Sprintf("diagnose %s", logPath)
+	cmd := exec.Command(claudePath, prompt)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		os.Exit(1)
+	}
+}
+
+func findLatestBuildLog(projectDir string) string {
+	buildDir := filepath.Join(projectDir, "build")
+	entries, err := os.ReadDir(buildDir)
+	if err != nil {
+		return ""
+	}
+
+	type logEntry struct {
+		path    string
+		modTime int64
+	}
+	var logs []logEntry
+
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		p := filepath.Join(buildDir, e.Name(), "build.log")
+		info, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+		logs = append(logs, logEntry{p, info.ModTime().UnixNano()})
+	}
+
+	if len(logs) == 0 {
+		return ""
+	}
+
+	sort.Slice(logs, func(i, j int) bool {
+		return logs[i].modTime > logs[j].modTime
+	})
+	return logs[0].path
+}
+
 func cmdUpdate() {
 	if err := yoe.Update(version); err != nil {
 		fmt.Fprintf(os.Stderr, "Update failed: %v\n", err)
@@ -523,11 +659,11 @@ func cmdTUI(_ []string) {
 
 func cmdFlash(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s flash <image-recipe> <device> [--dry-run]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s flash <image-unit> <device> [--dry-run]\n", os.Args[0])
 		os.Exit(1)
 	}
 
-	recipeName := args[0]
+	unitName := args[0]
 	devicePath := ""
 	dryRun := false
 
@@ -541,19 +677,19 @@ func cmdFlash(args []string) {
 	}
 
 	if devicePath == "" && !dryRun {
-		fmt.Fprintf(os.Stderr, "Usage: %s flash <image-recipe> <device>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s flash <image-unit> <device>\n", os.Args[0])
 		os.Exit(1)
 	}
 
 	proj := loadProject()
-	if err := device.Flash(proj, recipeName, devicePath, projectDir(), dryRun, os.Stdout); err != nil {
+	if err := device.Flash(proj, unitName, devicePath, projectDir(), dryRun, os.Stdout); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
 func cmdRun(args []string) {
-	recipeName := ""
+	unitName := ""
 	machineName := ""
 	opts := device.QEMUOptions{Memory: "1G"}
 
@@ -579,20 +715,20 @@ func cmdRun(args []string) {
 		case "--daemon":
 			opts.Daemon = true
 		default:
-			recipeName = args[i]
+			unitName = args[i]
 		}
 	}
 
 	proj := loadProject()
-	if recipeName == "" {
-		recipeName = proj.Defaults.Image
+	if unitName == "" {
+		unitName = proj.Defaults.Image
 	}
-	if recipeName == "" {
-		fmt.Fprintf(os.Stderr, "Usage: %s run <image-recipe> [--machine <name>]\n", os.Args[0])
+	if unitName == "" {
+		fmt.Fprintf(os.Stderr, "Usage: %s run <image-unit> [--machine <name>]\n", os.Args[0])
 		os.Exit(1)
 	}
 
-	if err := device.RunQEMU(proj, recipeName, machineName, projectDir(), opts, os.Stdout); err != nil {
+	if err := device.RunQEMU(proj, unitName, machineName, projectDir(), opts, os.Stdout); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -639,7 +775,7 @@ func cmdRepo(args []string) {
 
 func cmdSource(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s source <fetch|list|verify|clean> [recipes...]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s source <fetch|list|verify|clean> [units...]\n", os.Args[0])
 		os.Exit(1)
 	}
 

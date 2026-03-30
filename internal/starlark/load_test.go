@@ -7,7 +7,7 @@ import (
 )
 
 func TestLoadFunction(t *testing.T) {
-	// Create temp project with a class file and a recipe that loads it.
+	// Create temp project with a class file and a unit that loads it.
 	tmp := t.TempDir()
 
 	// classes/myclass.star defines a helper function
@@ -22,12 +22,12 @@ def my_builder(name, version):
 		t.Fatal(err)
 	}
 
-	// recipes/hello.star loads the class and calls it
-	recipesDir := filepath.Join(tmp, "recipes")
-	if err := os.MkdirAll(recipesDir, 0o755); err != nil {
+	// units/hello.star loads the class and calls it
+	unitsDir := filepath.Join(tmp, "units")
+	if err := os.MkdirAll(unitsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(recipesDir, "hello.star"), []byte(`
+	if err := os.WriteFile(filepath.Join(unitsDir, "hello.star"), []byte(`
 load("//classes/myclass.star", "my_builder")
 my_builder(name = "hello", version = "1.0")
 `), 0o644); err != nil {
@@ -37,13 +37,13 @@ my_builder(name = "hello", version = "1.0")
 	eng := NewEngine()
 	eng.SetProjectRoot(tmp)
 
-	if err := eng.ExecFile(filepath.Join(recipesDir, "hello.star")); err != nil {
+	if err := eng.ExecFile(filepath.Join(unitsDir, "hello.star")); err != nil {
 		t.Fatalf("ExecFile: %v", err)
 	}
 
-	r, ok := eng.Recipes()["hello"]
+	r, ok := eng.Units()["hello"]
 	if !ok {
-		t.Fatal("recipe 'hello' not registered")
+		t.Fatal("unit 'hello' not registered")
 	}
 	if r.Class != "autotools" {
 		t.Errorf("Class = %q, want %q", r.Class, "autotools")
@@ -69,12 +69,12 @@ def helper(name, version):
 		t.Fatal(err)
 	}
 
-	// Create a recipe that loads from the layer
-	recipesDir := filepath.Join(tmp, "recipes")
-	if err := os.MkdirAll(recipesDir, 0o755); err != nil {
+	// Create a unit that loads from the layer
+	unitsDir := filepath.Join(tmp, "units")
+	if err := os.MkdirAll(unitsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(recipesDir, "widget.star"), []byte(`
+	if err := os.WriteFile(filepath.Join(unitsDir, "widget.star"), []byte(`
 load("@mylib//classes/helper.star", "helper")
 helper(name = "widget", version = "2.0")
 `), 0o644); err != nil {
@@ -85,13 +85,13 @@ helper(name = "widget", version = "2.0")
 	eng.SetProjectRoot(tmp)
 	eng.SetLayerRoot("mylib", layerDir)
 
-	if err := eng.ExecFile(filepath.Join(recipesDir, "widget.star")); err != nil {
+	if err := eng.ExecFile(filepath.Join(unitsDir, "widget.star")); err != nil {
 		t.Fatalf("ExecFile: %v", err)
 	}
 
-	r, ok := eng.Recipes()["widget"]
+	r, ok := eng.Units()["widget"]
 	if !ok {
-		t.Fatal("recipe 'widget' not registered")
+		t.Fatal("unit 'widget' not registered")
 	}
 	if r.Class != "autotools" {
 		t.Errorf("Class = %q, want %q", r.Class, "autotools")
@@ -116,18 +116,18 @@ def shared_builder(name, version):
 		t.Fatal(err)
 	}
 
-	// Two recipes that load the same module
-	recipesDir := filepath.Join(tmp, "recipes")
-	if err := os.MkdirAll(recipesDir, 0o755); err != nil {
+	// Two units that load the same module
+	unitsDir := filepath.Join(tmp, "units")
+	if err := os.MkdirAll(unitsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(recipesDir, "a.star"), []byte(`
+	if err := os.WriteFile(filepath.Join(unitsDir, "a.star"), []byte(`
 load("//classes/shared.star", "shared_builder")
 shared_builder(name = "pkg-a", version = "1.0")
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(recipesDir, "b.star"), []byte(`
+	if err := os.WriteFile(filepath.Join(unitsDir, "b.star"), []byte(`
 load("//classes/shared.star", "shared_builder")
 shared_builder(name = "pkg-b", version = "2.0")
 `), 0o644); err != nil {
@@ -137,18 +137,18 @@ shared_builder(name = "pkg-b", version = "2.0")
 	eng := NewEngine()
 	eng.SetProjectRoot(tmp)
 
-	if err := eng.ExecFile(filepath.Join(recipesDir, "a.star")); err != nil {
+	if err := eng.ExecFile(filepath.Join(unitsDir, "a.star")); err != nil {
 		t.Fatalf("ExecFile a.star: %v", err)
 	}
-	if err := eng.ExecFile(filepath.Join(recipesDir, "b.star")); err != nil {
+	if err := eng.ExecFile(filepath.Join(unitsDir, "b.star")); err != nil {
 		t.Fatalf("ExecFile b.star: %v", err)
 	}
 
-	if _, ok := eng.Recipes()["pkg-a"]; !ok {
-		t.Error("recipe 'pkg-a' not registered")
+	if _, ok := eng.Units()["pkg-a"]; !ok {
+		t.Error("unit 'pkg-a' not registered")
 	}
-	if _, ok := eng.Recipes()["pkg-b"]; !ok {
-		t.Error("recipe 'pkg-b' not registered")
+	if _, ok := eng.Units()["pkg-b"]; !ok {
+		t.Error("unit 'pkg-b' not registered")
 	}
 
 	// Verify cache was used (same module path should have one entry)

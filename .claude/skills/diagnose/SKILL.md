@@ -2,29 +2,29 @@
 name: diagnose
 description: >
   This skill should be used when the user asks to "diagnose a build failure",
-  "debug a recipe", "fix a build", "why did the build fail", "/diagnose", or
-  mentions a recipe that failed to build. Iteratively analyzes build logs,
-  identifies root causes, applies fixes, and rebuilds until the recipe succeeds.
+  "debug a unit", "fix a build", "why did the build fail", "/diagnose", or
+  mentions a unit that failed to build. Iteratively analyzes build logs,
+  identifies root causes, applies fixes, and rebuilds until the unit succeeds.
 ---
 
 # Diagnose Build Failures
 
-Analyze and fix recipe build failures through an iterative read-fix-rebuild
-loop. This skill reads the build log, identifies the root cause, applies a fix
-to the recipe or source, and rebuilds until the recipe succeeds.
+Analyze and fix unit build failures through an iterative read-fix-rebuild loop.
+This skill reads the build log, identifies the root cause, applies a fix to the
+unit or source, and rebuilds until the unit succeeds.
 
 ## When to Use
 
-- A recipe fails to build (`yoe build <recipe>` exits with error)
+- A unit fails to build (`yoe build <unit>` exits with error)
 - The user asks to diagnose or debug a build failure
-- The user says `/diagnose <recipe>` or `/diagnose` (most recent failure)
+- The user says `/diagnose <unit>` or `/diagnose` (most recent failure)
 
 ## Diagnosis Workflow
 
-### Step 1: Identify the Failing Recipe
+### Step 1: Identify the Failing Unit
 
-If the user specifies a recipe name, use that. If not, find the most recent
-failure by checking build output or looking for recipes with no cache marker:
+If the user specifies a unit name, use that. If not, find the most recent
+failure by checking build output or looking for units with no cache marker:
 
 ```
 ls build/*/build.log -lt | head -5
@@ -32,23 +32,23 @@ ls build/*/build.log -lt | head -5
 
 ### Step 2: Read the Build Log
 
-The build log lives at `build/<recipe>/build.log`. Read the **end** of the log
+The build log lives at `build/<unit>/build.log`. Read the **end** of the log
 first — the error is almost always in the last 100 lines:
 
 ```
-Read build/<recipe>/build.log (last 100 lines)
+Read build/<unit>/build.log (last 100 lines)
 ```
 
 If the error references earlier output (e.g., a missing header first used
 hundreds of lines up), read more context as needed.
 
-### Step 3: Read the Recipe
+### Step 3: Read the Unit
 
-Load the recipe's `.star` file to understand what's being built, its
-dependencies, build class, configure args, and any custom build steps:
+Load the unit's `.star` file to understand what's being built, its dependencies,
+build class, configure args, and any custom build steps:
 
 ```
-Find and read layers/**/recipes/**/<recipe>.star
+Find and read layers/**/units/**/<unit>.star
 ```
 
 ### Step 4: Identify the Root Cause
@@ -56,22 +56,22 @@ Find and read layers/**/recipes/**/<recipe>.star
 Common failure categories in order of likelihood:
 
 1. **Missing dependency** — compiler error for a missing header or library.
-   Check if the required package is in the recipe's `deps` list. Check if the
-   dep is built and installed to `build/sysroot/`. If the dep has no recipe yet,
+   Check if the required package is in the unit's `deps` list. Check if the dep
+   is built and installed to `build/sysroot/`. If the dep has no unit yet,
    **create one** — do not install it in the Dockerfile via `apk add`. Every
-   library the system needs must be built from source as a recipe.
+   library the system needs must be built from source as a unit.
 2. **Missing build tool** — a tool required during the build (e.g., `makeinfo`,
    `help2man`, `bison`) is not in the container. The fix is **never** to install
    it in the Dockerfile. Instead, either disable the feature that needs it
-   (e.g., `--disable-docs`) if it's non-essential, or write a new recipe that
+   (e.g., `--disable-docs`) if it's non-essential, or write a new unit that
    builds the tool from source and add it as a `deps` entry so it lands in the
-   sysroot before this recipe builds. The Dockerfile provides only the minimal
+   sysroot before this unit builds. The Dockerfile provides only the minimal
    bootstrap toolchain.
 3. **Configure flag issue** — `./configure` or `cmake` can't find a feature or
-   path. Check `configure_args` in the recipe and verify paths reference
+   path. Check `configure_args` in the unit and verify paths reference
    `/build/sysroot`.
 4. **Source/patch conflict** — patch doesn't apply, or source version changed.
-   Check `build/<recipe>/src/` for `.rej` files or git errors in the log.
+   Check `build/<unit>/src/` for `.rej` files or git errors in the log.
 5. **Toolchain mismatch** — wrong compiler flags, missing tools. Check the build
    environment and Dockerfile.
 6. **Parallel build race** — intermittent failure in `make -j`. Look for "No
@@ -82,13 +82,13 @@ Common failure categories in order of likelihood:
 
 Based on the root cause, apply the appropriate fix:
 
-- **Missing dep**: Add to the recipe's `deps` list in the `.star` file. If no
-  recipe exists for the dependency, create one first. Never install the missing
-  library in the Dockerfile.
+- **Missing dep**: Add to the unit's `deps` list in the `.star` file. If no unit
+  exists for the dependency, create one first. Never install the missing library
+  in the Dockerfile.
 - **Missing build tool**: If non-essential (docs, man pages), disable via
-  configure flags. If essential, create a new recipe for the tool and add it as
-  a dep. **Never modify the Dockerfile to install packages.**
-- **Configure flag**: Adjust `configure_args` in the recipe
+  configure flags. If essential, create a new unit for the tool and add it as a
+  dep. **Never modify the Dockerfile to install artifacts.**
+- **Configure flag**: Adjust `configure_args` in the unit
 - **Patch conflict**: Update or remove the conflicting patch
 - **Source issue**: Check if the source needs updating or the extraction failed
 
@@ -96,10 +96,10 @@ Always explain what was found and what the fix is before applying it.
 
 ### Step 6: Rebuild with --force
 
-After applying the fix, rebuild the specific recipe:
+After applying the fix, rebuild the specific unit:
 
 ```bash
-yoe build --force <recipe>
+yoe build --force <unit>
 ```
 
 Use `--force` (not `--clean`) to skip the cache but preserve the source tree.
@@ -114,9 +114,9 @@ fixing a missing header reveals a missing library).
 
 ## Iteration Rules
 
-- **Maximum 5 iterations** before stopping to reassess with the user. If a
-  recipe fails 5 times with different errors, there may be a deeper issue (wrong
-  source version, fundamentally incompatible configuration).
+- **Maximum 5 iterations** before stopping to reassess with the user. If a unit
+  fails 5 times with different errors, there may be a deeper issue (wrong source
+  version, fundamentally incompatible configuration).
 - **Never apply the same fix twice.** If an attempted fix didn't resolve the
   error, revert it and try a different approach.
 - **Read the actual error, not just the exit code.** Build systems often print
@@ -127,24 +127,24 @@ fixing a missing header reveals a missing library).
 
 ## Key Paths
 
-| Path                                 | Contents                            |
-| ------------------------------------ | ----------------------------------- |
-| `build/<recipe>/build.log`           | Full build output                   |
-| `build/<recipe>/src/`                | Extracted source tree               |
-| `build/<recipe>/destdir/`            | Install staging directory           |
-| `build/sysroot/`                     | Shared sysroot (deps' headers/libs) |
-| `layers/**/recipes/**/<recipe>.star` | Recipe definition                   |
+| Path                             | Contents                            |
+| -------------------------------- | ----------------------------------- |
+| `build/<unit>/build.log`         | Full build output                   |
+| `build/<unit>/src/`              | Extracted source tree               |
+| `build/<unit>/destdir/`          | Install staging directory           |
+| `build/sysroot/`                 | Shared sysroot (deps' headers/libs) |
+| `layers/**/units/**/<unit>.star` | Unit definition                     |
 
 ## What NOT to Do
 
 - Do not modify files in `build/sysroot/` directly — it's populated
-  automatically from built packages.
-- Do not modify source files in `build/<recipe>/src/` as a permanent fix —
-  changes there are lost on rebuild. Instead, create a patch in the recipe.
+  automatically from built artifacts.
+- Do not modify source files in `build/<unit>/src/` as a permanent fix — changes
+  there are lost on rebuild. Instead, create a patch in the unit.
 - Do not skip the build log. Always read it before proposing a fix.
 - Do not take shortcuts to make the build pass (e.g., disabling features,
   removing configure checks) without explaining the trade-off and getting user
   approval.
 - Do not install missing tools or libraries in the Dockerfile. The container
-  provides only the minimal bootstrap toolchain. If a recipe needs a tool,
-  create a recipe for it.
+  provides only the minimal bootstrap toolchain. If a unit needs a tool, create
+  a unit for it.

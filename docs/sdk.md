@@ -34,10 +34,10 @@ Yoe-NG just packages the output. The SDK matters when developers need **target
 system libraries** (for CGO, FFI, or C/C++ development) or when the target
 architecture differs from their workstation.
 
-## SDK as a Recipe
+## SDK as a Unit
 
-An SDK is just another recipe class. It produces a development environment
-instead of a package or disk image:
+An SDK is just another unit class. It produces a development environment instead
+of a package or disk image:
 
 ```python
 load("//classes/sdk.star", "sdk")
@@ -49,7 +49,7 @@ sdk(
     machine = "beaglebone-black",
 
     # Base system packages (headers + libs + pkg-config)
-    packages = [
+    artifacts = [
         "glibc-dev",
         "linux-headers",
         "zlib-dev",
@@ -160,7 +160,7 @@ standard caching infrastructure:
 2. **Developers pull from cache** — `yoe build` checks the remote cache before
    building from source. If a cached `.apk` exists with the right input hash,
    it's used directly.
-3. **The SDK includes them** — the SDK recipe lists these packages in its
+3. **The SDK includes them** — the SDK unit lists these packages in its
    `packages` list, so `glibc-dev`, `qt6-dev`, etc. are installed in the SDK
    container.
 
@@ -169,7 +169,7 @@ sdk(
     name = "yoe-sdk-full",
     version = "1.0.0",
     machine = "beaglebone-black",
-    packages = [
+    artifacts = [
         "glibc-dev",
         "qt6-dev",           # pulled from cache, not built locally
         "chromium-dev",      # pulled from cache
@@ -184,7 +184,7 @@ Chromium itself. The cache ensures everyone gets the same pre-built binary.
 
 ## SDK Variants
 
-Like image recipes, SDK recipes compose via Starlark variables:
+Like image units, SDK units compose via Starlark variables:
 
 ```python
 load("//classes/sdk.star", "sdk")
@@ -240,5 +240,5 @@ New team member:
   code --devcontainer .                ← VS Code opens SDK container
 ```
 
-The SDK is not a separate tool or workflow — it's a recipe that produces a
+The SDK is not a separate tool or workflow — it's a unit that produces a
 development environment, built and cached like any other artifact.

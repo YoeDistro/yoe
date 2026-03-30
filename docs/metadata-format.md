@@ -1,30 +1,30 @@
-# Recipe & Configuration Format
+# Unit & Configuration Format
 
 Yoe-NG uses [Starlark](https://github.com/google/starlark-go) — a deterministic,
-sandboxed dialect of Python — for all build definitions. Recipes, classes,
-machine definitions, and project configuration are all `.star` files. See
+sandboxed dialect of Python — for all build definitions. Units, classes, machine
+definitions, and project configuration are all `.star` files. See
 [Build Languages](build-languages.md) for the rationale behind this choice.
 
-## Recipes vs. Packages
+## Units vs. Packages
 
 These are distinct concepts in Yoe-NG:
 
-- **Recipes** — `.star` files in the project tree that describe _how to build_
+- **Units** — `.star` files in the project tree that describe _how to build_
   software. They live in version control and are a development/CI concern.
-- **Packages** — `.apk` files that recipes _produce_. They are installable
+- **Packages** — `.apk` files that units _produce_. They are installable
   artifacts published to a repository and consumed by `apk` during image
   assembly or on-device updates.
 
-The build flow is: **recipe → build → .apk package(s) → repository → image /
+The build flow is: **unit → build → .apk unit(s) → repository → image /
 device**.
 
-Recipes are inputs to the build system. Packages are outputs. A developer edits
-recipes; a device only ever sees packages.
+Units are inputs to the build system. Packages are outputs. A developer edits
+units; a device only ever sees packages.
 
 ### Sub-packages
 
-A single recipe can produce multiple `.apk` packages. This is the same concept
-as Yocto's `PACKAGES` splitting and Debian's binary packages — one source build
+A single unit can produce multiple `.apk` packages. This is the same concept as
+Yocto's `PACKAGES` splitting and Debian's binary packages — one source build
 produces granular installable units:
 
 | Sub-package | Contents                               | Typical consumer        |
@@ -34,7 +34,7 @@ produces granular installable units:
 | `-doc`      | Man pages, info pages                  | Development images      |
 | `-dbg`      | Debug symbols (DWARF)                  | Debug/development       |
 
-**In a recipe:**
+**In a unit:**
 
 ```python
 load("//classes/autotools.star", "autotools")
@@ -45,17 +45,17 @@ autotools(
     source = "https://cdn.openbsd.org/.../openssh-9.6p1.tar.gz",
     deps = ["zlib", "openssl"],
     # Sub-package splitting — default splits are automatic, but can be
-    # customized or disabled per recipe.
+    # customized or disabled per unit.
     subpackages = {
         "dev": auto(),          # headers + pkg-config (automatic)
         "doc": auto(),          # man pages (automatic)
         "dbg": auto(),          # debug symbols (automatic)
-        "server": subpackage(   # custom split
+        "server": subunit(   # custom split
             description = "OpenSSH server",
             files = ["/usr/sbin/sshd", "/etc/ssh/sshd_config"],
             services = ["sshd"],
         ),
-        "client": subpackage(
+        "client": subunit(
             description = "OpenSSH client utilities",
             files = ["/usr/bin/ssh", "/usr/bin/scp", "/usr/bin/sftp"],
         ),
@@ -65,7 +65,7 @@ autotools(
 
 **How it works:**
 
-1. The recipe builds once, installing everything into `$DESTDIR`.
+1. The unit builds once, installing everything into `$DESTDIR`.
 2. After the build, the `yoe` engine splits `$DESTDIR` into sub-packages based
    on the `subpackages` declaration.
 3. `auto()` splits use file-path conventions (same as Alpine's apk and Yocto's
@@ -80,12 +80,12 @@ autotools(
 `-dbg` splits are applied. To produce a single unsplit package, set
 `subpackages = {}`.
 
-**In image recipes:**
+**In image units:**
 
 ```python
 image(
     name = "production-image",
-    packages = [
+    artifacts = [
         "openssh-server",       # just the server, not the full openssh
         "networkmanager",
     ],
@@ -93,7 +93,7 @@ image(
 
 image(
     name = "dev-image",
-    packages = [
+    artifacts = [
         "openssh",              # full package
         "openssh-dev",          # headers for on-device compilation
         "openssh-doc",          # man pages
@@ -105,7 +105,7 @@ image(
 Sub-packages keep production images small (no headers, no man pages, no debug
 symbols) while making development images fully featured. This is the same
 tradeoff Yocto and Debian make — granular packaging trades a small amount of
-recipe complexity for significant control over image contents.
+unit complexity for significant control over image contents.
 
 Alpine's apk already supports sub-packages natively (Alpine's `openssh` APKBUILD
 produces `openssh`, `openssh-doc`, `openssh-dev`, etc.), so Yoe-NG follows a
@@ -113,19 +113,19 @@ proven pattern.
 
 ## Why Starlark
 
-- **One language** — recipes, classes, machines, and project config are all
+- **One language** — units, classes, machines, and project config are all
   `.star` files. No TOML + shell + something-else stack.
 - **Python-like syntax** — most developers can read it immediately.
 - **Deterministic** — no side effects, no mutable global state. Critical for
   content-addressed caching.
-- **Sandboxed** — recipes cannot perform arbitrary I/O or network access.
+- **Sandboxed** — units cannot perform arbitrary I/O or network access.
 - **Go-native** — the `go.starlark.net` library embeds directly in the `yoe`
   binary.
 - **Composable** — functions, `load()`, and `**kwargs` provide natural
   composition for layers and overrides.
 - **Battle-tested** — used by Bazel (Google), Buck2 (Meta), and Pants.
 
-## Recipe Types
+## Unit Types
 
 ### Machine Definition (`machines/<name>.star`)
 
@@ -157,7 +157,7 @@ machine(
     name = "qemu-x86_64",
     arch = "x86_64",
     kernel = kernel(
-        recipe = "linux-qemu",
+        unit = "linux-qemu",
         cmdline = "console=ttyS0 root=/dev/vda2 rw",
     ),
     qemu = qemu_config(
@@ -170,12 +170,12 @@ machine(
 )
 ```
 
-### Image Recipe (`recipes/<name>.star`)
+### Image Unit (`units/<name>.star`)
 
-An image is a recipe that assembles a root filesystem from packages and produces
-a disk image. Image recipes use the `image()` class function instead of
-`package()`. They participate in the same DAG, use the same caching, and are
-built with `yoe build`.
+An image is a unit that assembles a root filesystem from packages and produces a
+disk image. Image units use the `image()` class function instead of `unit()`.
+They participate in the same DAG, use the same caching, and are built with
+`yoe build`.
 
 ```python
 load("//classes/image.star", "image")
@@ -186,7 +186,7 @@ image(
     description = "Minimal bootable system",
     # Packages installed into the rootfs.
     # The base system (glibc, busybox, systemd) is implicit unless excluded.
-    packages = [
+    artifacts = [
         "openssh",
         "networkmanager",
         "myapp",
@@ -251,16 +251,16 @@ image(
 **Conditional packages per machine:**
 
 ```python
-packages = ["openssh", "myapp"]
+artifacts = ["openssh", "myapp"]
 if machine.arch == "arm64":
     packages += ["arm64-firmware"]
 ```
 
-### Package Recipe (`recipes/<name>.star`)
+### Package Unit (`units/<name>.star`)
 
 Describes how to build a system-level package (C/C++ libraries, system daemons,
 etc.) and produce an `.apk`. Uses a class function like `autotools()`,
-`cmake()`, or the generic `package()`.
+`cmake()`, or the generic `unit()`.
 
 ```python
 load("//classes/autotools.star", "autotools")
@@ -280,10 +280,10 @@ autotools(
 )
 ```
 
-Or using the generic `package()` for custom build steps:
+Or using the generic `unit()` for custom build steps:
 
 ```python
-package(
+unit(
     name = "openssh",
     version = "9.6p1",
     source = "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.6p1.tar.gz",
@@ -302,11 +302,11 @@ package(
 
 ### Patches
 
-Recipes can apply patches to upstream source after fetching and before building.
+Units can apply patches to upstream source after fetching and before building.
 Patches are listed in order and applied with `git apply` or `patch -p1`:
 
 ```python
-package(
+unit(
     name = "busybox",
     version = "1.36.1",
     source = "https://busybox.net/downloads/busybox-1.36.1.tar.bz2",
@@ -319,15 +319,15 @@ package(
 ```
 
 Patch file paths are relative to the project root. Patch contents are included
-in the recipe's cache hash — changing a patch triggers a rebuild.
+in the unit's cache hash — changing a patch triggers a rebuild.
 
 **Layer overrides for patches** work through the standard function composition
 pattern:
 
 ```python
-# upstream: @recipes-core/busybox.star
+# upstream: @units-core/busybox.star
 def busybox(extra_patches=[], **overrides):
-    package(
+    unit(
         name = "busybox",
         version = "1.36.1",
         source = "https://busybox.net/downloads/busybox-1.36.1.tar.bz2",
@@ -339,21 +339,21 @@ def busybox(extra_patches=[], **overrides):
     )
 
 # vendor layer: adds a patch without modifying upstream
-load("@recipes-core//busybox.star", "busybox")
+load("@units-core//busybox.star", "busybox")
 busybox(extra_patches=["patches/vendor-busybox-audit.patch"])
 ```
 
 **Alternatives to patches:**
 
 - **Git-based sources** — fork the repo, apply changes as commits, point the
-  recipe at your branch/tag. Cleaner history, easier to rebase on upstream
+  unit at your branch/tag. Cleaner history, easier to rebase on upstream
   updates.
 - **Overlay files** — for config file changes on the target, the `overlays/`
   directory is simpler than patching source.
 
 ### Tasks and Per-Task Containers (planned)
 
-Recipes can define named build tasks via `task()`, each with an optional Docker
+Units can define named build tasks via `task()`, each with an optional Docker
 container. This replaces the flat `build = [...]` string list with structured
 steps that can each run in different environments.
 
@@ -375,7 +375,7 @@ go_binary(
 )
 
 # Task-level override — codegen uses a different container
-package(
+unit(
     name = "complex-app",
     container = "golang:1.22-alpine",       # default for all tasks
     tasks = [
@@ -389,8 +389,8 @@ package(
     ],
 )
 
-# Mix of container and bwrap in one recipe
-package(
+# Mix of container and bwrap in one unit
+unit(
     name = "hybrid-tool",
     tasks = [
         task("generate",
@@ -408,7 +408,7 @@ converted to unnamed tasks without containers. Classes generate tasks:
 ```python
 # classes/autotools.star generates three tasks
 def autotools(name, version, source, configure_args=[], **kwargs):
-    package(
+    unit(
         name=name, version=version, source=source,
         tasks = [
             task("configure",
@@ -421,10 +421,10 @@ def autotools(name, version, source, configure_args=[], **kwargs):
     )
 ```
 
-See [per-recipe containers plan](superpowers/plans/per-recipe-containers.md) for
-the full design.
+See [per-unit containers plan](superpowers/plans/per-unit-containers.md) for the
+full design.
 
-### Application Recipe (`recipes/<name>.star`)
+### Application Unit (`units/<name>.star`)
 
 Applications built with language-native build systems use language-specific
 class functions that delegate to the language toolchain.
@@ -448,8 +448,8 @@ go_binary(
 
 Language-specific classes handle the build details — `go_binary()` sets up
 `GOMODCACHE`, runs `go build`, and packages the result. Similar classes exist
-for Rust (`rust_binary()`), Zig (`zig_binary()`), Python (`python_package()`),
-and Node.js (`node_package()`).
+for Rust (`rust_binary()`), Zig (`zig_binary()`), Python (`python_unit()`), and
+Node.js (`node_unit()`).
 
 ### Project Configuration (`PROJECT.star`)
 
@@ -487,39 +487,39 @@ project(
         # Layer in a subdirectory of a repo — path specifies where LAYER.star is
         layer("git@github.com:YoeDistro/yoe-ng.git",
               ref = "main",
-              path = "layers/recipes-core"),
+              path = "layers/units-core"),
         # Layer at the root of its own repo
-        layer("git@github.com:vendor/bsp-recipes.git", ref = "main"),
+        layer("git@github.com:vendor/bsp-units.git", ref = "main"),
     ],
 )
 ```
 
 ## Classes
 
-Classes are Starlark functions that define build pipelines for different recipe
-types. They encapsulate the _how to build_ logic so that recipes only declare
+Classes are Starlark functions that define build pipelines for different unit
+types. They encapsulate the _how to build_ logic so that units only declare
 _what to build_.
 
 ### Built-in Classes
 
 These ship with `yoe` and cover common build patterns:
 
-| Class              | Description                                   |
-| ------------------ | --------------------------------------------- |
-| `package()`        | Generic package — custom build steps as shell |
-| `autotools()`      | configure / make / make install               |
-| `cmake()`          | CMake build                                   |
-| `meson()`          | Meson + Ninja build                           |
-| `go_binary()`      | Go application                                |
-| `rust_binary()`    | Rust application (Cargo)                      |
-| `zig_binary()`     | Zig application                               |
-| `python_package()` | Python package (pip/uv)                       |
-| `node_package()`   | Node.js package (npm/pnpm)                    |
-| `image()`          | Root filesystem image assembly                |
+| Class           | Description                                   |
+| --------------- | --------------------------------------------- |
+| `unit()`        | Generic package — custom build steps as shell |
+| `autotools()`   | configure / make / make install               |
+| `cmake()`       | CMake build                                   |
+| `meson()`       | Meson + Ninja build                           |
+| `go_binary()`   | Go application                                |
+| `rust_binary()` | Rust application (Cargo)                      |
+| `zig_binary()`  | Zig application                               |
+| `python_unit()` | Python package (pip/uv)                       |
+| `node_unit()`   | Node.js package (npm/pnpm)                    |
+| `image()`       | Root filesystem image assembly                |
 
 ### Class Composition
 
-Classes compose through function calls. A recipe can use multiple classes, and
+Classes compose through function calls. A unit can use multiple classes, and
 classes can wrap other classes:
 
 ```python
@@ -581,9 +581,9 @@ def my_go_service(name, version, source, **kwargs):
 ### Extensibility: Starlark and Go
 
 Starlark is not a standalone language — it runs embedded inside the `yoe` Go
-binary. Every built-in function (`package()`, `machine()`, `image()`, etc.) is a
-Go function registered into the Starlark environment. When Starlark code calls
-`package(name="openssh", ...)`, it executes Go code that has full access to the
+binary. Every built-in function (`unit()`, `machine()`, `image()`, etc.) is a Go
+function registered into the Starlark environment. When Starlark code calls
+`unit(name="openssh", ...)`, it executes Go code that has full access to the
 host runtime.
 
 This means the system is extensible in two directions:
@@ -638,7 +638,7 @@ my-project/
 │   ├── beaglebone-black.star
 │   ├── raspberrypi4.star
 │   └── qemu-arm64.star
-├── recipes/
+├── units/
 │   ├── base-image.star         # image() class
 │   ├── dev-image.star          # image() class, extends base
 │   ├── openssh.star            # autotools() class
@@ -660,12 +660,12 @@ my-project/
 ## Build Flow
 
 ```
-  recipes/*.star               (all recipe types: package and image)
+  units/*.star               (all unit types: package and image)
        │
        ▼
   yoe build                    (evaluate Starlark, resolve DAG, build)
        │
-       ├─ package() ──▶ compile source ──▶ *.apk packages ──▶ repository/
+       ├─ unit() ──▶ compile source ──▶ *.apk artifacts ──▶ repository/
        │
        └─ image()   ──▶ apk install deps into rootfs
                         ──▶ apply overlays + config
@@ -675,7 +675,7 @@ my-project/
 
 ## Layers
 
-Layers are external Git repositories that provide recipes, classes, and machine
+Layers are external Git repositories that provide units, classes, and machine
 definitions. They are the primary mechanism for reusing and sharing build
 definitions across projects — BSP vendors ship layers, and product teams compose
 them.
@@ -690,7 +690,7 @@ project(
         # Layer in a subdirectory of a repo
         layer("git@github.com:YoeDistro/yoe-ng.git",
               ref = "main",
-              path = "layers/recipes-core"),
+              path = "layers/units-core"),
         # Layer at the root of its own repo
         layer("git@github.com:vendor/bsp-imx8.git", ref = "v2.1.0"),
     ],
@@ -715,7 +715,7 @@ requiring users to manually discover transitive dependencies.
 # In github.com/vendor/bsp-imx8/LAYER.star
 layer_info(
     name = "vendor-bsp-imx8",
-    description = "i.MX8 BSP recipes and machine definitions",
+    description = "i.MX8 BSP units and machine definitions",
     deps = [
         layer("github.com/vendor/hal-common", ref = "v1.3.0"),
         layer("github.com/vendor/firmware-imx", ref = "v5.4"),
@@ -763,7 +763,7 @@ Add this to your PROJECT.star layers list:
 ```python
 # PROJECT.star
 layers = [
-    layer("github.com/yoe/recipes-core", ref = "v1.0.0"),
+    layer("github.com/yoe/units-core", ref = "v1.0.0"),
     layer("github.com/vendor/bsp-imx8", ref = "v2.1.0"),
     # Override the version that bsp-imx8 requests (v1.3.0 → v1.4.0)
     layer("github.com/vendor/hal-common", ref = "v1.4.0"),
@@ -780,7 +780,7 @@ layers = [
     # Local override — point at a checkout on disk instead of fetching
     layer("git@github.com:YoeDistro/yoe-ng.git",
           local = "../yoe-ng",
-          path = "layers/recipes-core"),
+          path = "layers/units-core"),
     # Local override for a standalone layer
     layer("git@github.com:vendor/bsp-imx8.git", local = "../bsp-imx8"),
 ]
@@ -793,29 +793,29 @@ equivalent to Go's `replace` directive in `go.mod`.
 ## Label-Based References
 
 Inspired by Bazel's label system and GN's `//path/to:target`, Yoe-NG uses a
-label scheme for referencing recipes and classes across repositories:
+label scheme for referencing units and classes across repositories:
 
 ```python
 # Local references (within the current project)
 load("//classes/autotools.star", "autotools")   # from project root
-load("//recipes/openssh.star", "openssh_config") # load shared config
+load("//units/openssh.star", "openssh_config") # load shared config
 
 # External references (from layers)
-load("@recipes-core//openssh.star", "openssh")
+load("@units-core//openssh.star", "openssh")
 load("@vendor-bsp//kernel.star", "vendor_kernel")
 ```
 
-Layer names (`@recipes-core`, `@vendor-bsp`) map to the layers declared in
-`PROJECT.star`. When `yoe` evaluates recipes, it fetches and caches external
+Layer names (`@units-core`, `@vendor-bsp`) map to the layers declared in
+`PROJECT.star`. When `yoe` evaluates units, it fetches and caches external
 layers, then resolves all `load()` references to concrete files.
 
 ## Layer Composition
 
 Layers enable the vendor BSP / product overlay pattern without modifying
-upstream recipes:
+upstream units:
 
 ```python
-# Layer 1: @recipes-core/openssh.star — base recipe as a function
+# Layer 1: @units-core/openssh.star — base unit as a function
 def openssh(extra_deps=[], extra_configure_args=[], **overrides):
     autotools(
         name = "openssh",
@@ -826,10 +826,10 @@ def openssh(extra_deps=[], extra_configure_args=[], **overrides):
     )
 
 # Layer 2: @vendor-bsp/openssh.star — vendor extends it
-load("@recipes-core//openssh.star", "openssh")
+load("@units-core//openssh.star", "openssh")
 openssh(extra_deps=["vendor-crypto"])
 
-# Layer 3: product recipe — further customization
+# Layer 3: product unit — further customization
 load("@vendor-bsp//openssh.star", "openssh")
 openssh(extra_configure_args=["--with-pam"])
 ```
@@ -848,20 +848,20 @@ function call to find all modifications.
   clean `git rebase` for patch updates, natural `yoe dev` workflow (edit,
   commit, extract patches), and no SHA256 to maintain. Use
   `source = "https://...git"` with a `tag` to pin the version.
-- **One file per recipe** — each recipe is its own `.star` file. This keeps
-  diffs clean and makes it easy to add/remove components.
-- **Recipes and packages are separate concerns** — recipes are
-  version-controlled build instructions; packages are binary artifacts. This
-  separation enables building once and deploying many times, sharing packages
-  across teams, and on-device incremental updates via `apk`.
+- **One file per unit** — each unit is its own `.star` file. This keeps diffs
+  clean and makes it easy to add/remove components.
+- **Units and packages are separate concerns** — units are version-controlled
+  build instructions; packages are binary artifacts. This separation enables
+  building once and deploying many times, sharing packages across teams, and
+  on-device incremental updates via `apk`.
 - **Classes as functions** — build patterns (autotools, cmake, go) are Starlark
   functions, not a type system. Multiple classes compose through function calls.
   This is simpler and more flexible than Yocto's class inheritance.
-- **Unified recipe directory** — system packages, application packages, and
-  images all live in `recipes/`. The class function determines the output:
-  `package()` / `autotools()` / etc. produce `.apk` files, `image()` produces
-  disk images. One concept (recipe), one directory, one DAG.
-- **apk for image assembly** — image recipes declare their packages as
+- **Unified unit directory** — system packages, application packages, and images
+  all live in `units/`. The class function determines the output: `unit()` /
+  `autotools()` / etc. produce `.apk` files, `image()` produces disk images. One
+  concept (unit), one directory, one DAG.
+- **apk for image assembly** — image units declare their packages as
   dependencies. `yoe build <image>` creates a clean rootfs and runs `apk add` to
   populate it from the repository, exactly like Alpine's image builder. This
   leverages apk's dependency resolution rather than reimplementing it.

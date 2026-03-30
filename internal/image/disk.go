@@ -23,8 +23,8 @@ func toContainerPath(projectDir, hostPath string) (string, error) {
 // GenerateDiskImage creates a partitioned disk image from a rootfs directory.
 // Disk tools (sfdisk, mkfs, dd, etc.) run inside the container via
 // RunInContainer; pure file operations stay on the host.
-func GenerateDiskImage(rootfs, imgPath string, recipe *yoestar.Recipe, projectDir string, w io.Writer) error {
-	partitions := recipe.Partitions
+func GenerateDiskImage(rootfs, imgPath string, unit *yoestar.Unit, projectDir string, w io.Writer) error {
+	partitions := unit.Partitions
 	if len(partitions) == 0 {
 		partitions = []yoestar.Partition{
 			{Label: "rootfs", Type: "ext4", Size: "512M", Root: true},
@@ -102,7 +102,7 @@ func GenerateDiskImage(rootfs, imgPath string, recipe *yoestar.Recipe, projectDi
 	}
 
 	// Install syslinux bootloader (MBR + VBR + ldlinux.sys)
-	if err := installBootloader(imgPath, rootfs, recipe, projectDir, w); err != nil {
+	if err := installBootloader(imgPath, rootfs, unit, projectDir, w); err != nil {
 		fmt.Fprintf(w, "  Warning: could not install bootloader: %v\n", err)
 	}
 
@@ -250,7 +250,7 @@ func createExt4Partition(partImg string, sizeMB int, rootfs string, p yoestar.Pa
 // installBootloader writes syslinux MBR code and runs extlinux --install
 // on the root partition to set up the VBR and ldlinux.sys.
 // MBR byte writing is pure Go (host); losetup/mount/extlinux run in the container.
-func installBootloader(imgPath, rootfs string, recipe *yoestar.Recipe, projectDir string, w io.Writer) error {
+func installBootloader(imgPath, rootfs string, unit *yoestar.Unit, projectDir string, w io.Writer) error {
 	// Write MBR boot code (pure Go — reads mbr.bin from rootfs on host)
 	mbrBin := filepath.Join(rootfs, "usr", "share", "syslinux", "mbr.bin")
 	if _, err := os.Stat(mbrBin); os.IsNotExist(err) {
@@ -287,7 +287,7 @@ func installBootloader(imgPath, rootfs string, recipe *yoestar.Recipe, projectDi
 	// Find the root partition offset and size
 	offsetBytes := int64(1024 * 1024) // 1MB default (after MBR)
 	var rootSizeMB int
-	for _, p := range recipe.Partitions {
+	for _, p := range unit.Partitions {
 		if p.Root {
 			rootSizeMB = parseSizeMB(p.Size)
 			if rootSizeMB == 0 {

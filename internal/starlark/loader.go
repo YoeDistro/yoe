@@ -96,15 +96,15 @@ func LoadProjectFromRoot(root string) (*Project, error) {
 		return nil, err
 	}
 
-	// Evaluate all recipes
-	if err := evalDir(eng, root, "recipes"); err != nil {
+	// Evaluate all units
+	if err := evalDir(eng, root, "units"); err != nil {
 		return nil, err
 	}
 
-	// Evaluate machines, recipes, and images from local layers
+	// Evaluate machines, units, and images from local layers
 	if eng.layerRoots != nil {
 		for _, layerPath := range eng.layerRoots {
-			for _, subdir := range []string{"machines", "recipes", "images"} {
+			for _, subdir := range []string{"machines", "units", "images"} {
 				if err := evalDir(eng, layerPath, subdir); err != nil {
 					return nil, err
 				}
@@ -118,7 +118,7 @@ func LoadProjectFromRoot(root string) (*Project, error) {
 	}
 
 	proj.Machines = eng.Machines()
-	proj.Recipes = eng.Recipes()
+	proj.Units = eng.Units()
 
 	return proj, nil
 }

@@ -22,7 +22,7 @@ func (e *Engine) builtins() starlark.StringDict {
 		"kernel":      starlark.NewBuiltin("kernel", fnKernel),
 		"uboot":       starlark.NewBuiltin("uboot", fnUboot),
 		"qemu_config": starlark.NewBuiltin("qemu_config", fnQEMUConfig),
-		"package":     starlark.NewBuiltin("package", e.fnPackage),
+		"unit":        starlark.NewBuiltin("unit", e.fnUnit),
 		"autotools":   starlark.NewBuiltin("autotools", e.fnAutotools),
 		"cmake":       starlark.NewBuiltin("cmake", e.fnCMake),
 		"go_binary":   starlark.NewBuiltin("go_binary", e.fnGoBinary),
@@ -304,7 +304,7 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 			Tag:         structString(kernelS, "tag"),
 			Defconfig:   structString(kernelS, "defconfig"),
 			DeviceTrees: structStringList(kernelS, "device_trees"),
-			Recipe:      structString(kernelS, "recipe"),
+			Unit:        structString(kernelS, "unit"),
 			Cmdline:     structString(kernelS, "cmdline"),
 		},
 	}
@@ -347,13 +347,13 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 	return starlark.None, nil
 }
 
-func (e *Engine) registerRecipe(class string, kwargs []starlark.Tuple) (*Recipe, error) {
+func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, error) {
 	name := kwString(kwargs, "name")
 	if name == "" {
 		return nil, fmt.Errorf("%s() requires name", class)
 	}
 
-	r := &Recipe{
+	r := &Unit{
 		Name:          name,
 		Version:       kwString(kwargs, "version"),
 		Class:         class,
@@ -372,7 +372,7 @@ func (e *Engine) registerRecipe(class string, kwargs []starlark.Tuple) (*Recipe,
 		Services:      kwStringList(kwargs, "services"),
 		Conffiles:     kwStringList(kwargs, "conffiles"),
 		NoSysroot:     kwBool(kwargs, "no_sysroot"),
-		Packages:      kwStringList(kwargs, "packages"),
+		Artifacts:      kwStringList(kwargs, "artifacts"),
 		Exclude:       kwStringList(kwargs, "exclude"),
 		Hostname:      kwString(kwargs, "hostname"),
 		Timezone:      kwString(kwargs, "timezone"),
@@ -407,40 +407,40 @@ func (e *Engine) registerRecipe(class string, kwargs []starlark.Tuple) (*Recipe,
 	}
 
 	e.mu.Lock()
-	e.recipes[name] = r
+	e.units[name] = r
 	e.mu.Unlock()
 
 	return r, nil
 }
 
-func (e *Engine) fnPackage(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	r, err := e.registerRecipe("package", kwargs)
+func (e *Engine) fnUnit(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	r, err := e.registerUnit("unit", kwargs)
 	if err != nil {
 		return nil, err
 	}
 	if len(r.Build) == 0 {
-		return nil, fmt.Errorf("package(%q): build steps required", r.Name)
+		return nil, fmt.Errorf("unit(%q): build steps required", r.Name)
 	}
 	return starlark.None, nil
 }
 
 func (e *Engine) fnAutotools(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	_, err := e.registerRecipe("autotools", kwargs)
+	_, err := e.registerUnit("autotools", kwargs)
 	return starlark.None, err
 }
 
 func (e *Engine) fnCMake(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	_, err := e.registerRecipe("cmake", kwargs)
+	_, err := e.registerUnit("cmake", kwargs)
 	return starlark.None, err
 }
 
 func (e *Engine) fnGoBinary(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	_, err := e.registerRecipe("go", kwargs)
+	_, err := e.registerUnit("go", kwargs)
 	return starlark.None, err
 }
 
 func (e *Engine) fnImage(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	_, err := e.registerRecipe("image", kwargs)
+	_, err := e.registerUnit("image", kwargs)
 	return starlark.None, err
 }
 

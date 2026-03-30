@@ -17,10 +17,10 @@ Yoe-NG uses a layered build environment with three tiers:
 │  Provides: glibc, gcc, make, cmake, language SDKs   │
 │  libc: glibc (Yoe-NG's own packages)               │
 ├─────────────────────────────────────────────────────┤
-│  Tier 2: Per-Recipe Build Environment               │
+│  Tier 2: Per-Unit Build Environment               │
 │  Populated by: apk with only declared build deps    │
 │  Isolated via bubblewrap                            │
-│  Produces: .apk packages                            │
+│  Produces: .apk artifacts                            │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -55,7 +55,7 @@ Host                              Container (Alpine)
 │ openssh     │   -v $PWD:/project│ (has bwrap, apk, gcc...) │
 │             │   -v cache:/cache │                          │
 │ (no bwrap,  │                   │ Tier 1: build root       │
-│  no apk)    │                   │ Tier 2: per-recipe bwrap │
+│  no apk)    │                   │ Tier 2: per-unit bwrap │
 └─────────────┘                   └──────────────────────────┘
 ```
 
@@ -83,7 +83,7 @@ yoe container status       # show container image status
 When the container is invoked, it mounts:
 
 - **Project directory** → `/project` (read-write)
-- **Build source/dest** → `/build/src`, `/build/destdir` (per-recipe mounts)
+- **Build source/dest** → `/build/src`, `/build/destdir` (per-unit mounts)
 - **Sysroot** → `/build/sysroot` (read-only, deps' headers/libraries)
 
 Build output uses `--user uid:gid` so files created by the container are owned
@@ -104,22 +104,22 @@ That's it. Everything else is inside the container.
 
 | Tool    | Package    | Used by                        | Purpose                                                            |
 | ------- | ---------- | ------------------------------ | ------------------------------------------------------------------ |
-| `bwrap` | bubblewrap | `internal/build/sandbox.go`    | Per-recipe build isolation (namespace sandbox)                     |
-| `bash`  | bash       | `internal/build/sandbox.go`    | Execute recipe build step shell commands                           |
+| `bwrap` | bubblewrap | `internal/build/sandbox.go`    | Per-unit build isolation (namespace sandbox)                       |
+| `bash`  | bash       | `internal/build/sandbox.go`    | Execute unit build step shell commands                             |
 | `git`   | git        | `internal/source/`, `dev.go`   | Clone/fetch repos, manage workspaces, apply/extract patches        |
 | `tar`   | tar        | `internal/source/workspace.go` | Extract `.tar.xz` archives (`.tar.gz`/`.bz2` handled by Go stdlib) |
 | `nproc` | coreutils  | `internal/build/sandbox.go`    | Detect CPU count for `$NPROC` build variable                       |
 | `uname` | coreutils  | `internal/build/sandbox.go`    | Detect host architecture for `$ARCH` variable                      |
-| `make`  | make       | Recipe build steps             | C/C++ builds                                                       |
-| `gcc`   | gcc        | Recipe build steps             | C compilation                                                      |
-| `g++`   | g++        | Recipe build steps             | C++ compilation                                                    |
+| `make`  | make       | Unit build steps               | C/C++ builds                                                       |
+| `gcc`   | gcc        | Unit build steps               | C compilation                                                      |
+| `g++`   | g++        | Unit build steps               | C++ compilation                                                    |
 | `patch` | patch      | Fallback for patch application | When `git apply` is not suitable                                   |
 
 **Called indirectly** (by user-defined build steps, not by `yoe` itself):
 
 - Language toolchains (`go`, `cargo`, `cmake`, `meson`, `python3`, `npm`) —
   installed into the Tier 1 build root as needed
-- Any command available in the build sandbox — recipe build steps are arbitrary
+- Any command available in the build sandbox — unit build steps are arbitrary
   shell commands
 - `ctx.shell()` in custom commands can invoke any host tool
 
@@ -145,14 +145,14 @@ This build root is:
 - **Managed by apk** — adding or updating a host tool is just
   `apk add --root ... <tool>`.
 
-### Tier 2: Per-Recipe Isolation
+### Tier 2: Per-Unit Isolation
 
-Each recipe builds in an isolated environment with only its declared
-dependencies. This ensures hermetic builds — a recipe cannot accidentally depend
-on a tool it didn't declare.
+Each unit builds in an isolated environment with only its declared dependencies.
+This ensures hermetic builds — a unit cannot accidentally depend on a tool it
+didn't declare.
 
 ```sh
-# yoe creates a minimal environment for each recipe build
+# yoe creates a minimal environment for each unit build
 bwrap \
     --ro-bind /var/yoe/buildroot / \
     --bind /tmp/build/$RECIPE /build \
@@ -165,12 +165,12 @@ bwrap \
 Bubblewrap provides:
 
 - **Unprivileged isolation** — no root or Docker daemon required.
-- **Read-only base** — the build root is mounted read-only; recipes can't modify
+- **Read-only base** — the build root is mounted read-only; units can't modify
   host tools.
 - **Minimal overhead** — bubblewrap is a thin namespace wrapper, not a full
   container runtime. Build performance is near-native.
 - **Declared dependencies only** — the build environment is assembled from only
-  the packages listed in the recipe's `deps`.
+  the packages listed in the unit's `deps`.
 
 ## Why Not Docker for Builds?
 
@@ -238,9 +238,8 @@ built by Yoe-NG's own toolchain. The Alpine dependency is gone.
 
 ### Stage 2: Normal Operation
 
-From this point on, all builds use the Yoe-NG build root. New recipes build
-inside Tier 2 isolated environments. The bootstrap is a one-time cost per
-architecture.
+From this point on, all builds use the Yoe-NG build root. New units build inside
+Tier 2 isolated environments. The bootstrap is a one-time cost per architecture.
 
 ```sh
 # Normal development — no bootstrap needed
@@ -283,7 +282,7 @@ isolation) for all operations that need pseudo-root access. Inside a user
 namespace, the process sees itself as uid 0 and can perform all root-like
 filesystem operations — no LD_PRELOAD, no daemon, no database.
 
-### How Image Recipes Use This
+### How Image Units Use This
 
 ```sh
 # Image assembly inside a user namespace
@@ -325,7 +324,7 @@ rootfs partitions), `yoe` can use **systemd-repart** as a complementary tool.
 Since Yoe-NG already uses systemd, `systemd-repart` is a natural fit:
 
 - Declarative partition definitions (aligns with the partition definitions in
-  image recipes).
+  image units).
 - Handles GPT, MBR, filesystem creation, and image sizing.
 - Runs unprivileged with user namespaces.
 - Maintained by the systemd project.
@@ -343,18 +342,18 @@ First time setup (only requires yoe binary + git + docker/podman):
   yoe build --all            ← auto-builds container on first run, then builds
 
 Day-to-day development:
-  $EDITOR recipes/myapp.star
+  $EDITOR units/myapp.star
   yoe build myapp            ← builds in isolated bwrap sandbox
   yoe build base-image       ← assembles rootfs with apk
   yoe flash base-image /dev/sdX
 
 Adding a host tool:
-  $EDITOR recipes/cmake.star ← write a recipe for the tool
+  $EDITOR units/cmake.star ← write a unit for the tool
   yoe build cmake            ← produces cmake.apk
-  (cmake is now available as a build dependency for other recipes)
+  (cmake is now available as a build dependency for other units)
 
 Updating the base toolchain:
-  yoe build --force gcc      ← rebuild gcc recipe
+  yoe build --force gcc      ← rebuild gcc unit
   yoe build --all            ← rebuild everything against new gcc
 ```
 
@@ -378,13 +377,13 @@ $YOE_CACHE/
 │   │   └── 34/567890...abcd.git/       # bare git repo, keyed by url#ref hash
 │   └── packages/
 │       ├── x86_64/
-│       │   ├── a1/b2c3d4...e5f6.apk    # built .apk, keyed by recipe input hash
+│       │   ├── a1/b2c3d4...e5f6.apk    # built .apk, keyed by unit input hash
 │       │   └── 78/90abcd...1234.apk
 │       └── aarch64/
 │           └── ...
 ├── index/
 │   ├── sources.json                     # URL → content hash mapping
-│   └── packages.json                    # recipe name+version → input hash mapping
+│   └── packages.json                    # unit name+version → input hash mapping
 └── tmp/                                 # atomic writes land here first
 ```
 
@@ -393,13 +392,13 @@ $YOE_CACHE/
 - **Two-character prefix directories** (like Git) prevent any single directory
   from accumulating millions of entries.
 - **Sources are keyed by content hash** — the SHA256 of the actual file, which
-  recipes already declare in their `sha256` field. Two different URLs serving
+  units already declare in their `sha256` field. Two different URLs serving
   identical tarballs share one cache entry.
 - **Git sources are keyed by `sha256(url + "#" + ref)`** — since a git repo is a
   directory (not a single file), content-addressing isn't practical. The URL+ref
   key ensures different tags/branches get separate clones.
-- **Packages are keyed by recipe input hash** — the same hash computed by
-  `internal/resolve/hash.go` from recipe fields, source hash, dependency hashes,
+- **Packages are keyed by unit input hash** — the same hash computed by
+  `internal/resolve/hash.go` from unit fields, source hash, dependency hashes,
   and architecture. This is the Nix-like property: if the inputs haven't
   changed, the cached output is valid.
 - **Index files** provide human-readable reverse lookups (hash → name) for
@@ -411,13 +410,13 @@ $YOE_CACHE/
 ```
 yoe build openssh
   │
-  ├─ 1. Resolve DAG, compute input hashes for all recipes
+  ├─ 1. Resolve DAG, compute input hashes for all units
   │     (internal/resolve/hash.go — already implemented)
   │
-  ├─ 2. For each recipe in topological order:
+  ├─ 2. For each unit in topological order:
   │     │
   │     ├─ Check local object store: objects/packages/<arch>/<hash>.apk
-  │     │   Hit → publish to build/repo/, skip to next recipe
+  │     │   Hit → publish to build/repo/, skip to next unit
   │     │
   │     ├─ Check remote cache: GET s3://bucket/packages/<arch>/<hash>.apk
   │     │   Hit → download to local object store, publish to repo, skip
@@ -425,10 +424,10 @@ yoe build openssh
   │     ├─ Cache miss → need to build:
   │     │   │
   │     │   ├─ Check source cache: objects/sources/<hash>.<ext>
-  │     │   │   Hit → extract to build/<recipe>/src/
+  │     │   │   Hit → extract to build/<unit>/src/
   │     │   │   Miss → download, verify SHA256, store in object store
   │     │   │
-  │     │   ├─ Build recipe (sandbox or direct)
+  │     │   ├─ Build unit (sandbox or direct)
   │     │   │
   │     │   ├─ Package output as .apk
   │     │   │
@@ -438,22 +437,22 @@ yoe build openssh
   │     │   │
   │     │   └─ Publish .apk to build/repo/ for image assembly
   │     │
-  │     └─ Next recipe
+  │     └─ Next unit
   │
-  └─ 3. Assemble image (if target is an image recipe)
+  └─ 3. Assemble image (if target is an image unit)
 ```
 
 The critical property: **a cache hit on a package skips the entire build,
 including source download.** This is why CI builds are fast — most packages come
-from the remote cache, and only the changed recipe (plus anything that
+from the remote cache, and only the changed unit (plus anything that
 transitively depends on it) actually builds.
 
 ### Cache Key Computation
 
-The cache key for a recipe is computed by `internal/resolve/hash.go`. It is a
+The cache key for a unit is computed by `internal/resolve/hash.go`. It is a
 SHA256 hash of:
 
-- Recipe identity: name, version, class
+- Unit identity: name, version, class
 - Architecture
 - Source: URL, SHA256, tag, branch, patches
 - Build configuration: build steps, configure args, Go package
@@ -465,7 +464,7 @@ every package that depends on `glibc`, which all get new hashes, which all
 become cache misses. This is automatic — there are no stale entries, only unused
 ones.
 
-For image recipes, the hash also includes the package list, hostname, timezone,
+For image units, the hash also includes the package list, hostname, timezone,
 locale, and service list.
 
 ### Cache Levels
@@ -515,8 +514,8 @@ S3 API, and works in air-gapped environments.
 
 |                   | Nix                          | Yocto sstate               | Yoe-NG                          |
 | ----------------- | ---------------------------- | -------------------------- | ------------------------------- |
-| Cache granularity | Per derivation output        | Per task                   | Per recipe                      |
-| Key computation   | Full derivation hash         | Task hash + signatures     | Recipe input hash (SHA256)      |
+| Cache granularity | Per derivation output        | Per task                   | Per unit                        |
+| Key computation   | Full derivation hash         | Task hash + signatures     | Unit input hash (SHA256)        |
 | Object size       | Closures (can be 1GB+)       | Individual task outputs    | Single `.apk` file              |
 | Remote backend    | Cachix, nix-serve, S3        | sstate-mirror (HTTP/S3)    | Any S3-compatible               |
 | Setup complexity  | Moderate (Cachix simplifies) | High (mirrors, hashequiv)  | Low (just a bucket URL)         |
@@ -544,7 +543,7 @@ wheels) have their own download caches. Yoe-NG shares these across builds:
 
 These caches are **not** content-addressed by Yoe-NG — they are managed by the
 language toolchains themselves. Yoe-NG ensures the cache directories persist
-across builds and are shared across recipes that use the same language.
+across builds and are shared across units that use the same language.
 
 ### Cache Signing and Verification
 
@@ -580,16 +579,16 @@ Build matrix:
   yoe build base-image --machine beaglebone-black
   yoe build dev-image --machine beaglebone-black
   yoe build production-image --machine raspberrypi4
-  yoe build --all --type image   ← builds all image recipes for all machines
+  yoe build --all --type image   ← builds all image units for all machines
 ```
 
 ### Package Sharing Across Targets
 
-Because recipes produce architecture-specific `.apk` packages that live in a
+Because units produce architecture-specific `.apk` packages that live in a
 shared repository, packages built for one machine are reused by any other
 machine with the same architecture. Building `openssh` for the BeagleBone also
 satisfies the Raspberry Pi — both are `aarch64` and produce identical packages
-(same recipe, same source, same arch flags → same cache key).
+(same unit, same source, same arch flags → same cache key).
 
 This means a multi-machine project does **not** rebuild the world for each
 board. Only machine-specific packages (kernel, bootloader, device trees) are

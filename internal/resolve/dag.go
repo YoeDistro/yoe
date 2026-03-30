@@ -8,14 +8,14 @@ import (
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
-// DAG represents the dependency graph of all recipes in a project.
+// DAG represents the dependency graph of all units in a project.
 type DAG struct {
 	Nodes map[string]*Node
 }
 
-// Node represents a recipe in the dependency graph.
+// Node represents a unit in the dependency graph.
 type Node struct {
-	Recipe *yoestar.Recipe
+	Unit *yoestar.Unit
 	Deps   []string // build-time dependency names
 	Rdeps  []string // reverse dependencies (computed)
 }
@@ -24,16 +24,16 @@ type Node struct {
 func BuildDAG(proj *yoestar.Project) (*DAG, error) {
 	dag := &DAG{Nodes: make(map[string]*Node)}
 
-	// Add all recipes as nodes.
-	// For image recipes, Packages are also dependencies (they must be built
+	// Add all units as nodes.
+	// For image units, Artifacts are also dependencies (they must be built
 	// before the image can be assembled).
-	for name, recipe := range proj.Recipes {
-		deps := recipe.Deps
-		if recipe.Class == "image" {
-			deps = append(append([]string{}, deps...), recipe.Packages...)
+	for name, unit := range proj.Units {
+		deps := unit.Deps
+		if unit.Class == "image" {
+			deps = append(append([]string{}, deps...), unit.Artifacts...)
 		}
 		dag.Nodes[name] = &Node{
-			Recipe: recipe,
+			Unit: unit,
 			Deps:   deps,
 		}
 	}
@@ -43,7 +43,7 @@ func BuildDAG(proj *yoestar.Project) (*DAG, error) {
 		for _, dep := range node.Deps {
 			target, ok := dag.Nodes[dep]
 			if !ok {
-				return nil, fmt.Errorf("recipe %q depends on %q, which does not exist", name, dep)
+				return nil, fmt.Errorf("unit %q depends on %q, which does not exist", name, dep)
 			}
 			target.Rdeps = append(target.Rdeps, name)
 		}
@@ -57,7 +57,7 @@ func BuildDAG(proj *yoestar.Project) (*DAG, error) {
 	return dag, nil
 }
 
-// TopologicalSort returns recipes in build order (dependencies before dependents).
+// TopologicalSort returns units in build order (dependencies before dependents).
 // Returns an error if the graph contains a cycle.
 func (d *DAG) TopologicalSort() ([]string, error) {
 	// Kahn's algorithm
@@ -120,10 +120,10 @@ func (d *DAG) TopologicalSort() ([]string, error) {
 	return order, nil
 }
 
-// DepsOf returns the transitive dependencies of a recipe (not including itself).
+// DepsOf returns the transitive dependencies of a unit (not including itself).
 func (d *DAG) DepsOf(name string) ([]string, error) {
 	if _, ok := d.Nodes[name]; !ok {
-		return nil, fmt.Errorf("recipe %q not found", name)
+		return nil, fmt.Errorf("unit %q not found", name)
 	}
 
 	visited := make(map[string]bool)
@@ -149,7 +149,7 @@ func (d *DAG) DepsOf(name string) ([]string, error) {
 // RdepsOf returns the transitive reverse dependencies (what depends on name).
 func (d *DAG) RdepsOf(name string) ([]string, error) {
 	if _, ok := d.Nodes[name]; !ok {
-		return nil, fmt.Errorf("recipe %q not found", name)
+		return nil, fmt.Errorf("unit %q not found", name)
 	}
 
 	visited := make(map[string]bool)

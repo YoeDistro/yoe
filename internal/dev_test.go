@@ -10,7 +10,7 @@ import (
 )
 
 func TestDevExtract(t *testing.T) {
-	// Create a temp project with a recipe
+	// Create a temp project with a unit
 	dir := t.TempDir()
 	setupDevTestProject(t, dir)
 
@@ -142,16 +142,16 @@ func TestDevStatus(t *testing.T) {
 
 func setupDevTestProject(t *testing.T, dir string) {
 	t.Helper()
-	// Create a minimal project with an openssh recipe
-	os.MkdirAll(filepath.Join(dir, "recipes"), 0755)
+	// Create a minimal project with an openssh unit
+	os.MkdirAll(filepath.Join(dir, "units"), 0755)
 	os.MkdirAll(filepath.Join(dir, "machines"), 0755)
 
 	os.WriteFile(filepath.Join(dir, "PROJECT.star"), []byte(
 		`project(name = "test", version = "0.1.0")`+"\n",
 	), 0644)
 
-	os.WriteFile(filepath.Join(dir, "recipes", "openssh.star"), []byte(
-		`package(name = "openssh", version = "9.6p1", source = "https://example.com/openssh.tar.gz", build = ["make"])`+"\n",
+	os.WriteFile(filepath.Join(dir, "units", "openssh.star"), []byte(
+		`unit(name = "openssh", version = "9.6p1", source = "https://example.com/openssh.tar.gz", build = ["make"])`+"\n",
 	), 0644)
 }
 

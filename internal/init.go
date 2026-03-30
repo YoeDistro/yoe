@@ -11,7 +11,7 @@ func RunInit(projectDir string, machine string) error {
 		return fmt.Errorf("project already exists at %s (PROJECT.star found)", projectDir)
 	}
 
-	dirs := []string{"machines", "recipes", "classes", "overlays"}
+	dirs := []string{"machines", "units", "classes", "overlays"}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(filepath.Join(projectDir, dir), 0755); err != nil {
 			return fmt.Errorf("creating directory %s: %w", dir, err)
@@ -34,7 +34,7 @@ func RunInit(projectDir string, machine string) error {
     layers = [
         layer("git@github.com:YoeDistro/yoe-ng.git",
               ref = "main",
-              path = "layers/recipes-core"),
+              path = "layers/units-core"),
     ],
 )
 `, name, defaultMachine)
@@ -67,7 +67,7 @@ func createMachineFile(projectDir, name string) error {
 		content = fmt.Sprintf(`machine(
     name = %q,
     arch = "x86_64",
-    kernel = kernel(recipe = "linux-qemu", cmdline = "console=ttyS0 root=/dev/vda1 rw"),
+    kernel = kernel(unit = "linux-qemu", cmdline = "console=ttyS0 root=/dev/vda1 rw"),
     qemu = qemu_config(machine = "q35", cpu = "host", memory = "1G", display = "none"),
 )
 `, name)
@@ -75,7 +75,7 @@ func createMachineFile(projectDir, name string) error {
 		content = fmt.Sprintf(`machine(
     name = %q,
     arch = "arm64",
-    kernel = kernel(recipe = "linux-qemu", cmdline = "console=ttyAMA0 root=/dev/vda1 rw"),
+    kernel = kernel(unit = "linux-qemu", cmdline = "console=ttyAMA0 root=/dev/vda1 rw"),
     qemu = qemu_config(machine = "virt", cpu = "host", memory = "1G", display = "none"),
 )
 `, name)
@@ -83,7 +83,7 @@ func createMachineFile(projectDir, name string) error {
 		content = fmt.Sprintf(`machine(
     name = %q,
     arch = "riscv64",
-    kernel = kernel(recipe = "linux-qemu", cmdline = "console=ttyS0 root=/dev/vda1 rw"),
+    kernel = kernel(unit = "linux-qemu", cmdline = "console=ttyS0 root=/dev/vda1 rw"),
     qemu = qemu_config(machine = "virt", cpu = "host", memory = "1G", display = "none"),
 )
 `, name)

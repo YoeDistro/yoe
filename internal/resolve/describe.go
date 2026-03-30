@@ -8,11 +8,11 @@ import (
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
-// Describe prints detailed information about a recipe.
+// Describe prints detailed information about a unit.
 func Describe(w io.Writer, proj *yoestar.Project, name string, arch string) error {
-	recipe, ok := proj.Recipes[name]
+	unit, ok := proj.Units[name]
 	if !ok {
-		return fmt.Errorf("recipe %q not found", name)
+		return fmt.Errorf("unit %q not found", name)
 	}
 
 	dag, err := BuildDAG(proj)
@@ -25,45 +25,45 @@ func Describe(w io.Writer, proj *yoestar.Project, name string, arch string) erro
 		return err
 	}
 
-	fmt.Fprintf(w, "Recipe:       %s\n", recipe.Name)
-	fmt.Fprintf(w, "Version:      %s\n", recipe.Version)
-	fmt.Fprintf(w, "Class:        %s\n", recipe.Class)
-	if recipe.Description != "" {
-		fmt.Fprintf(w, "Description:  %s\n", recipe.Description)
+	fmt.Fprintf(w, "Unit:         %s\n", unit.Name)
+	fmt.Fprintf(w, "Version:      %s\n", unit.Version)
+	fmt.Fprintf(w, "Class:        %s\n", unit.Class)
+	if unit.Description != "" {
+		fmt.Fprintf(w, "Description:  %s\n", unit.Description)
 	}
-	if recipe.License != "" {
-		fmt.Fprintf(w, "License:      %s\n", recipe.License)
+	if unit.License != "" {
+		fmt.Fprintf(w, "License:      %s\n", unit.License)
 	}
-	if recipe.Source != "" {
-		fmt.Fprintf(w, "Source:       %s\n", recipe.Source)
+	if unit.Source != "" {
+		fmt.Fprintf(w, "Source:       %s\n", unit.Source)
 	}
-	if recipe.SHA256 != "" {
-		fmt.Fprintf(w, "SHA256:       %s\n", recipe.SHA256)
+	if unit.SHA256 != "" {
+		fmt.Fprintf(w, "SHA256:       %s\n", unit.SHA256)
 	}
 
-	if len(recipe.Deps) > 0 {
-		fmt.Fprintf(w, "Build deps:   %s\n", strings.Join(recipe.Deps, ", "))
+	if len(unit.Deps) > 0 {
+		fmt.Fprintf(w, "Build deps:   %s\n", strings.Join(unit.Deps, ", "))
 	}
-	if len(recipe.RuntimeDeps) > 0 {
-		fmt.Fprintf(w, "Runtime deps: %s\n", strings.Join(recipe.RuntimeDeps, ", "))
+	if len(unit.RuntimeDeps) > 0 {
+		fmt.Fprintf(w, "Runtime deps: %s\n", strings.Join(unit.RuntimeDeps, ", "))
 	}
 
 	fmt.Fprintf(w, "Input hash:   %s\n", hashes[name])
 	fmt.Fprintf(w, "Architecture: %s\n", arch)
 
-	if recipe.Class == "image" {
-		if len(recipe.Packages) > 0 {
-			fmt.Fprintf(w, "Packages:     %s\n", strings.Join(recipe.Packages, ", "))
+	if unit.Class == "image" {
+		if len(unit.Artifacts) > 0 {
+			fmt.Fprintf(w, "Artifacts:     %s\n", strings.Join(unit.Artifacts, ", "))
 		}
-		if recipe.Hostname != "" {
-			fmt.Fprintf(w, "Hostname:     %s\n", recipe.Hostname)
+		if unit.Hostname != "" {
+			fmt.Fprintf(w, "Hostname:     %s\n", unit.Hostname)
 		}
 	}
 
 	return nil
 }
 
-// Refs prints what depends on a given recipe (reverse dependencies).
+// Refs prints what depends on a given unit (reverse dependencies).
 func Refs(w io.Writer, proj *yoestar.Project, name string, direct bool) error {
 	dag, err := BuildDAG(proj)
 	if err != nil {
@@ -71,7 +71,7 @@ func Refs(w io.Writer, proj *yoestar.Project, name string, direct bool) error {
 	}
 
 	if _, ok := dag.Nodes[name]; !ok {
-		return fmt.Errorf("recipe %q not found", name)
+		return fmt.Errorf("unit %q not found", name)
 	}
 
 	if direct {
@@ -82,7 +82,7 @@ func Refs(w io.Writer, proj *yoestar.Project, name string, direct bool) error {
 		}
 		fmt.Fprintf(w, "Direct dependents of %s:\n", name)
 		for _, rdep := range node.Rdeps {
-			r := proj.Recipes[rdep]
+			r := proj.Units[rdep]
 			fmt.Fprintf(w, "  %s [%s]\n", rdep, r.Class)
 		}
 	} else {
@@ -96,7 +96,7 @@ func Refs(w io.Writer, proj *yoestar.Project, name string, direct bool) error {
 		}
 		fmt.Fprintf(w, "All dependents of %s (transitive):\n", name)
 		for _, rdep := range rdeps {
-			r := proj.Recipes[rdep]
+			r := proj.Units[rdep]
 			fmt.Fprintf(w, "  %s [%s]\n", rdep, r.Class)
 		}
 	}
@@ -125,7 +125,7 @@ func Graph(w io.Writer, proj *yoestar.Project, format string, filter string) err
 func graphText(w io.Writer, dag *DAG, order []string, filter string) error {
 	for _, name := range order {
 		if filter != "" && name != filter {
-			// If filtering, only show the filtered recipe and its deps
+			// If filtering, only show the filtered unit and its deps
 			deps, _ := dag.DepsOf(filter)
 			found := name == filter
 			for _, d := range deps {
@@ -163,9 +163,9 @@ func graphDOT(w io.Writer, dag *DAG, order []string, filter string) error {
 
 	for _, name := range nodes {
 		node := dag.Nodes[name]
-		label := fmt.Sprintf("%s\\n%s", name, node.Recipe.Version)
+		label := fmt.Sprintf("%s\\n%s", name, node.Unit.Version)
 		shape := "box"
-		if node.Recipe.Class == "image" {
+		if node.Unit.Class == "image" {
 			shape = "box3d"
 		}
 		fmt.Fprintf(w, "  %q [label=%q, shape=%s];\n", name, label, shape)

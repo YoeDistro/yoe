@@ -520,11 +520,11 @@ import (
 	yoe "github.com/YoeDistro/yoe-ng/internal"
 )
 
-// SandboxConfig defines the bubblewrap sandbox for a recipe build.
+// SandboxConfig defines the bubblewrap sandbox for a unit build.
 type SandboxConfig struct {
 	// BuildRoot is the Tier 1 build root (ro-bind mounted as /)
 	BuildRoot string
-	// SrcDir is the recipe source directory (bind mounted as /build/src)
+	// SrcDir is the unit source directory (bind mounted as /build/src)
 	SrcDir string
 	// DestDir is the staging directory (bind mounted as /build/destdir)
 	DestDir string
@@ -639,7 +639,7 @@ func SysrootDir(projectDir string) string {
 	return filepath.Join(projectDir, "build", "sysroot")
 }
 
-// InstallToSysroot copies a recipe's destdir contents into the shared sysroot.
+// InstallToSysroot copies a unit's destdir contents into the shared sysroot.
 func InstallToSysroot(destDir, sysrootDir string) error {
 	if err := os.MkdirAll(sysrootDir, 0755); err != nil {
 		return err
@@ -677,7 +677,7 @@ func Arch() string {
 	}
 }
 
-// RecipeBuildDir returns the build directory for a recipe.
+// RecipeBuildDir returns the build directory for a unit.
 func RecipeBuildDir(projectDir, recipeName string) string {
 	return filepath.Join(projectDir, "build", recipeName)
 }
@@ -929,7 +929,7 @@ Replace the build loop in `Stage0` (lines 80-85):
 				ProjectDir: projectDir,
 			}
 			if err := build.RunSimple(cfg, cmd); err != nil {
-				return fmt.Errorf("stage0 %s step %d: %w", recipe.Name, i+1, err)
+				return fmt.Errorf("stage0 %s step %d: %w", unit.Name, i+1, err)
 			}
 		}
 ```
@@ -951,7 +951,7 @@ check -- always use `RunInSandbox`:
 				ProjectDir: projectDir,
 			}
 			if err := build.RunInSandbox(cfg, cmd); err != nil {
-				return fmt.Errorf("stage1 %s step %d: %w", recipe.Name, i+1, err)
+				return fmt.Errorf("stage1 %s step %d: %w", unit.Name, i+1, err)
 			}
 		}
 ```
@@ -1037,7 +1037,7 @@ Remove extractPackages fallback -- apk always available in container."
 Update `GenerateDiskImage` signature to accept `projectDir`:
 
 ```go
-func GenerateDiskImage(rootfs, imgPath string, recipe *yoestar.Recipe,
+func GenerateDiskImage(rootfs, imgPath string, unit *yoestar.Unit,
 	projectDir string, w io.Writer) error {
 ```
 
@@ -1106,7 +1106,7 @@ Add `yoe "github.com/YoeDistro/yoe-ng/internal"` import.
 Update `generateImage` call in `Assemble`:
 
 ```go
-	if err := GenerateDiskImage(rootfs, imgPath, recipe, projectDir, w); err != nil {
+	if err := GenerateDiskImage(rootfs, imgPath, unit, projectDir, w); err != nil {
 ```
 
 - [ ] **Step 3: Verify compilation**
@@ -1144,7 +1144,7 @@ uses NoUser for root access (losetup/mount)."
 - [ ] **Step 1: Add host-first QEMU fallback**
 
 In `RunQEMU`, try the host QEMU binary first. If not found, fall back to
-container. After the existing recipe/machine/image lookup, replace the command
+container. After the existing unit/machine/image lookup, replace the command
 execution section:
 
 ```go

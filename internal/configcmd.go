@@ -19,7 +19,7 @@ func ShowConfig(dir string, w io.Writer) error {
 	fmt.Fprintf(w, "Repository: %s\n", proj.Repository.Path)
 	fmt.Fprintf(w, "Cache:      %s\n", proj.Cache.Path)
 	fmt.Fprintf(w, "Machines:   %d defined\n", len(proj.Machines))
-	fmt.Fprintf(w, "Recipes:    %d defined\n", len(proj.Recipes))
+	fmt.Fprintf(w, "Units:    %d defined\n", len(proj.Units))
 
 	if len(proj.Machines) > 0 {
 		fmt.Fprintln(w, "\nMachines:")
@@ -28,9 +28,9 @@ func ShowConfig(dir string, w io.Writer) error {
 		}
 	}
 
-	if len(proj.Recipes) > 0 {
-		fmt.Fprintln(w, "\nRecipes:")
-		for name, r := range proj.Recipes {
+	if len(proj.Units) > 0 {
+		fmt.Fprintln(w, "\nUnits:")
+		for name, r := range proj.Units {
 			fmt.Fprintf(w, "  %-20s [%s] %s\n", name, r.Class, r.Version)
 		}
 	}

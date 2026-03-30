@@ -12,7 +12,7 @@ type Engine struct {
 	mu        sync.Mutex
 	project   *Project
 	machines  map[string]*Machine
-	recipes   map[string]*Recipe
+	units     map[string]*Unit
 	commands  map[string]*Command
 	layerInfo *LayerInfo
 
@@ -29,14 +29,14 @@ type Engine struct {
 func NewEngine() *Engine {
 	return &Engine{
 		machines: make(map[string]*Machine),
-		recipes:  make(map[string]*Recipe),
+		units:    make(map[string]*Unit),
 		commands: make(map[string]*Command),
 	}
 }
 
 func (e *Engine) Project() *Project              { return e.project }
 func (e *Engine) Machines() map[string]*Machine   { return e.machines }
-func (e *Engine) Recipes() map[string]*Recipe     { return e.recipes }
+func (e *Engine) Units() map[string]*Unit     { return e.units }
 func (e *Engine) Commands() map[string]*Command   { return e.commands }
 func (e *Engine) LayerInfo() *LayerInfo           { return e.layerInfo }
 func (e *Engine) Globals() starlark.StringDict    { return e.globals }

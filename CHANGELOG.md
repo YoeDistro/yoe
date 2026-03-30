@@ -8,6 +8,31 @@ and this project adheres to
 
 ## [Unreleased]
 
+**BREAKING CHANGE** - due to rename, recommend deleting any external projects
+and starting over.
+
+- **Terminology rename** — "recipe" is now "unit" and "package" is now
+  "artifact" throughout the codebase. The Starlark `package()` function is now
+  `unit()`, the image field `packages` is now `artifacts`, and the `recipes/`
+  directory in layers is now `units/`. The `recipes-core` layer is now
+  `units-core`. The Go `internal/packaging` package is now `internal/artifact`.
+- **`yoe log`** — view build logs from the command line. Shows the most recent
+  build log by default, or a specific unit's log with `yoe log <unit>`. Use `-e`
+  to open the log in `$EDITOR`.
+- **`yoe diagnose`** — launch Claude Code with the `/diagnose` skill to
+  analyze a build failure. Uses the most recent build log by default, or a
+  specific unit's log with `yoe diagnose <unit>`.
+- **TUI rewrite** — `yoe` with no args launches an interactive unit list with
+  inline build status (cached/waiting/building/failed). Builds run in-process
+  via `build.BuildUnits()` with real-time status events — dependencies show as
+  yellow "waiting", then flash green as they build. Features: background builds
+  (`b`/`B`), edit unit in `$EDITOR` (`e`), view build log (`l`), diagnose with
+  Claude (`d`), add unit with Claude (`a`), clean with confirmation (`c`/`C`),
+  search/filter (`/`), and a split detail view showing executor output and build
+  log tail. The `yoe tui` subcommand has been removed.
+- **Build events** — `build.Options.OnEvent` callback notifies callers (e.g.,
+  the TUI) as each unit transitions through cached/building/done/failed states.
+
 ## [0.2.10] - 2026-03-30
 
 - **`yoe container shell`** — interactive bash shell inside the build container

@@ -1,7 +1,7 @@
 # The `yoe` Tool
 
 `yoe` is the single CLI tool that drives all Yoe-NG workflows — building
-packages and images from recipes, managing caches and source downloads, and
+packages and images from units, managing caches and source downloads, and
 flashing devices. It is a statically-linked Go binary with no runtime
 dependencies.
 
@@ -22,8 +22,9 @@ workstation, run on an ARM build server.
 ## Command Overview
 
 ```
+yoe                 Launch the interactive TUI
 yoe init            Create a new Yoe-NG project
-yoe build           Build recipes (packages and images)
+yoe build           Build units (packages and images)
 yoe dev             Manage source modifications (extract, diff, status)
 yoe flash           Write an image to a device/SD card
 yoe run             Run an image in QEMU
@@ -32,10 +33,11 @@ yoe repo            Manage the local apk package repository
 yoe cache           Manage the build cache (local and remote)
 yoe source          Download and manage source archives/repos
 yoe config          View and edit project configuration
-yoe desc            Describe a recipe, package, or target
+yoe desc            Describe a unit, package, or target
 yoe refs            Show reverse dependencies
 yoe graph           Visualize the dependency DAG
-yoe tui             Launch the interactive TUI
+yoe log             Show build log (most recent or specific unit)
+yoe diagnose        Launch Claude Code to diagnose a build failure
 yoe clean           Remove build artifacts
 yoe container       Manage the build container (build, status)
 ```
@@ -62,7 +64,7 @@ Creates:
 my-project/
 ├── PROJECT.star
 ├── machines/
-├── recipes/
+├── units/
 ├── classes/
 └── overlays/
 ```
@@ -75,32 +77,32 @@ yoe init my-project --machine beaglebone-black
 
 ### `yoe build`
 
-Builds one or more recipes. Package recipes (`package()`, `autotools()`, etc.)
-produce `.apk` packages and publish them to the local repository. Image recipes
+Builds one or more units. Package units (`unit()`, `autotools()`, etc.) produce
+`.apk` packages and publish them to the local repository. Image units
 (`image()`) assemble a root filesystem and produce a disk image. The class
 function used in the `.star` file determines the behavior — the command is the
 same for both.
 
 ```sh
-# Build a single package recipe
+# Build a single package unit
 yoe build openssh
 
-# Build multiple recipes
+# Build multiple units
 yoe build openssh zlib openssl
 
-# Build an image recipe (assembles rootfs, produces disk image)
+# Build an image unit (assembles rootfs, produces disk image)
 yoe build base-image
 
 # Build an image for a specific machine
 yoe build base-image --machine raspberrypi4
 
-# Build all recipes (packages and images)
+# Build all units (packages and images)
 yoe build --all
 
-# Build all image recipes for all machines (full matrix)
+# Build all image units for all machines (full matrix)
 yoe build --all --class image
 
-# Build a recipe and all its dependencies
+# Build a unit and all its dependencies
 yoe build --with-deps myapp
 
 # Rebuild even if the cache is fresh
@@ -128,13 +130,13 @@ up front rather than mid-build.
 
 1. **Sync layers** — fetch or update external layers declared in `PROJECT.star`
    (skipped if already up to date). See `yoe layer sync`.
-2. **Evaluate Starlark** — load and evaluate all `.star` recipe files (including
+2. **Evaluate Starlark** — load and evaluate all `.star` unit files (including
    those from layers) to produce the set of build targets. Each class function
-   call (`package()`, `autotools()`, `image()`, etc.) registers a target.
+   call (`unit()`, `autotools()`, `image()`, etc.) registers a target.
 3. **Resolve dependencies** — topologically sort the build order from declared
-   dependencies. Validate that all referenced recipes exist and the graph is
+   dependencies. Validate that all referenced units exist and the graph is
    acyclic. **If any errors are found, stop here** — no partial builds.
-4. **Check cache** — compute a content hash of the recipe + source + build
+4. **Check cache** — compute a content hash of the unit + source + build
    dependencies. If a cached `.apk` with that hash exists (locally or in a
    remote cache), skip the build.
 5. **Fetch source** — download the source archive or clone the git repo (see
@@ -149,11 +151,11 @@ up front rather than mid-build.
    - `$NPROC` — number of available CPU cores
    - `$ARCH` — target architecture
 8. **Package** — collect files from `$DESTDIR`, generate `.PKGINFO` from the
-   recipe metadata, and create the `.apk` archive.
+   unit metadata, and create the `.apk` archive.
 9. **Publish** — add the `.apk` to the local repository and update the repo
    index.
 
-**For image recipes** (`image()` class), steps 5-9 are replaced with image
+**For image units** (`image()` class), steps 5-9 are replaced with image
 assembly:
 
 1. **Sync layers** — same as above.
@@ -167,7 +169,7 @@ assembly:
    repository to install all declared packages. apk handles dependency
    resolution.
 8. **Apply configuration** — set hostname, timezone, locale, enable systemd
-   services per the image recipe's configuration.
+   services per the image unit's configuration.
 9. **Apply overlays** — copy files from `overlays/` into the rootfs.
 10. **Install kernel + bootloader** — build (or fetch from cache) the kernel and
     bootloader per the machine definition, install into the rootfs/boot
@@ -191,7 +193,7 @@ Writes a built image to a block device or SD card.
 # Flash to SD card (auto-detects the most recent image build)
 yoe flash /dev/sdX
 
-# Flash a specific image recipe's output
+# Flash a specific image unit's output
 yoe flash base-image /dev/sdX
 
 # Flash for a specific machine
@@ -215,7 +217,7 @@ hardware or native CI runners.
 # Run the most recently built image (auto-detects machine/image)
 yoe run
 
-# Run a specific image recipe
+# Run a specific image unit
 yoe run dev-image --machine qemu-x86_64
 
 # Forward host port 2222 to guest SSH (port 22)
@@ -258,7 +260,7 @@ machine(
     name = "qemu-x86_64",
     arch = "x86_64",
     kernel = kernel(
-        recipe = "linux-qemu",
+        unit = "linux-qemu",
         cmdline = "console=ttyS0 root=/dev/vda2 rw",
     ),
     qemu = qemu_config(
@@ -279,7 +281,7 @@ architecture.
 ### `yoe layer`
 
 Manages external layers — the Git repositories declared in `PROJECT.star` that
-provide recipes, classes, and machine definitions.
+provide units, classes, and machine definitions.
 
 ```sh
 # Fetch/update all layers to the refs declared in PROJECT.star
@@ -325,7 +327,7 @@ entirely and use the local directory. `yoe layer list` shows these as
 
 ```
 Layer                              Ref        Status
-@recipes-core                      v1.0.0     up to date
+@units-core                      v1.0.0     up to date
 @vendor-bsp-imx8                   v2.1.0     up to date
   └─ @hal-common                   v1.3.0     up to date (transitive)
   └─ @firmware-imx                 v5.4       up to date (transitive)
@@ -368,7 +370,7 @@ yoe cache status
 # List cached packages (local)
 yoe cache list
 
-# Show what's cached for a specific recipe
+# Show what's cached for a specific unit
 yoe cache list openssh
 
 # Push locally-built packages to the remote cache
@@ -407,10 +409,10 @@ Manages source downloads. Sources are cached locally to avoid repeated
 downloads.
 
 ```sh
-# Download sources for a recipe
+# Download sources for a unit
 yoe source fetch openssh
 
-# Download sources for all recipes
+# Download sources for all units
 yoe source fetch --all
 
 # List cached sources
@@ -446,15 +448,15 @@ yoe config resolve --machine beaglebone-black --image base
 
 ### `yoe desc`
 
-Describes a recipe, showing its resolved configuration, dependencies, build
-inputs hash, and package output. Inspired by GN's `gn desc`.
+Describes a unit, showing its resolved configuration, dependencies, build inputs
+hash, and package output. Inspired by GN's `gn desc`.
 
 ```sh
-# Show full details of a recipe
+# Show full details of a unit
 yoe desc openssh
 
 # Example output:
-#   Recipe:       openssh
+#   Unit:       openssh
 #   Version:      9.6p1
 #   Source:       https://cdn.openbsd.org/.../openssh-9.6p1.tar.gz
 #   Build deps:   zlib, openssl
@@ -463,7 +465,7 @@ yoe desc openssh
 #   Cached .apk:  yes (openssh-9.6p1-r0.apk)
 #   Config:       CFLAGS=-O2 -march=armv8-a (propagated from machine)
 
-# Show only the resolved config for a recipe
+# Show only the resolved config for a unit
 yoe desc openssh --config
 
 # Show the build inputs that contribute to the hash
@@ -472,7 +474,7 @@ yoe desc openssh --inputs
 
 ### `yoe refs`
 
-Shows reverse dependencies — what recipes or images depend on a given recipe.
+Shows reverse dependencies — what units or images depend on a given unit.
 Inspired by GN's `gn refs`.
 
 ```sh
@@ -508,39 +510,118 @@ yoe graph
 # Output DOT format for graphviz
 yoe graph --format dot | dot -Tpng -o deps.png
 
-# Show graph for a single recipe and its deps
+# Show graph for a single unit and its deps
 yoe graph openssh
 
-# Show only recipes that need rebuilding
+# Show only units that need rebuilding
 yoe graph --stale
 ```
 
-### `yoe tui`
+### `yoe` (no args)
 
-Launches an interactive terminal UI for common workflows.
+Running `yoe` with no arguments launches an interactive terminal UI showing all
+units with their build status.
 
 ```
-┌─ Yoe-NG ─────────────────────────────────────────────┐
-│                                                       │
-│  Machine: beaglebone-black    Image: base             │
-│                                                       │
-│  [B] Build packages                                   │
-│  [I] Build image                                      │
-│  [F] Flash to device                                  │
-│  [R] Repository status                                │
-│  [M] Select machine                                   │
-│  [C] Configuration                                    │
-│  [L] Build log                                        │
-│                                                       │
-│  Packages: 23 built, 2 outdated                       │
-│  Last image: 2026-03-19 14:32                         │
-│                                                       │
-└───────────────────────────────────────────────────────┘
+  Yoe-NG  Machine: qemu-x86_64  Image: base-image
+
+  NAME                         CLASS        STATUS
+→ base-files                   unit         ● cached
+  busybox                      unit         ● cached
+  linux                        unit         ▌building...
+  musl                         unit         ● waiting
+  ncurses                      autotools    ● cached
+  openssh                      unit         ● failed
+  openssl                      autotools    ● cached
+  util-linux                   autotools
+  zlib                         autotools    ● cached
+
+  b build  e edit  d diagnose  l log  c clean  / search  q quit
 ```
 
-The TUI is built with [Bubble Tea](https://github.com/charmbracelet/bubbletea)
-and provides real-time build progress, log streaming, and interactive selection
-of machines/images/recipes.
+#### Status indicators
+
+| Indicator        | Color          | Meaning                      |
+| ---------------- | -------------- | ---------------------------- |
+| (none)           | —              | Never built                  |
+| `● cached`       | dim/gray       | Built and cached             |
+| `● waiting`      | yellow         | Queued, deps building first  |
+| `▌building...`   | flashing green | Actively compiling           |
+| `● failed`       | red            | Last build failed            |
+
+When you build a unit, its dependencies appear as "waiting" (yellow), then
+transition to "building" (flashing green) as the executor reaches them. Multiple
+deps can flash green simultaneously.
+
+#### Key bindings (unit list)
+
+| Key     | Action                                               |
+| ------- | ---------------------------------------------------- |
+| `b`     | Build selected unit in background                    |
+| `e`     | Open unit's `.star` file in `$EDITOR`                |
+| `d`     | Launch `claude diagnose` for the unit                |
+| `l`     | Open unit's build log in `$EDITOR`                   |
+| `a`     | Launch `claude /new-unit`                            |
+| `c`     | Clean selected unit's build artifacts (with confirm) |
+| `/`     | Search/filter units by name                          |
+| `Enter` | Show detail view (build output + log tail)           |
+| `B`     | Build all units in background                        |
+| `C`     | Clean all build artifacts (with confirm)             |
+| `j/k`   | Navigate up/down                                     |
+| `q`     | Quit                                                 |
+
+#### Detail view
+
+Pressing Enter on a unit shows a split-pane detail view:
+
+- **BUILD OUTPUT** (top) — executor progress: dependency resolution, cache hits,
+  build status for each dep
+- **BUILD LOG** (bottom) — tail of the unit's `build.log`, updated in real time
+  during a build
+
+| Key   | Action                            |
+| ----- | --------------------------------- |
+| `Esc` | Return to unit list               |
+| `b`   | Build this unit in background     |
+| `d`   | Launch `claude diagnose`          |
+| `l`   | Open build log in `$EDITOR`       |
+
+#### Search
+
+Press `/` to enter search mode. Type to filter — only matching units are shown.
+Press Enter to accept the filter, Esc to cancel and show all units.
+
+Builds call `build.BuildUnits()` directly (in-process, no subprocess). The
+executor sends events to the TUI as each unit starts and finishes building.
+
+The TUI is built with [Bubble Tea](https://github.com/charmbracelet/bubbletea).
+
+### `yoe log`
+
+Shows a build log. With no arguments, shows the most recently modified build
+log. Specify a unit name to view that unit's log.
+
+```
+yoe log                  # show most recent build log
+yoe log openssl          # show openssl build log
+yoe log openssl -e       # open openssl build log in $EDITOR
+```
+
+The `-e` / `--edit` flag opens the log in your editor (defaults to `vi`).
+
+### `yoe diagnose`
+
+Launches Claude Code to diagnose a build failure. With no arguments, diagnoses
+the most recent build failure. Specify a unit name to diagnose that unit.
+
+```
+yoe diagnose             # diagnose most recent failure
+yoe diagnose util-linux  # diagnose util-linux build failure
+```
+
+Requires `claude` to be in your PATH. Claude Code reads the build log and
+iteratively identifies root causes, applies fixes, and rebuilds until the unit
+succeeds.
 
 ### Custom Commands
 
@@ -593,15 +674,15 @@ a command, it checks `commands/*.star` before printing "unknown command".
 Vendor BSP layers can ship custom commands (e.g., `flash-emmc`, `enter-dfu`)
 that become available when the layer is added to the project.
 
-**Key difference from recipe evaluation:** Recipe `.star` files are sandboxed —
-no I/O, deterministic. Command `.star` files have full I/O access via
-`ctx.shell()` because they are actions, not build definitions.
+**Key difference from unit evaluation:** Unit `.star` files are sandboxed — no
+I/O, deterministic. Command `.star` files have full I/O access via `ctx.shell()`
+because they are actions, not build definitions.
 
 ### `yoe dev`
 
-Work with recipe source code directly. Every recipe's build directory is a git
-repo — upstream source is committed with an `upstream` tag, and existing patches
-are applied as commits on top. Local edits are just git commits.
+Work with unit source code directly. Every unit's build directory is a git repo
+— upstream source is committed with an `upstream` tag, and existing patches are
+applied as commits on top. Local edits are just git commits.
 
 There is no "dev mode" to enter or exit. If the build directory has commits
 beyond `upstream`, `yoe build` uses them directly instead of re-fetching source.
@@ -622,25 +703,25 @@ yoe dev diff openssh
 # Extract commits as patch files
 yoe dev extract openssh
 # Writes patches/openssh/0001-fix-auth-timeout-handling.patch
-# Prints updated patches list for your recipe
+# Prints updated patches list for your unit
 
-# Check which recipes have local modifications
+# Check which units have local modifications
 yoe dev status
 ```
 
 **Subcommands:**
 
-| Subcommand                 | Description                                                                                     |
-| -------------------------- | ----------------------------------------------------------------------------------------------- |
-| `yoe dev extract <recipe>` | Run `git format-patch upstream..HEAD`, write to `patches/<recipe>/`, print updated patches list |
-| `yoe dev diff <recipe>`    | Show `git log upstream..HEAD` — your local commits                                              |
-| `yoe dev status`           | List all recipes with commits beyond upstream                                                   |
+| Subcommand               | Description                                                                                   |
+| ------------------------ | --------------------------------------------------------------------------------------------- |
+| `yoe dev extract <unit>` | Run `git format-patch upstream..HEAD`, write to `patches/<unit>/`, print updated patches list |
+| `yoe dev diff <unit>`    | Show `git log upstream..HEAD` — your local commits                                            |
+| `yoe dev status`         | List all units with commits beyond upstream                                                   |
 
 **Rebasing on upstream updates:**
 
 ```sh
-# Update recipe version
-$EDITOR recipes/openssh.star   # bump version to 9.7p1
+# Update unit version
+$EDITOR units/openssh.star   # bump version to 9.7p1
 
 # Rebuild fetches new source, applies patches via rebase
 yoe build openssh
@@ -670,7 +751,7 @@ yoe clean
 # Remove everything (build dirs, packages, sources)
 yoe clean --all
 
-# Remove only packages for a specific recipe
+# Remove only packages for a specific unit
 yoe clean openssh
 ```
 
@@ -692,26 +773,26 @@ yoe clean openssh
 
 `yoe` resolves dependencies at two levels:
 
-1. **Build-time** — recipe `deps` entries form a DAG. `yoe build --with-deps`
+1. **Build-time** — unit `deps` entries form a DAG. `yoe build --with-deps`
    topologically sorts this graph and builds in order, parallelizing where the
    DAG allows.
 
-2. **Install-time** — recipe `runtime_deps` entries are written into the
-   `.apk`'s `.PKGINFO`. When `apk add` runs during image assembly, it pulls in
-   runtime dependencies automatically.
+2. **Install-time** — unit `runtime_deps` entries are written into the `.apk`'s
+   `.PKGINFO`. When `apk add` runs during image assembly, it pulls in runtime
+   dependencies automatically.
 
 This means:
 
-- Build dependencies are resolved by `yoe` (it knows the recipe graph).
+- Build dependencies are resolved by `yoe` (it knows the unit graph).
 - Runtime dependencies are resolved by `apk` (it knows the package graph).
-- The recipe author declares both; the tools handle the rest.
+- The unit author declares both; the tools handle the rest.
 
 ### Config Propagation
 
 Inspired by GN's `public_configs`, machine-level configuration automatically
 propagates through the dependency graph. When you build for a specific machine,
 settings like architecture flags, optimization level, and kernel headers path
-flow to every recipe without each recipe declaring them:
+flow to every unit without each unit declaring them:
 
 ```
 machine (beaglebone-black)
@@ -719,30 +800,30 @@ machine (beaglebone-black)
   → CFLAGS = "-O2 -march=armv8-a"
   → KERNEL_HEADERS = "/usr/src/linux-6.6/include"
       ↓ propagates to
-  recipe (zlib)        → builds with arm64 flags
-  recipe (openssl)     → builds with arm64 flags
-  recipe (openssh)     → builds with arm64 flags + sees kernel headers
+  unit (zlib)        → builds with arm64 flags
+  unit (openssl)     → builds with arm64 flags
+  unit (openssh)     → builds with arm64 flags + sees kernel headers
 ```
 
-Recipes can also declare `public_config` settings that propagate to their
-dependents. For example, a `zlib` recipe might export its include path so that
+Units can also declare `public_config` settings that propagate to their
+dependents. For example, a `zlib` unit might export its include path so that
 `openssh` (which depends on `zlib`) automatically gets `-I/usr/include` without
-the recipe author specifying it.
+the unit author specifying it.
 
 This is resolved during the graph resolution phase (phase 1) so the full
-resolved config for every recipe is known before any build starts. Use
-`yoe desc <recipe> --config` to inspect the resolved configuration.
+resolved config for every unit is known before any build starts. Use
+`yoe desc <unit> --config` to inspect the resolved configuration.
 
-**Design note: recipe-level, not task-level dependencies.** Unlike BitBake,
-which models dependencies between individual tasks across recipes (e.g.,
-`B:do_configure` depends on `A:do_install`), `yoe` treats each recipe as an
-atomic unit — recipe A depends on recipe B means B must be fully built before A
-starts. This is a deliberate simplicity trade-off. BitBake's task-level graph
-enables fine-grained parallelism (start fetching C while B is still compiling)
-and per-task caching (sstate), but it is also the primary source of Yocto's
-debugging complexity. Recipe-level dependencies are easier to reason about, and
-the parallelism loss is minor since independent recipes still build concurrently
-across the DAG. Per-recipe caching via content-addressed `.apk` hashes provides
+**Design note: unit-level, not task-level dependencies.** Unlike BitBake, which
+models dependencies between individual tasks across units (e.g.,
+`B:do_configure` depends on `A:do_install`), `yoe` treats each unit as an atomic
+unit — unit A depends on unit B means B must be fully built before A starts.
+This is a deliberate simplicity trade-off. BitBake's task-level graph enables
+fine-grained parallelism (start fetching C while B is still compiling) and
+per-task caching (sstate), but it is also the primary source of Yocto's
+debugging complexity. Unit-level dependencies are easier to reason about, and
+the parallelism loss is minor since independent units still build concurrently
+across the DAG. Per-unit caching via content-addressed `.apk` hashes provides
 sufficient granularity for fast incremental rebuilds.
 
 ## Caching Strategy
@@ -751,7 +832,7 @@ Builds are cached at multiple levels:
 
 1. **Source cache** — downloaded tarballs and git clones in
    `$YOE_CACHE/sources/`. Keyed by URL + hash.
-2. **Build cache** — content-addressed by hashing the recipe, source, and all
+2. **Build cache** — content-addressed by hashing the unit, source, and all
    build dependency `.apk` hashes. If the combined hash matches, the build is
    skipped and the cached `.apk` is used.
 3. **Package repository** — built `.apk` files in the local repo. Once
@@ -762,9 +843,9 @@ Builds are cached at multiple levels:
    details on S3 configuration, cache signing, and the multi-level fallback
    chain.
 
-Cache invalidation is hash-based, not timestamp-based. Changing a recipe,
-updating a source, or rebuilding a dependency all produce a new hash and trigger
-a rebuild. Use `yoe build --dry-run` to see what would be rebuilt and why, or
+Cache invalidation is hash-based, not timestamp-based. Changing a unit, updating
+a source, or rebuilding a dependency all produce a new hash and trigger a
+rebuild. Use `yoe build --dry-run` to see what would be rebuilt and why, or
 `yoe cache stats` to review hit/miss rates from the last build.
 
 ## Example Workflow
@@ -773,8 +854,8 @@ a rebuild. Use `yoe build --dry-run` to see what would be rebuilt and why, or
 # Start a new project
 yoe init my-product --machine beaglebone-black
 
-# Add a recipe for your application
-$EDITOR recipes/myapp.star
+# Add a unit for your application
+$EDITOR units/myapp.star
 
 # Build everything (packages and images)
 yoe build --all
@@ -783,7 +864,7 @@ yoe build --all
 yoe flash base-image /dev/sdX
 
 # Later, update just your app and rebuild the image
-$EDITOR recipes/myapp.star  # bump version
+$EDITOR units/myapp.star  # bump version
 yoe build myapp
 yoe build base-image         # only myapp's .apk changed, fast rebuild
 

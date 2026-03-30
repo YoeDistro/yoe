@@ -214,7 +214,7 @@ lazily on the first `RunInContainer` invocation.
 - Stage 1: build commands run via `container.RunInContainer` with bwrap
   (self-hosted toolchain)
 - `createBuildRoot` uses `apk` via `container.RunInContainer`
-- `Status` and recipe verification run on host (pure Go)
+- `Status` and unit verification run on host (pure Go)
 
 ### QEMU (`internal/device/qemu.go`)
 

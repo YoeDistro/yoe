@@ -7,15 +7,15 @@ import (
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
-func makeProject(recipes map[string]*yoestar.Recipe) *yoestar.Project {
+func makeProject(units map[string]*yoestar.Unit) *yoestar.Project {
 	return &yoestar.Project{
 		Name:    "test",
-		Recipes: recipes,
+		Units: units,
 	}
 }
 
 func TestBuildDAG(t *testing.T) {
-	proj := makeProject(map[string]*yoestar.Recipe{
+	proj := makeProject(map[string]*yoestar.Unit{
 		"zlib":    {Name: "zlib", Deps: nil},
 		"openssl": {Name: "openssl", Deps: []string{"zlib"}},
 		"openssh": {Name: "openssh", Deps: []string{"zlib", "openssl"}},
@@ -38,7 +38,7 @@ func TestBuildDAG(t *testing.T) {
 }
 
 func TestBuildDAG_MissingDep(t *testing.T) {
-	proj := makeProject(map[string]*yoestar.Recipe{
+	proj := makeProject(map[string]*yoestar.Unit{
 		"openssh": {Name: "openssh", Deps: []string{"nonexistent"}},
 	})
 
@@ -52,7 +52,7 @@ func TestBuildDAG_MissingDep(t *testing.T) {
 }
 
 func TestTopologicalSort(t *testing.T) {
-	proj := makeProject(map[string]*yoestar.Recipe{
+	proj := makeProject(map[string]*yoestar.Unit{
 		"zlib":    {Name: "zlib", Deps: nil},
 		"openssl": {Name: "openssl", Deps: []string{"zlib"}},
 		"openssh": {Name: "openssh", Deps: []string{"zlib", "openssl"}},
@@ -93,7 +93,7 @@ func TestTopologicalSort(t *testing.T) {
 }
 
 func TestTopologicalSort_Cycle(t *testing.T) {
-	proj := makeProject(map[string]*yoestar.Recipe{
+	proj := makeProject(map[string]*yoestar.Unit{
 		"a": {Name: "a", Deps: []string{"b"}},
 		"b": {Name: "b", Deps: []string{"c"}},
 		"c": {Name: "c", Deps: []string{"a"}},
@@ -114,7 +114,7 @@ func TestTopologicalSort_Cycle(t *testing.T) {
 }
 
 func TestTopologicalSort_NoDeps(t *testing.T) {
-	proj := makeProject(map[string]*yoestar.Recipe{
+	proj := makeProject(map[string]*yoestar.Unit{
 		"a": {Name: "a", Deps: nil},
 		"b": {Name: "b", Deps: nil},
 		"c": {Name: "c", Deps: nil},
@@ -136,7 +136,7 @@ func TestTopologicalSort_NoDeps(t *testing.T) {
 }
 
 func TestDepsOf(t *testing.T) {
-	proj := makeProject(map[string]*yoestar.Recipe{
+	proj := makeProject(map[string]*yoestar.Unit{
 		"zlib":    {Name: "zlib", Deps: nil},
 		"openssl": {Name: "openssl", Deps: []string{"zlib"}},
 		"openssh": {Name: "openssh", Deps: []string{"openssl"}},
@@ -156,7 +156,7 @@ func TestDepsOf(t *testing.T) {
 }
 
 func TestRdepsOf(t *testing.T) {
-	proj := makeProject(map[string]*yoestar.Recipe{
+	proj := makeProject(map[string]*yoestar.Unit{
 		"zlib":    {Name: "zlib", Deps: nil},
 		"openssl": {Name: "openssl", Deps: []string{"zlib"}},
 		"openssh": {Name: "openssh", Deps: []string{"openssl"}},
@@ -180,6 +180,6 @@ func TestDepsOf_NotFound(t *testing.T) {
 	dag := &DAG{Nodes: make(map[string]*Node)}
 	_, err := dag.DepsOf("nonexistent")
 	if err == nil {
-		t.Fatal("expected error for nonexistent recipe, got nil")
+		t.Fatal("expected error for nonexistent unit, got nil")
 	}
 }
