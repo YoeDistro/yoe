@@ -33,7 +33,8 @@ via `yoe list` or by browsing `layers/recipes-core/recipes/`.
 - [ ] `file` — file type identification
 - [ ] `procps` — ps, top, free, vmstat; more capable than busybox versions
 - [ ] `htop` — interactive process viewer
-- [ ] `dropbear` — lightweight SSH alternative to openssh for constrained devices
+- [ ] `dropbear` — lightweight SSH alternative to openssh for constrained
+      devices
 
 ## Notes
 

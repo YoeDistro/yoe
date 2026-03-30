@@ -89,8 +89,8 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
 
 ## Key Design Decisions
 
-- **Container versioning** — when modifying `containers/Dockerfile.build`, always
-  bump both the `# Version:` comment in the Dockerfile and the
+- **Container versioning** — when modifying `containers/Dockerfile.build`,
+  always bump both the `# Version:` comment in the Dockerfile and the
   `containerVersion` constant in `internal/container.go` to match
 - **Container-only builds** — host provides only `yoe` + Git + Docker; all tools
   live in the container
