@@ -22,6 +22,7 @@ workstation, run on an ARM build server.
 ## Command Overview
 
 ```
+yoe                 Launch the interactive TUI
 yoe init            Create a new Yoe-NG project
 yoe build           Build units (packages and images)
 yoe dev             Manage source modifications (extract, diff, status)
@@ -35,7 +36,8 @@ yoe config          View and edit project configuration
 yoe desc            Describe a unit, package, or target
 yoe refs            Show reverse dependencies
 yoe graph           Visualize the dependency DAG
-yoe tui             Launch the interactive TUI
+yoe log             Show build log (most recent or specific unit)
+yoe diagnose        Launch Claude Code to diagnose a build failure
 yoe clean           Remove build artifacts
 yoe container       Manage the build container (build, status)
 ```
@@ -515,9 +517,10 @@ yoe graph openssh
 yoe graph --stale
 ```
 
-### `yoe tui`
+### `yoe` (no args)
 
-Launches an interactive terminal UI for common workflows.
+Running `yoe` with no arguments launches an interactive terminal UI for common
+workflows.
 
 ```
 ┌─ Yoe-NG ─────────────────────────────────────────────┐
@@ -541,6 +544,33 @@ Launches an interactive terminal UI for common workflows.
 The TUI is built with [Bubble Tea](https://github.com/charmbracelet/bubbletea)
 and provides real-time build progress, log streaming, and interactive selection
 of machines/images/units.
+
+### `yoe log`
+
+Shows a build log. With no arguments, shows the most recently modified build
+log. Specify a unit name to view that unit's log.
+
+```
+yoe log                  # show most recent build log
+yoe log openssl          # show openssl build log
+yoe log openssl -e       # open openssl build log in $EDITOR
+```
+
+The `-e` / `--edit` flag opens the log in your editor (defaults to `vi`).
+
+### `yoe diagnose`
+
+Launches Claude Code to diagnose a build failure. With no arguments, diagnoses
+the most recent build failure. Specify a unit name to diagnose that unit.
+
+```
+yoe diagnose             # diagnose most recent failure
+yoe diagnose util-linux  # diagnose util-linux build failure
+```
+
+Requires `claude` to be in your PATH. Claude Code reads the build log and
+iteratively identifies root causes, applies fixes, and rebuilds until the unit
+succeeds.
 
 ### Custom Commands
 

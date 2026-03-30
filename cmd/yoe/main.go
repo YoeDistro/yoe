@@ -23,8 +23,8 @@ var version = "dev"
 
 func main() {
 	if len(os.Args) < 2 {
-		printUsage()
-		os.Exit(1)
+		cmdTUI(nil)
+		return
 	}
 
 	command := os.Args[1]
@@ -39,8 +39,6 @@ func main() {
 		cmdInit(args)
 	case "container":
 		cmdContainer(args)
-	case "tui":
-		cmdTUI(args)
 	case "layer":
 		cmdLayer(args)
 	case "build":
@@ -84,6 +82,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "Usage: %s COMMAND [OPTIONS]\n\n", os.Args[0])
 	fmt.Fprintf(os.Stderr, "Yoe-NG embedded Linux distribution builder\n\n")
 	fmt.Fprintf(os.Stderr, "Commands:\n")
+	fmt.Fprintf(os.Stderr, "  (no args)               Launch the interactive TUI\n")
 	fmt.Fprintf(os.Stderr, "  init <project-dir>      Create a new Yoe-NG project\n")
 	fmt.Fprintf(os.Stderr, "  container               Manage the build container (build, shell, status)\n")
 	fmt.Fprintf(os.Stderr, "  build [units...]      Build units (--force, --clean, --verbose, --dry-run)\n")
@@ -98,7 +97,6 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  desc <unit>           Describe a unit or target\n")
 	fmt.Fprintf(os.Stderr, "  refs <unit>           Show reverse dependencies\n")
 	fmt.Fprintf(os.Stderr, "  graph                   Visualize the dependency DAG\n")
-	fmt.Fprintf(os.Stderr, "  tui                     Launch the interactive TUI\n")
 	fmt.Fprintf(os.Stderr, "  log [unit] [-e]         Show build log (most recent, or specific unit; -e to edit)\n")
 	fmt.Fprintf(os.Stderr, "  diagnose [unit]         Launch Claude Code to diagnose a build failure\n")
 	fmt.Fprintf(os.Stderr, "  clean                   Remove build artifacts\n")
