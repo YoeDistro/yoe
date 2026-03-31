@@ -142,6 +142,12 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	buildDir := UnitBuildDir(opts.ProjectDir, unit.Name)
 	EnsureDir(buildDir)
 
+	// Skip if another process is already building this unit.
+	if IsBuildInProgress(opts.ProjectDir, unit.Name) {
+		fmt.Fprintf(w, "  %s: build already in progress, skipping\n", unit.Name)
+		return nil
+	}
+
 	// Remove the cache marker before starting so a cancelled or failed
 	// build does not leave a stale marker that makes it appear cached.
 	os.Remove(CacheMarkerPath(opts.ProjectDir, unit.Name, hash))
