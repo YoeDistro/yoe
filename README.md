@@ -11,7 +11,7 @@ all with full understanding of your project's dependency graph and build state.
 ## 🚀 Getting Started
 
 Prerequisites: a Linux host (x86_64 or ARM64) with Git and Docker (or Podman)
-installed.
+installed. (only x86_64 host has been tested, ARM64 testing appreciated)
 
 ```sh
 # Download the yoe binary
@@ -209,8 +209,8 @@ Instead of maintaining cross-toolchains, Yoe-NG targets native builds:
   transparently emulated via binfmt_misc. One command to set up
   (`yoe container binfmt`), then `--machine qemu-arm64` just works. ~5-20x
   slower than native, but fine for iterating on a few packages.
-- **Native hardware** — build on the target architecture directly (ARM64
-  dev boards, RISC-V boards).
+- **Native hardware** — build on the target architecture directly (ARM64 dev
+  boards, RISC-V boards).
 - **Cloud CI** — use native architecture runners (e.g., ARM64 GitHub Actions
   runners, AWS Graviton, Hetzner ARM boxes) for full-speed CI builds.
 
