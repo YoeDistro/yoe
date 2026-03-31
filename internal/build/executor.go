@@ -412,7 +412,7 @@ func HasBuildLog(projectDir, name string) bool {
 
 // BuildingLockPath returns the path of the lock file written during a build.
 func BuildingLockPath(projectDir, name string) string {
-	return filepath.Join(projectDir, "build", name, ".building")
+	return filepath.Join(projectDir, "build", name, ".lock")
 }
 
 // IsBuildInProgress returns true if another process is currently building this unit.

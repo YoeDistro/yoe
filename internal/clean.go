@@ -70,7 +70,7 @@ func CleanLocks(projectDir string) error {
 		if !e.IsDir() {
 			continue
 		}
-		lockPath := filepath.Join(buildDir, e.Name(), ".building")
+		lockPath := filepath.Join(buildDir, e.Name(), ".lock")
 		if _, err := os.Stat(lockPath); err == nil {
 			os.Remove(lockPath)
 			fmt.Printf("Removed lock: %s\n", e.Name())
