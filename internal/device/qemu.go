@@ -60,6 +60,20 @@ func RunQEMU(proj *yoestar.Project, unitName, machineName, projectDir string, op
 			a = append(a, "-netdev", "user,id=net0")
 			a = append(a, "-device", "virtio-net-pci,netdev=net0")
 		}
+
+		// Direct kernel boot: when no firmware is configured, pass
+		// -kernel and -append for architectures that need it (arm64, riscv64).
+		needsDirectBoot := machine.QEMU == nil || machine.QEMU.Firmware == ""
+		if needsDirectBoot && machine.Kernel.Unit != "" {
+			kernelPath := findKernelImage(projectDir, machine.Arch, machine.Kernel.Unit)
+			if kernelPath != "" {
+				a = append(a, "-kernel", kernelPath)
+				if machine.Kernel.Cmdline != "" {
+					a = append(a, "-append", machine.Kernel.Cmdline)
+				}
+			}
+		}
+
 		return a
 	}
 
@@ -100,6 +114,18 @@ func RunQEMU(proj *yoestar.Project, unitName, machineName, projectDir string, op
 		Interactive: !opts.Daemon,
 		NoUser:      true,
 	})
+}
+
+// findKernelImage locates the kernel image (vmlinuz) from a kernel unit's
+// build output.
+func findKernelImage(projectDir, arch, kernelUnit string) string {
+	// Check the unit's destdir for /boot/vmlinuz
+	destDir := filepath.Join(projectDir, "build", arch, kernelUnit, "destdir")
+	vmlinuz := filepath.Join(destDir, "boot", "vmlinuz")
+	if _, err := os.Stat(vmlinuz); err == nil {
+		return vmlinuz
+	}
+	return ""
 }
 
 func qemuBinary(arch string) string {
