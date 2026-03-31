@@ -153,18 +153,20 @@ func cmdLayer(args []string) {
 	}
 }
 
-func resolveTargetArch(proj *yoestar.Project, machineName string) string {
+func resolveTargetArch(proj *yoestar.Project, machineName string) (string, error) {
 	if machineName != "" {
-		if m, ok := proj.Machines[machineName]; ok {
-			return m.Arch
+		m, ok := proj.Machines[machineName]
+		if !ok {
+			return "", fmt.Errorf("machine %q not found", machineName)
 		}
+		return m.Arch, nil
 	}
 	// Use the default machine's arch
 	if m, ok := proj.Machines[proj.Defaults.Machine]; ok {
-		return m.Arch
+		return m.Arch, nil
 	}
 	// Fallback to host arch
-	return build.Arch()
+	return build.Arch(), nil
 }
 
 func cmdBuild(args []string) {
@@ -204,7 +206,11 @@ func cmdBuild(args []string) {
 	defer stop()
 
 	proj := loadProject()
-	targetArch := resolveTargetArch(proj, machineName)
+	targetArch, err := resolveTargetArch(proj, machineName)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 	opts := build.Options{
 		Ctx:        ctx,
 		Force:      force,
