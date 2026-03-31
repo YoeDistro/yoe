@@ -80,8 +80,7 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
 - **Tooling written in Go** — single static binary, no runtime dependencies, TUI
   built with [Bubble Tea](https://github.com/charmbracelet/bubbletea), fast
   enough, trivial to distribute
-- **Build dependencies isolated with bubblewrap** — no Docker daemon required,
-  no host dependency pollution
+- **Build dependencies isolated with bubblewrap** — no host dependency pollution
 - **Easy BSP support** — support for many boards, inclusive of hardware
   ecosystem
 - **Global cache of pre-built assets** — minimize time building from source
