@@ -11,6 +11,6 @@ image(
     timezone = "UTC",
     services = [],
     partitions = [
-        partition(label="rootfs", type="ext4", size="50M", root=True),
+        partition(label="rootfs", type="ext4", size="128M", root=True),
     ],
 )
