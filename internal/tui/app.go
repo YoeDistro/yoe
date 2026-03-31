@@ -616,6 +616,9 @@ func (m model) updateSetupMachine(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "enter":
 		m.proj.Defaults.Machine = m.machines[m.machineCursor]
+		if mach, ok := m.proj.Machines[m.machines[m.machineCursor]]; ok {
+			m.arch = mach.Arch
+		}
 		m.message = fmt.Sprintf("Machine set to %s", m.machines[m.machineCursor])
 		m.setupField = ""
 		m.view = viewUnits

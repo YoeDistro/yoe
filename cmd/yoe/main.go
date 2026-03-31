@@ -153,22 +153,17 @@ func cmdLayer(args []string) {
 	}
 }
 
-func resolveTargetArch(proj *yoestar.Project, units []string, machineName string) string {
+func resolveTargetArch(proj *yoestar.Project, machineName string) string {
 	if machineName != "" {
 		if m, ok := proj.Machines[machineName]; ok {
 			return m.Arch
 		}
 	}
-	// If building an image unit, use the default machine's arch
-	for _, name := range units {
-		if u, ok := proj.Units[name]; ok && u.Class == "image" {
-			mn := proj.Defaults.Machine
-			if m, ok := proj.Machines[mn]; ok {
-				return m.Arch
-			}
-		}
+	// Use the default machine's arch
+	if m, ok := proj.Machines[proj.Defaults.Machine]; ok {
+		return m.Arch
 	}
-	// Default to host arch
+	// Fallback to host arch
 	return build.Arch()
 }
 
@@ -209,7 +204,7 @@ func cmdBuild(args []string) {
 	defer stop()
 
 	proj := loadProject()
-	targetArch := resolveTargetArch(proj, units, machineName)
+	targetArch := resolveTargetArch(proj, machineName)
 	opts := build.Options{
 		Ctx:        ctx,
 		Force:      force,
