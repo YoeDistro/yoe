@@ -8,6 +8,9 @@ conversational: describe what you need, and the AI generates units, configures
 machines, traces dependencies, diagnoses build failures, and audits security —
 all with full understanding of your project's dependency graph and build state.
 
+Note: much of what is in the docs has not been implemented yet, and is mostly 
+vision.
+
 ## 🚀 Getting Started
 
 Prerequisites: an x86_64 Linux host with Git and Docker (or Podman) installed.
@@ -15,7 +18,6 @@ Prerequisites: an x86_64 Linux host with Git and Docker (or Podman) installed.
 ```sh
 # Download the yoe binary
 curl -L https://github.com/yoe/yoe-ng/releases/latest/download/yoe-Linux-x86_64 -o yoe
-(project is not public yet, so download manually from releases page)
 chmod +x yoe
 sudo mv yoe /usr/local/bin/
 
@@ -23,14 +25,12 @@ sudo mv yoe /usr/local/bin/
 yoe init yoe-test
 cd yoe-test
 
-# Fetch layers (downloads units-core)
-yoe layer sync
+# start the TUI (see screenshot below)
+yoe
 
-# Build the base image (builds all required packages, then assembles the image)
-yoe build base-image
+# navigate to the base-image and press 'b' to build.
 
-# Boot it in QEMU
-yoe run base-image
+# when build is complete, press 'r' to run.
 
 # Log in a user: root, no password
 
@@ -39,6 +39,10 @@ poweroff
 ```
 
 `dev-image` is another included image with a few more things in it.
+
+There are also CLI variants of the above commands (`build`, `run`, etc.).
+
+<img width="1743" height="1597" alt="image" src="https://github.com/user-attachments/assets/99e297f3-b424-422a-8b24-45fb82de81fb" />
 
 ## 🤖 Why AI-Native
 
