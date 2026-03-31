@@ -34,16 +34,23 @@ def base_files(name = "base-files", users = None):
             "mkdir -p $DESTDIR/etc $DESTDIR/root $DESTDIR/proc $DESTDIR/sys"
             + " $DESTDIR/dev $DESTDIR/tmp $DESTDIR/run",
         ] + users_commands(users) + [
-            # Busybox inittab: mount filesystems, getty on serial console
-            "cat > $DESTDIR/etc/inittab << 'INITTAB'\n"
-            + "::sysinit:/bin/mount -t proc proc /proc\n"
-            + "::sysinit:/bin/mount -t sysfs sys /sys\n"
-            + "::sysinit:/bin/hostname -F /etc/hostname\n"
-            + "::sysinit:/etc/init.d/rcS\n"
-            + "ttyS0::respawn:/sbin/getty -L ttyS0 115200 vt100\n"
-            + "::ctrlaltdel:/sbin/reboot\n"
-            + "::shutdown:/bin/umount -a -r\n"
-            + "INITTAB",
+            # Busybox inittab: mount filesystems, getty on serial console.
+            # Console device varies by arch (ttyS0 on x86, ttyAMA0 on arm64).
+            """
+case $ARCH in
+    arm64)   CONSOLE=ttyAMA0 ;;
+    *)       CONSOLE=ttyS0 ;;
+esac
+cat > $DESTDIR/etc/inittab << INITTAB
+::sysinit:/bin/mount -t proc proc /proc
+::sysinit:/bin/mount -t sysfs sys /sys
+::sysinit:/bin/hostname -F /etc/hostname
+::sysinit:/etc/init.d/rcS
+${CONSOLE}::respawn:/sbin/getty -L ${CONSOLE} 115200 vt100
+::ctrlaltdel:/sbin/reboot
+::shutdown:/bin/umount -a -r
+INITTAB
+""",
 
             # rcS script — runs all init scripts in /etc/init.d/
             "mkdir -p $DESTDIR/etc/init.d",
