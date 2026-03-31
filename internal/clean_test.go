@@ -22,7 +22,7 @@ func TestRunClean_Default(t *testing.T) {
 	}
 
 	// Default clean removes build but preserves repo.
-	if err := RunClean(proj, false, true, nil); err != nil {
+	if err := RunClean(proj, "x86_64", false, true, nil); err != nil {
 		t.Fatalf("RunClean default: %v", err)
 	}
 
@@ -45,7 +45,7 @@ func TestRunClean_All(t *testing.T) {
 		}
 	}
 
-	if err := RunClean(proj, true, true, nil); err != nil {
+	if err := RunClean(proj, "x86_64", true, true, nil); err != nil {
 		t.Fatalf("RunClean all: %v", err)
 	}
 
@@ -62,20 +62,20 @@ func TestRunClean_Units(t *testing.T) {
 
 	// Create build dirs for two units.
 	for _, r := range []string{"openssl", "busybox"} {
-		if err := os.MkdirAll(filepath.Join(buildDir, r), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(buildDir, "x86_64", r), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	// Clean only openssl.
-	if err := RunClean(proj, false, true, []string{"openssl"}); err != nil {
+	if err := RunClean(proj, "x86_64", false, true, []string{"openssl"}); err != nil {
 		t.Fatalf("RunClean units: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(buildDir, "openssl")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(buildDir, "x86_64", "openssl")); !os.IsNotExist(err) {
 		t.Error("expected openssl build dir to be removed")
 	}
-	if _, err := os.Stat(filepath.Join(buildDir, "busybox")); err != nil {
+	if _, err := os.Stat(filepath.Join(buildDir, "x86_64", "busybox")); err != nil {
 		t.Error("expected busybox build dir to still exist")
 	}
 }
@@ -84,7 +84,7 @@ func TestRunClean_NoBuildDir(t *testing.T) {
 	proj := t.TempDir()
 
 	// Should succeed even when build dir does not exist.
-	if err := RunClean(proj, false, true, nil); err != nil {
+	if err := RunClean(proj, "x86_64", false, true, nil); err != nil {
 		t.Fatalf("RunClean on missing build dir: %v", err)
 	}
 }

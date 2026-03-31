@@ -54,7 +54,7 @@ func Stage0(proj *yoestar.Project, projectDir string, w io.Writer) error {
 		unit := proj.Units[name]
 		fmt.Fprintf(w, "\n--- Building %s %s ---\n", unit.Name, unit.Version)
 
-		buildDir := build.UnitBuildDir(projectDir, unit.Name)
+		buildDir := build.UnitBuildDir(projectDir, arch, unit.Name)
 		destDir := filepath.Join(buildDir, "destdir")
 
 		// Clean and prepare
@@ -134,7 +134,7 @@ func Stage1(proj *yoestar.Project, projectDir string, w io.Writer) error {
 		unit := proj.Units[name]
 		fmt.Fprintf(w, "\n--- Rebuilding %s %s (self-hosted) ---\n", unit.Name, unit.Version)
 
-		buildDir := build.UnitBuildDir(projectDir, unit.Name)
+		buildDir := build.UnitBuildDir(projectDir, arch, unit.Name)
 		destDir := filepath.Join(buildDir, "destdir")
 
 		os.RemoveAll(destDir)

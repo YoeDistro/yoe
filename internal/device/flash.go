@@ -21,8 +21,14 @@ func Flash(proj *yoestar.Project, unitName, devicePath, projectDir string, dryRu
 		return fmt.Errorf("unit %q is not an image (class=%q)", unitName, unit.Class)
 	}
 
+	// Resolve machine arch
+	machine, ok := proj.Machines[proj.Defaults.Machine]
+	if !ok {
+		return fmt.Errorf("default machine %q not found", proj.Defaults.Machine)
+	}
+
 	// Find the built image
-	imgPath := findImage(projectDir, unitName)
+	imgPath := findImage(projectDir, machine.Arch, unitName)
 	if imgPath == "" {
 		return fmt.Errorf("no built image found for %q — run yoe build %s first", unitName, unitName)
 	}
@@ -67,8 +73,8 @@ func Flash(proj *yoestar.Project, unitName, devicePath, projectDir string, dryRu
 	return nil
 }
 
-func findImage(projectDir, unitName string) string {
-	outputDir := filepath.Join(projectDir, "build", unitName, "output")
+func findImage(projectDir, arch, unitName string) string {
+	outputDir := filepath.Join(projectDir, "build", arch, unitName, "output")
 
 	// Check for tar.gz first
 	tarPath := filepath.Join(outputDir, unitName+".img.tar.gz")

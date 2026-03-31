@@ -8,12 +8,12 @@ import (
 	"strings"
 )
 
-func RunClean(projectDir string, all bool, force bool, units []string) error {
+func RunClean(projectDir, arch string, all bool, force bool, units []string) error {
 	buildDir := filepath.Join(projectDir, "build")
 
 	if len(units) > 0 {
 		for _, r := range units {
-			dir := filepath.Join(buildDir, r)
+			dir := filepath.Join(buildDir, arch, r)
 			if err := os.RemoveAll(dir); err != nil {
 				return fmt.Errorf("removing %s: %w", dir, err)
 			}
@@ -54,8 +54,8 @@ func RunClean(projectDir string, all bool, force bool, units []string) error {
 	return nil
 }
 
-func CleanLocks(projectDir string) error {
-	buildDir := filepath.Join(projectDir, "build")
+func CleanLocks(projectDir, arch string) error {
+	buildDir := filepath.Join(projectDir, "build", arch)
 	entries, err := os.ReadDir(buildDir)
 	if err != nil {
 		if os.IsNotExist(err) {

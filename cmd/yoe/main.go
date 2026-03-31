@@ -243,12 +243,12 @@ func cmdContainer(args []string) {
 
 func cmdContainerShell() {
 	projectDir := projectDir()
-	sysroot := filepath.Join(projectDir, "build", "shell", "sysroot")
+	sysroot := filepath.Join(projectDir, "build", build.Arch(), "shell", "sysroot")
 	build.EnsureDir(sysroot)
 
 	// Use a temp dir for src/destdir so the sandbox mounts are valid
-	srcDir := filepath.Join(projectDir, "build", "shell", "src")
-	destDir := filepath.Join(projectDir, "build", "shell", "destdir")
+	srcDir := filepath.Join(projectDir, "build", build.Arch(), "shell", "src")
+	destDir := filepath.Join(projectDir, "build", build.Arch(), "shell", "destdir")
 	build.EnsureDir(srcDir)
 	build.EnsureDir(destDir)
 
@@ -371,14 +371,14 @@ func cmdClean(args []string) {
 	}
 
 	if locks {
-		if err := yoe.CleanLocks(dir); err != nil {
+		if err := yoe.CleanLocks(dir, build.Arch()); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 		return
 	}
 
-	if err := yoe.RunClean(dir, all, force, units); err != nil {
+	if err := yoe.RunClean(dir, build.Arch(), all, force, units); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -480,7 +480,7 @@ func cmdDev(args []string) {
 			fmt.Fprintf(os.Stderr, "Usage: %s dev extract <unit>\n", os.Args[0])
 			os.Exit(1)
 		}
-		if err := yoe.DevExtract(dir, args[1], os.Stdout); err != nil {
+		if err := yoe.DevExtract(dir, build.Arch(), args[1], os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -489,12 +489,12 @@ func cmdDev(args []string) {
 			fmt.Fprintf(os.Stderr, "Usage: %s dev diff <unit>\n", os.Args[0])
 			os.Exit(1)
 		}
-		if err := yoe.DevDiff(dir, args[1], os.Stdout); err != nil {
+		if err := yoe.DevDiff(dir, build.Arch(), args[1], os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 	case "status":
-		if err := yoe.DevStatus(dir, os.Stdout); err != nil {
+		if err := yoe.DevStatus(dir, build.Arch(), os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -552,7 +552,7 @@ func cmdLog(args []string) {
 	var logPath string
 
 	if unitName != "" {
-		logPath = filepath.Join(dir, "build", unitName, "build.log")
+		logPath = filepath.Join(build.UnitBuildDir(dir, build.Arch(), unitName), "build.log")
 	} else {
 		logPath = findLatestBuildLog(dir)
 	}
@@ -596,7 +596,7 @@ func cmdDiagnose(args []string) {
 	var logPath string
 
 	if unitName != "" {
-		logPath = filepath.Join(dir, "build", unitName, "build.log")
+		logPath = filepath.Join(build.UnitBuildDir(dir, build.Arch(), unitName), "build.log")
 	} else {
 		logPath = findLatestBuildLog(dir)
 	}
@@ -628,8 +628,8 @@ func cmdDiagnose(args []string) {
 }
 
 func findLatestBuildLog(projectDir string) string {
-	buildDir := filepath.Join(projectDir, "build")
-	entries, err := os.ReadDir(buildDir)
+	archDir := filepath.Join(projectDir, "build", build.Arch())
+	entries, err := os.ReadDir(archDir)
 	if err != nil {
 		return ""
 	}
@@ -644,7 +644,7 @@ func findLatestBuildLog(projectDir string) string {
 		if !e.IsDir() {
 			continue
 		}
-		p := filepath.Join(buildDir, e.Name(), "build.log")
+		p := filepath.Join(archDir, e.Name(), "build.log")
 		info, err := os.Stat(p)
 		if err != nil {
 			continue

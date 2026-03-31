@@ -116,21 +116,23 @@ func TestCacheMarker(t *testing.T) {
 	name := "test-unit"
 	hash := "abc123def456"
 
+	arch := "x86_64"
+
 	// Not cached initially
-	if IsBuildCached(dir, name, hash) {
+	if IsBuildCached(dir, arch, name, hash) {
 		t.Error("should not be cached initially")
 	}
 
 	// Write marker
-	writeCacheMarker(dir, name, hash)
+	writeCacheMarker(dir, arch, name, hash)
 
 	// Now cached
-	if !IsBuildCached(dir, name, hash) {
+	if !IsBuildCached(dir, arch, name, hash) {
 		t.Error("should be cached after writing marker")
 	}
 
 	// Different hash not cached
-	if IsBuildCached(dir, name, "different") {
+	if IsBuildCached(dir, arch, name, "different") {
 		t.Error("different hash should not be cached")
 	}
 }
@@ -196,7 +198,7 @@ func TestBuildUnits_WithDeps(t *testing.T) {
 	}
 
 	// Create source directory with a file (simulating prepared source)
-	srcDir := filepath.Join(projectDir, "build", "hello", "src")
+	srcDir := filepath.Join(projectDir, "build", "x86_64", "hello", "src")
 	os.MkdirAll(srcDir, 0755)
 	os.WriteFile(filepath.Join(srcDir, "Makefile"), []byte("all:\n\techo hello\n"), 0644)
 
@@ -231,9 +233,9 @@ func TestBuildUnits_WithDeps(t *testing.T) {
 	}
 
 	// Verify cache marker was written
-	if !IsBuildCached(projectDir, "hello", "") {
+	if !IsBuildCached(projectDir, "x86_64", "hello", "") {
 		// The hash won't be "" — just verify the marker file exists
-		markerDir := filepath.Join(projectDir, "build", "hello")
+		markerDir := filepath.Join(projectDir, "build", "x86_64", "hello")
 		entries, _ := os.ReadDir(markerDir)
 		found := false
 		for _, e := range entries {

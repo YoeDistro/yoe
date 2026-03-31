@@ -77,6 +77,7 @@ type execDoneMsg struct {
 type model struct {
 	proj       *yoestar.Project
 	projectDir string
+	arch       string
 	units      []string
 	hashes     map[string]string
 	statuses   map[string]unitStatus
@@ -123,11 +124,11 @@ func Run(proj *yoestar.Project, projectDir string) error {
 	statuses := make(map[string]unitStatus, len(units))
 	for _, name := range units {
 		hash := hashes[name]
-		if build.IsBuildCached(projectDir, name, hash) {
+		if build.IsBuildCached(projectDir, arch, name, hash) {
 			statuses[name] = statusCached
-		} else if build.IsBuildInProgress(projectDir, name) {
+		} else if build.IsBuildInProgress(projectDir, arch, name) {
 			statuses[name] = statusBuilding
-		} else if build.HasBuildLog(projectDir, name) {
+		} else if build.HasBuildLog(projectDir, arch, name) {
 			statuses[name] = statusFailed
 		}
 	}
@@ -137,6 +138,7 @@ func Run(proj *yoestar.Project, projectDir string) error {
 	m := model{
 		proj:       proj,
 		projectDir: projectDir,
+		arch:       arch,
 		units:      units,
 		hashes:     hashes,
 		statuses:   statuses,
@@ -350,7 +352,7 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "l":
 		if m.cursor < len(m.units) {
 			name := m.units[m.cursor]
-			logPath := filepath.Join(m.projectDir, "build", name, "build.log")
+			logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.arch, name), "build.log")
 			if _, err := os.Stat(logPath); err == nil {
 				return m, m.execEditor(logPath)
 			}
@@ -361,7 +363,7 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "d":
 		if m.cursor < len(m.units) {
 			name := m.units[m.cursor]
-			logPath := filepath.Join(m.projectDir, "build", name, "build.log")
+			logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.arch, name), "build.log")
 			c := exec.Command("claude", fmt.Sprintf("diagnose %s", logPath))
 			c.Dir = m.projectDir
 			return m, tea.ExecProcess(c, func(err error) tea.Msg {
@@ -526,7 +528,7 @@ func (m model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		} else if strings.HasPrefix(action, "clean:") {
 			name := strings.TrimPrefix(action, "clean:")
-			buildDir := filepath.Join(m.projectDir, "build", name)
+			buildDir := build.UnitBuildDir(m.projectDir, m.arch, name)
 			if err := os.RemoveAll(buildDir); err != nil {
 				m.message = fmt.Sprintf("Clean failed: %v", err)
 			} else {
@@ -690,7 +692,7 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.startBuild(m.detailUnit)
 
 	case "d":
-		logPath := filepath.Join(m.projectDir, "build", m.detailUnit, "build.log")
+		logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.arch, m.detailUnit), "build.log")
 		c := exec.Command("claude", fmt.Sprintf("diagnose %s", logPath))
 		c.Dir = m.projectDir
 		return m, tea.ExecProcess(c, func(err error) tea.Msg {
@@ -709,7 +711,7 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "l":
-		logPath := filepath.Join(m.projectDir, "build", m.detailUnit, "build.log")
+		logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.arch, m.detailUnit), "build.log")
 		if _, err := os.Stat(logPath); err == nil {
 			return m, m.execEditor(logPath)
 		}
@@ -1012,10 +1014,11 @@ func (m *model) startBuild(name string) tea.Cmd {
 
 	proj := m.proj
 	projectDir := m.projectDir
+	arch := m.arch
 	unitName := name
 
 	// Write executor output to a log file so detail view can tail it
-	outputPath := filepath.Join(projectDir, "build", unitName, ".output.log")
+	outputPath := filepath.Join(build.UnitBuildDir(projectDir, arch, unitName), ".output.log")
 	build.EnsureDir(filepath.Dir(outputPath))
 
 	return func() tea.Msg {
@@ -1030,7 +1033,7 @@ func (m *model) startBuild(name string) tea.Cmd {
 			Ctx:        ctx,
 			Force:      true,
 			ProjectDir: projectDir,
-			Arch:       build.Arch(),
+			Arch:       arch,
 			OnEvent: func(ev build.BuildEvent) {
 				if tuiProgram != nil {
 					tuiProgram.Send(buildEventMsg{
@@ -1056,9 +1059,10 @@ func (m model) execEditor(path string) tea.Cmd {
 }
 
 func (m *model) refreshDetail() {
-	outputPath := filepath.Join(m.projectDir, "build", m.detailUnit, ".output.log")
+	unitDir := build.UnitBuildDir(m.projectDir, m.arch, m.detailUnit)
+	outputPath := filepath.Join(unitDir, ".output.log")
 	m.outputLines = readFileAll(outputPath)
-	logPath := filepath.Join(m.projectDir, "build", m.detailUnit, "build.log")
+	logPath := filepath.Join(unitDir, "build.log")
 	m.logLines = readFileAll(logPath)
 	if m.autoFollow {
 		m.scrollToBottom()

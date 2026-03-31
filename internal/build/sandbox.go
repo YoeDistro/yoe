@@ -192,13 +192,13 @@ func StageSysroot(destDir, buildDir string) error {
 
 // AssembleSysroot merges the sysroot-stage dirs of all transitive deps
 // into a unit's private sysroot.
-func AssembleSysroot(sysrootDir string, dag *resolve.DAG, unit string, projectDir string) error {
+func AssembleSysroot(sysrootDir string, dag *resolve.DAG, unit string, projectDir string, arch string) error {
 	os.RemoveAll(sysrootDir)
 	if err := os.MkdirAll(sysrootDir, 0755); err != nil {
 		return err
 	}
 	for _, dep := range dag.TransitiveDeps(unit) {
-		stageDir := filepath.Join(UnitBuildDir(projectDir, dep), "sysroot-stage")
+		stageDir := filepath.Join(UnitBuildDir(projectDir, arch, dep), "sysroot-stage")
 		if _, err := os.Stat(stageDir); err != nil {
 			continue // dep has no staged output (e.g., image)
 		}
@@ -244,6 +244,6 @@ func Arch() string {
 }
 
 // UnitBuildDir returns the build directory for a unit.
-func UnitBuildDir(projectDir, unitName string) string {
-	return filepath.Join(projectDir, "build", unitName)
+func UnitBuildDir(projectDir, arch, unitName string) string {
+	return filepath.Join(projectDir, "build", arch, unitName)
 }
