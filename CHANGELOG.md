@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Fix in-progress builds shown as failed** — opening a second `yoe` instance
+  while a build is running no longer marks that unit as failed. A PID-based lock
+  file (`.building`) is written during builds so other instances can detect
+  in-progress work.
+
 ## [0.3.3] - 2026-03-30
 
 - **HTTPS layer URLs** — `yoe init` now uses HTTPS URLs for the units-core layer
