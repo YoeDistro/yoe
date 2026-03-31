@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-03-30
+
 - **HTTPS layer URLs** — `yoe init` now uses HTTPS URLs for the units-core layer
   instead of SSH, removing the need for SSH key setup to get started.
 
