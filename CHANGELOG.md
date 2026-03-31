@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-03-31
+
+**ARM BUILDS ON X86 NOW WORK**
+
 - **TUI global notifications** — the TUI now shows a yellow banner for
   background operations like container image rebuilds. Previously these events
   were only visible in build log files.
@@ -17,15 +21,15 @@ and this project adheres to
 - **xz switched to cmake** — the xz unit now uses the cmake class instead of
   autotools with gettext workarounds, simplifying the build definition.
 - **TUI reloads .star files before each build** — editing unit definitions or
-  classes no longer requires restarting the TUI. The project is re-evaluated from
-  Starlark on each build, picking up any changes to build steps, deps, or
+  classes no longer requires restarting the TUI. The project is re-evaluated
+  from Starlark on each build, picking up any changes to build steps, deps, or
   configuration.
 - **Fix xz autoreconf failure** — xz's `configure.ac` uses `AM_GNU_GETTEXT`
   macros which require gettext's m4 files. The xz unit now provides stub m4
   macros and skips `autopoint`, allowing `autoreconf` to succeed without gettext
   installed in the container.
-- **Cross-architecture builds** — build arm64 and riscv64 images on x86_64
-  hosts using QEMU user-mode emulation. Target arch is resolved from the machine
+- **Cross-architecture builds** — build arm64 and riscv64 images on x86_64 hosts
+  using QEMU user-mode emulation. Target arch is resolved from the machine
   definition. Run `yoe container binfmt` for one-time setup, then
   `yoe build base-image --machine qemu-arm64` works transparently.
 - **Arch-aware build directories** — build output is now stored under
