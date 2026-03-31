@@ -89,7 +89,7 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
   no golden images
 - **Modern languages** (Go, Rust, Zig, Python, JavaScript) — uses native
   language package managers, caches packages where possible
-- **No cross compilation** — native builds on modern ARM/RISC-V hardware
+- **No cross compilation** — leverage native builds on modern ARM/RISC-V hardware
 - **Starlark for units and build rules** — Python-like, deterministic, sandboxed
   (see [Build Languages](docs/build-languages.md))
 - **Leverage existing ecosystems** — integrate with language-native build
