@@ -8,10 +8,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-03-30
+
 - **Build lock files** — a PID-based `.lock` file is written during builds so
   other `yoe` instances can detect in-progress work instead of marking active
-  builds as failed. Builds are skipped if another process is already building the
-  same unit.
+  builds as failed. Builds are skipped if another process is already building
+  the same unit.
 - **`yoe clean --locks`** — removes stale lock files left behind by crashed or
   killed builds.
 - **TUI edit for cached layers** — pressing `e` on a unit now also searches the
