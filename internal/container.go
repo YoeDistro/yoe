@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/YoeDistro/yoe-ng/containers"
@@ -19,8 +20,27 @@ const (
 	containerImage   = "yoe-ng"
 )
 
-func containerTag() string {
-	return containerImage + ":" + containerVersion
+// hostArch returns the host machine architecture in Yoe-NG format.
+func hostArch() string {
+	out, err := exec.Command("uname", "-m").Output()
+	if err != nil {
+		return "x86_64"
+	}
+	arch := strings.TrimSpace(string(out))
+	switch arch {
+	case "aarch64":
+		return "arm64"
+	default:
+		return arch
+	}
+}
+
+func containerTag(arch string) string {
+	host := hostArch()
+	if arch == "" || arch == host {
+		return containerImage + ":" + containerVersion
+	}
+	return containerImage + ":" + containerVersion + "-" + arch
 }
 
 // Mount describes a bind mount for the container.
@@ -33,6 +53,7 @@ type Mount struct {
 // ContainerRunConfig configures a single command execution inside the container.
 type ContainerRunConfig struct {
 	Ctx         context.Context   // optional; nil means background
+	Arch        string            // target architecture (empty = host arch)
 	Command     string            // shell command to run
 	ProjectDir  string            // mounted as /project
 	Mounts      []Mount           // additional bind mounts
@@ -43,23 +64,30 @@ type ContainerRunConfig struct {
 	Stderr      io.Writer         // override stderr (default: os.Stderr)
 }
 
-var ensureOnce sync.Once
-var ensureErr error
+var ensureMu sync.Mutex
+var ensuredArches = map[string]error{}
 
 // RunInContainer executes a shell command inside the build container.
-// The container image is built lazily on first invocation.
+// The container image is built lazily on first invocation per arch.
 func RunInContainer(cfg ContainerRunConfig) error {
-	// Use the configured stderr for image build progress, falling back
-	// to os.Stderr when no writer is set (CLI mode).
-	ensureOnce.Do(func() {
+	arch := cfg.Arch
+	if arch == "" {
+		arch = hostArch()
+	}
+
+	ensureMu.Lock()
+	err, ok := ensuredArches[arch]
+	if !ok {
 		w := cfg.Stderr
 		if w == nil {
 			w = os.Stderr
 		}
-		ensureErr = EnsureImage(w)
-	})
-	if ensureErr != nil {
-		return fmt.Errorf("container image: %w", ensureErr)
+		err = EnsureImage(arch, w)
+		ensuredArches[arch] = err
+	}
+	ensureMu.Unlock()
+	if err != nil {
+		return fmt.Errorf("container image: %w", err)
 	}
 
 	runtime, err := detectRuntime()
@@ -132,7 +160,17 @@ func RunInContainer(cfg ContainerRunConfig) error {
 // The returned args end with "bash" "-c" so the caller only needs to
 // append the command string.
 func containerRunArgs(cfg ContainerRunConfig) ([]string, error) {
+	arch := cfg.Arch
+	if arch == "" {
+		arch = hostArch()
+	}
+
 	args := []string{"run", "--rm", "--privileged"}
+
+	// Add platform for cross-arch containers
+	if arch != hostArch() {
+		args = append(args, "--platform", "linux/"+arch)
+	}
 
 	if !cfg.NoUser {
 		u, err := user.Current()
@@ -163,25 +201,34 @@ func containerRunArgs(cfg ContainerRunConfig) ([]string, error) {
 	}
 
 	args = append(args, "-w", "/project")
-	args = append(args, containerTag())
+	args = append(args, containerTag(arch))
 	args = append(args, "bash", "-c")
 
 	return args, nil
 }
 
 // EnsureImage checks if the versioned container image exists and builds it
-// if not. The optional writer receives build progress; if nil, output is
-// discarded (safe for TUI mode).
-func EnsureImage(w io.Writer) error {
+// if not. The arch parameter selects the target architecture (empty = host).
+// The optional writer receives build progress; if nil, output is discarded
+// (safe for TUI mode).
+func EnsureImage(arch string, w io.Writer) error {
 	runtime, err := detectRuntime()
 	if err != nil {
 		return err
 	}
 
-	tag := containerTag()
+	tag := containerTag(arch)
 	cmd := exec.Command(runtime, "image", "inspect", tag)
 	if err := cmd.Run(); err == nil {
 		return nil
+	}
+
+	// Cross-arch: check binfmt_misc first
+	host := hostArch()
+	if arch != "" && arch != host {
+		if err := checkBinfmt(arch); err != nil {
+			return err
+		}
 	}
 
 	if w == nil {
@@ -200,7 +247,15 @@ func EnsureImage(w io.Writer) error {
 		return fmt.Errorf("writing Dockerfile: %w", err)
 	}
 
-	cmd = exec.Command(runtime, "build", "-t", tag, tmpDir)
+	if arch != "" && arch != host {
+		platform := "linux/" + arch
+		cmd = exec.Command(runtime, "buildx", "build",
+			"--platform", platform,
+			"--load",
+			"-t", tag, tmpDir)
+	} else {
+		cmd = exec.Command(runtime, "build", "-t", tag, tmpDir)
+	}
 	cmd.Stdout = w
 	cmd.Stderr = w
 	if err := cmd.Run(); err != nil {
@@ -208,6 +263,29 @@ func EnsureImage(w io.Writer) error {
 	}
 
 	return nil
+}
+
+// checkBinfmt verifies that binfmt_misc is registered for the given arch.
+func checkBinfmt(arch string) error {
+	binfmtName := binfmtArchName(arch)
+	path := filepath.Join("/proc/sys/fs/binfmt_misc", binfmtName)
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	}
+	return fmt.Errorf(
+		"binfmt_misc not registered for %s.\nRun 'yoe container binfmt' to enable cross-architecture builds",
+		arch)
+}
+
+func binfmtArchName(arch string) string {
+	switch arch {
+	case "arm64":
+		return "qemu-aarch64"
+	case "riscv64":
+		return "qemu-riscv64"
+	default:
+		return "qemu-" + arch
+	}
 }
 
 // ContainerVersion returns the container version embedded in this binary.

@@ -247,7 +247,7 @@ func cmdContainer(args []string) {
 
 	switch args[0] {
 	case "build":
-		if err := yoe.EnsureImage(os.Stderr); err != nil {
+		if err := yoe.EnsureImage("", os.Stderr); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -256,7 +256,7 @@ func cmdContainer(args []string) {
 		cmdContainerShell()
 	case "status":
 		fmt.Printf("Container version: %s (image: yoe-ng:%s)\n", yoe.ContainerVersion(), yoe.ContainerVersion())
-		if err := yoe.EnsureImage(io.Discard); err != nil {
+		if err := yoe.EnsureImage("", io.Discard); err != nil {
 			fmt.Println("Container image: not built")
 		} else {
 			fmt.Println("Container image: ready")

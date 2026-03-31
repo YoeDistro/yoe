@@ -243,6 +243,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 
 		cfg := &SandboxConfig{
 			Ctx:        ctx,
+			Arch:       opts.Arch,
 			SrcDir:     srcDir,
 			DestDir:    destDir,
 			Sysroot:    sysroot,
