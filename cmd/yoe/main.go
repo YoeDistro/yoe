@@ -349,6 +349,7 @@ func cmdConfig(args []string) {
 func cmdClean(args []string) {
 	all := false
 	force := false
+	locks := false
 	var units []string
 
 	for i := 0; i < len(args); i++ {
@@ -357,6 +358,8 @@ func cmdClean(args []string) {
 			all = true
 		case "--force", "-f":
 			force = true
+		case "--locks":
+			locks = true
 		default:
 			units = append(units, args[i])
 		}
@@ -365,6 +368,14 @@ func cmdClean(args []string) {
 	dir := os.Getenv("YOE_PROJECT")
 	if dir == "" {
 		dir = "."
+	}
+
+	if locks {
+		if err := yoe.CleanLocks(dir); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	if err := yoe.RunClean(dir, all, force, units); err != nil {

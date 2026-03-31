@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/YoeDistro/yoe-ng/internal/image"
 	"github.com/YoeDistro/yoe-ng/internal/artifact"
@@ -141,9 +142,20 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	buildDir := UnitBuildDir(opts.ProjectDir, unit.Name)
 	EnsureDir(buildDir)
 
+	// Skip if another process is already building this unit.
+	if IsBuildInProgress(opts.ProjectDir, unit.Name) {
+		fmt.Fprintf(w, "  %s: build already in progress, skipping\n", unit.Name)
+		return nil
+	}
+
 	// Remove the cache marker before starting so a cancelled or failed
 	// build does not leave a stale marker that makes it appear cached.
 	os.Remove(CacheMarkerPath(opts.ProjectDir, unit.Name, hash))
+
+	// Write a lock file so other yoe instances can detect an in-progress build.
+	lockPath := BuildingLockPath(opts.ProjectDir, unit.Name)
+	os.WriteFile(lockPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0644)
+	defer os.Remove(lockPath)
 
 	// Open build log. In verbose mode, tee to terminal + log file.
 	// In normal mode, log only — on error, print the log path.
@@ -395,6 +407,24 @@ func IsBuildCached(projectDir, name, hash string) bool {
 
 func HasBuildLog(projectDir, name string) bool {
 	_, err := os.Stat(filepath.Join(projectDir, "build", name, "build.log"))
+	return err == nil
+}
+
+// BuildingLockPath returns the path of the lock file written during a build.
+func BuildingLockPath(projectDir, name string) string {
+	return filepath.Join(projectDir, "build", name, ".lock")
+}
+
+// IsBuildInProgress returns true if another process is currently building this unit.
+// It checks for the lock file and verifies the PID is still alive.
+func IsBuildInProgress(projectDir, name string) bool {
+	data, err := os.ReadFile(BuildingLockPath(projectDir, name))
+	if err != nil {
+		return false
+	}
+	pid := strings.TrimSpace(string(data))
+	// Check if the process is still running
+	_, err = os.Stat(fmt.Sprintf("/proc/%s", pid))
 	return err == nil
 }
 

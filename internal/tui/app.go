@@ -118,6 +118,8 @@ func Run(proj *yoestar.Project, projectDir string) error {
 		hash := hashes[name]
 		if build.IsBuildCached(projectDir, name, hash) {
 			statuses[name] = statusCached
+		} else if build.IsBuildInProgress(projectDir, name) {
+			statuses[name] = statusBuilding
 		} else if build.HasBuildLog(projectDir, name) {
 			statuses[name] = statusFailed
 		}
@@ -991,21 +993,42 @@ func (m model) listViewportHeight() int {
 }
 
 func findUnitFile(projectDir, name string) string {
-	// Search roots: project's own layers + parent directories for relative
-	// layer references (e.g., testdata/e2e-project references ../../layers/)
-	roots := []string{projectDir}
+	// Collect directories to search for .star files.
+	// For the project and parent dirs, search under layers/.
+	// For cached layers, search the layer root directly (units/, images/, etc.).
+	var searchDirs []string
+
+	for _, root := range []string{projectDir} {
+		d := filepath.Join(root, "layers")
+		if _, err := os.Stat(d); err == nil {
+			searchDirs = append(searchDirs, d)
+		}
+	}
 	for _, rel := range []string{"..", filepath.Join("..", "..")} {
-		r := filepath.Join(projectDir, rel)
-		if _, err := os.Stat(filepath.Join(r, "layers")); err == nil {
-			roots = append(roots, r)
+		d := filepath.Join(projectDir, rel, "layers")
+		if _, err := os.Stat(d); err == nil {
+			searchDirs = append(searchDirs, d)
+		}
+	}
+
+	// Add cached layer directories
+	cacheDir := os.Getenv("YOE_CACHE")
+	if cacheDir == "" {
+		cacheDir = "cache"
+	}
+	cachedLayers := filepath.Join(cacheDir, "layers")
+	if entries, err := os.ReadDir(cachedLayers); err == nil {
+		for _, e := range entries {
+			if e.IsDir() {
+				searchDirs = append(searchDirs, filepath.Join(cachedLayers, e.Name()))
+			}
 		}
 	}
 
 	// First pass: look for an exact <name>.star file
-	for _, root := range roots {
-		layersDir := filepath.Join(root, "layers")
+	for _, dir := range searchDirs {
 		var found string
-		filepath.WalkDir(layersDir, func(path string, d os.DirEntry, err error) error {
+		filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 			if err != nil || d.IsDir() {
 				return nil
 			}
@@ -1023,10 +1046,9 @@ func findUnitFile(projectDir, name string) string {
 	// Second pass: derived units (e.g., base-files-dev is defined inside
 	// another .star file via a function call). Grep for the name string.
 	needle := []byte(`"` + name + `"`)
-	for _, root := range roots {
-		layersDir := filepath.Join(root, "layers")
+	for _, dir := range searchDirs {
 		var found string
-		filepath.WalkDir(layersDir, func(path string, d os.DirEntry, err error) error {
+		filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 			if err != nil || d.IsDir() || !strings.HasSuffix(path, ".star") {
 				return nil
 			}
