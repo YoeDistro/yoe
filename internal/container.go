@@ -21,6 +21,11 @@ const (
 )
 
 // hostArch returns the host machine architecture in Yoe-NG format.
+// HostArch returns the host machine's architecture (e.g., "x86_64", "arm64").
+func HostArch() string {
+	return hostArch()
+}
+
 func hostArch() string {
 	out, err := exec.Command("uname", "-m").Output()
 	if err != nil {
@@ -266,6 +271,15 @@ func EnsureImage(arch string, w io.Writer) error {
 }
 
 // checkBinfmt verifies that binfmt_misc is registered for the given arch.
+// CheckBinfmt verifies that binfmt_misc is registered for the given
+// architecture. Returns nil if registered or if arch matches the host.
+func CheckBinfmt(arch string) error {
+	if arch == "" || arch == hostArch() {
+		return nil
+	}
+	return checkBinfmt(arch)
+}
+
 func checkBinfmt(arch string) error {
 	binfmtName := binfmtArchName(arch)
 	path := filepath.Join("/proc/sys/fs/binfmt_misc", binfmtName)

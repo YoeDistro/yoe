@@ -15,6 +15,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	yoe "github.com/YoeDistro/yoe-ng/internal"
 	"github.com/YoeDistro/yoe-ng/internal/build"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
@@ -78,6 +79,7 @@ type model struct {
 	proj       *yoestar.Project
 	projectDir string
 	arch       string
+	warning    string // persistent warning banner (e.g., binfmt missing)
 	dag        *resolve.DAG
 	units      []string
 	hashes     map[string]string
@@ -151,6 +153,7 @@ func Run(proj *yoestar.Project, projectDir string) error {
 		cancels:    make(map[string]context.CancelFunc),
 		machines:   machines,
 	}
+	m.checkBinfmtWarning()
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	tuiProgram = p
@@ -622,6 +625,7 @@ func (m model) updateSetupMachine(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.arch = mach.Arch
 		}
 		m.recomputeStatuses()
+		m.checkBinfmtWarning()
 		m.message = fmt.Sprintf("Machine set to %s", m.machines[m.machineCursor])
 		m.setupField = ""
 		m.view = viewUnits
@@ -749,10 +753,17 @@ func (m model) viewUnits() string {
 	// Header
 	machine := m.proj.Defaults.Machine
 	image := m.proj.Defaults.Image
-	b.WriteString(fmt.Sprintf("  %s  Machine: %s  Image: %s\n\n",
+	b.WriteString(fmt.Sprintf("  %s  Machine: %s  Image: %s\n",
 		titleStyle.Render("Yoe-NG"),
 		headerStyle.Render(machine),
 		headerStyle.Render(image)))
+
+	// Warning banner
+	if m.warning != "" {
+		warnStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("226")).Bold(true)
+		b.WriteString(fmt.Sprintf("  %s\n", warnStyle.Render(m.warning)))
+	}
+	b.WriteString("\n")
 
 	// Column header
 	b.WriteString(fmt.Sprintf("  %s %s %s\n",
@@ -1171,6 +1182,16 @@ func (m *model) recomputeStatuses() {
 		} else {
 			m.statuses[name] = statusNone
 		}
+	}
+}
+
+// checkBinfmtWarning sets or clears the warning banner based on whether
+// binfmt_misc is registered for the current target arch.
+func (m *model) checkBinfmtWarning() {
+	if err := yoe.CheckBinfmt(m.arch); err != nil {
+		m.warning = "⚠ Cross-arch build: run 'yoe container binfmt' to register QEMU emulation for " + m.arch
+	} else {
+		m.warning = ""
 	}
 }
 
