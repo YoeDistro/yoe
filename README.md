@@ -18,9 +18,9 @@ vision.
 
 ## 🚀 Getting Started
 
-Prerequisites: Linux or macOS with Git and Docker (or Podman) installed.
-Windows users: install WSL2 and use the Linux binary. (Linux x86_64/Docker is
-the most tested configuration)
+Prerequisites: Linux or macOS with Git and Docker (or Podman) installed. Windows
+users: install WSL2 and use the Linux binary. (Linux x86_64/Docker is the most
+tested configuration)
 
 ```sh
 # Download the yoe binary
