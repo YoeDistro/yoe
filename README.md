@@ -110,7 +110,8 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
 - **Modern languages** (Go, Rust, Zig, Python, JavaScript) — uses native
   language package managers, caches packages where possible
 - **No cross compilation** — native builds via QEMU user-mode emulation or real
-  ARM/RISC-V hardware
+  ARM/RISC-V hardware. Build environment is per-unit, not global — each unit
+  runs in its own isolated container.
 - **Starlark for units and build rules** — Python-like, deterministic, sandboxed
   (see [Build Languages](docs/build-languages.md))
 - **Leverage existing ecosystems** — integrate with language-native build
