@@ -8,6 +8,20 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Cross-architecture builds** — build arm64 and riscv64 images on x86_64
+  hosts using QEMU user-mode emulation. Target arch is resolved from the machine
+  definition. Run `yoe container binfmt` for one-time setup, then
+  `yoe build base-image --machine qemu-arm64` works transparently.
+- **Arch-aware build directories** — build output is now stored under
+  `build/<arch>/<unit>/` and APK repos under `build/repo/<arch>/`, supporting
+  multi-arch builds in the same project. **Note:** existing build caches under
+  `build/<unit>/` will need to be rebuilt (`yoe clean --all`).
+- **`yoe container binfmt`** — new command to register QEMU user-mode emulation
+  for cross-architecture container builds. Shows what it will do and prompts for
+  confirmation.
+- **Multi-arch QEMU** — `yoe run` now auto-detects cross-architecture execution
+  and uses software emulation (`-cpu max`) instead of KVM. Container includes
+  `qemu-system-aarch64` and `qemu-system-riscv64`.
 - **TUI setup menu** — press `s` to open a setup view for selecting the target
   machine. Shows available machines with their architecture and highlights the
   current selection. Designed to accommodate future setup options.

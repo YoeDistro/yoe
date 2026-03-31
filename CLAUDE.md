@@ -101,6 +101,9 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
   provides only the minimal bootstrap toolchain (gcc, binutils, make, etc.);
   everything else is a unit. For non-essential features (docs, man pages),
   disabling via configure flags is also acceptable.
+- **Cross-architecture builds** — foreign-arch containers via QEMU user-mode
+  emulation (binfmt_misc). Target arch comes from the machine definition. Build
+  directories include arch: `build/<arch>/<unit>/`.
 - **Build sysroot** — after each unit builds, its output is installed into
   `build/sysroot/` so subsequent units can find deps' headers/libraries
 - **Starlark** for all units and config (Python-like, deterministic, sandboxed)
