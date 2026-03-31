@@ -113,32 +113,56 @@ func qemuBinary(arch string) string {
 	}
 }
 
+func detectHostArch() string {
+	out, err := exec.Command("uname", "-m").Output()
+	if err != nil {
+		return "x86_64"
+	}
+	arch := strings.TrimSpace(string(out))
+	switch arch {
+	case "aarch64":
+		return "arm64"
+	default:
+		return arch
+	}
+}
+
 func baseQEMUArgs(machine *yoestar.Machine, opts QEMUOptions) []string {
 	var args []string
 
-	// Machine type
+	hostArch := detectHostArch()
+	crossArch := machine.Arch != hostArch
+
 	qemu := machine.QEMU
 	if qemu != nil {
 		if qemu.Machine != "" {
 			args = append(args, "-machine", qemu.Machine)
 		}
-		if qemu.CPU != "" {
+		if crossArch {
+			args = append(args, "-cpu", "max")
+		} else if qemu.CPU != "" {
 			args = append(args, "-cpu", qemu.CPU)
 		}
 	} else {
-		// Defaults per arch
 		switch machine.Arch {
 		case "arm64":
-			args = append(args, "-machine", "virt", "-cpu", "host")
+			args = append(args, "-machine", "virt")
 		case "riscv64":
-			args = append(args, "-machine", "virt", "-cpu", "host")
+			args = append(args, "-machine", "virt")
 		default:
-			args = append(args, "-machine", "q35", "-cpu", "host")
+			args = append(args, "-machine", "q35")
+		}
+		if crossArch {
+			args = append(args, "-cpu", "max")
+		} else {
+			args = append(args, "-cpu", "host")
 		}
 	}
 
-	// Enable KVM
-	args = append(args, "-enable-kvm")
+	// Enable KVM only for same-arch
+	if !crossArch {
+		args = append(args, "-enable-kvm")
+	}
 
 	// Memory
 	mem := opts.Memory
