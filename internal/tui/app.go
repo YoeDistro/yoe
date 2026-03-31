@@ -391,7 +391,7 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.cursor < len(m.units) {
 			name := m.units[m.cursor]
 			if u, ok := m.proj.Units[name]; ok && u.Class == "image" {
-				c := exec.Command(os.Args[0], "run", name)
+				c := exec.Command(os.Args[0], "run", name, "--machine", m.proj.Defaults.Machine)
 				c.Dir = m.projectDir
 				return m, tea.ExecProcess(c, func(err error) tea.Msg {
 					return execDoneMsg{err: err}
@@ -714,7 +714,7 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "r":
 		if u, ok := m.proj.Units[m.detailUnit]; ok && u.Class == "image" {
-			c := exec.Command(os.Args[0], "run", m.detailUnit)
+			c := exec.Command(os.Args[0], "run", m.detailUnit, "--machine", m.proj.Defaults.Machine)
 			c.Dir = m.projectDir
 			return m, tea.ExecProcess(c, func(err error) tea.Msg {
 				return execDoneMsg{err: err}
