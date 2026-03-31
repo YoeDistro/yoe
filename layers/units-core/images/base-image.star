@@ -6,7 +6,7 @@ image(
         "base-files",
         "busybox",
         "linux",
-    ] + (["syslinux"] if target_arch() == "x86_64" else []),
+    ] + (["syslinux"] if ARCH == "x86_64" else []),
     hostname = "yoe",
     timezone = "UTC",
     services = [],

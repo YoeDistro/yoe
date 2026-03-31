@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"go.starlark.net/starlark"
 )
 
 // LoadOption configures optional behavior for LoadProject / LoadProjectFromRoot.
@@ -142,11 +144,18 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		}
 	}
 
-	// Apply machine override before evaluating units/images so that
-	// target_arch() reflects the actual target machine.
+	// Apply machine override before evaluating units/images.
 	if cfg.machine != "" {
 		if proj := eng.Project(); proj != nil {
 			proj.Defaults.Machine = cfg.machine
+		}
+	}
+
+	// Set ARCH variable for phase 2 so Starlark files can use it
+	// (e.g., conditional artifacts in image definitions).
+	if proj := eng.Project(); proj != nil {
+		if m, ok := eng.Machines()[proj.Defaults.Machine]; ok {
+			eng.SetVar("ARCH", starlark.String(m.Arch))
 		}
 	}
 

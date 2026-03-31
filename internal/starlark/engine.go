@@ -20,6 +20,9 @@ type Engine struct {
 	// used to retrieve the run() function for custom commands.
 	globals starlark.StringDict
 
+	// Predeclared variables set after engine creation (e.g., ARCH).
+	vars map[string]starlark.Value
+
 	// load() support
 	projectRoot string
 	layerRoots  map[string]string
@@ -31,7 +34,14 @@ func NewEngine() *Engine {
 		machines: make(map[string]*Machine),
 		units:    make(map[string]*Unit),
 		commands: make(map[string]*Command),
+		vars:     make(map[string]starlark.Value),
 	}
+}
+
+// SetVar sets a predeclared variable available in all subsequently evaluated
+// .star files. Used to inject ARCH after machines are loaded.
+func (e *Engine) SetVar(name string, value starlark.Value) {
+	e.vars[name] = value
 }
 
 func (e *Engine) Project() *Project              { return e.project }

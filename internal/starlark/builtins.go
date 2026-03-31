@@ -9,7 +9,7 @@ import (
 
 // builtins returns the predeclared names available in all .star files.
 func (e *Engine) builtins() starlark.StringDict {
-	return starlark.StringDict{
+	d := starlark.StringDict{
 		"project":     starlark.NewBuiltin("project", e.fnProject),
 		"defaults":    starlark.NewBuiltin("defaults", fnDefaults),
 		"repository":  starlark.NewBuiltin("repository", fnRepository),
@@ -32,8 +32,14 @@ func (e *Engine) builtins() starlark.StringDict {
 		"arg":         starlark.NewBuiltin("arg", fnArg),
 		"True":        starlark.True,
 		"False":       starlark.False,
-		"target_arch": starlark.NewBuiltin("target_arch", e.fnTargetArch),
 	}
+
+	// Merge engine variables (e.g., ARCH set after machine loading).
+	for k, v := range e.vars {
+		d[k] = v
+	}
+
+	return d
 }
 
 // --- Helper: extract keyword args ---
@@ -500,13 +506,3 @@ func (e *Engine) fnCommand(thread *starlark.Thread, _ *starlark.Builtin, _ starl
 	return starlark.None, nil
 }
 
-// fnTargetArch returns the architecture of the default machine.
-// Available in .star files as target_arch().
-func (e *Engine) fnTargetArch(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
-	if e.project != nil && e.project.Defaults.Machine != "" {
-		if m, ok := e.machines[e.project.Defaults.Machine]; ok {
-			return starlark.String(m.Arch), nil
-		}
-	}
-	return starlark.String("x86_64"), nil
-}
