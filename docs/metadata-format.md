@@ -485,7 +485,7 @@ project(
     ),
     layers = [
         # Layer in a subdirectory of a repo — path specifies where LAYER.star is
-        layer("git@github.com:YoeDistro/yoe-ng.git",
+        layer("https://github.com/YoeDistro/yoe-ng.git",
               ref = "main",
               path = "layers/units-core"),
         # Layer at the root of its own repo
@@ -688,7 +688,7 @@ project(
     version = "1.0.0",
     layers = [
         # Layer in a subdirectory of a repo
-        layer("git@github.com:YoeDistro/yoe-ng.git",
+        layer("https://github.com/YoeDistro/yoe-ng.git",
               ref = "main",
               path = "layers/units-core"),
         # Layer at the root of its own repo
@@ -778,7 +778,7 @@ fetching from Git. The `local` parameter overrides the remote URL:
 ```python
 layers = [
     # Local override — point at a checkout on disk instead of fetching
-    layer("git@github.com:YoeDistro/yoe-ng.git",
+    layer("https://github.com/YoeDistro/yoe-ng.git",
           local = "../yoe-ng",
           path = "layers/units-core"),
     # Local override for a standalone layer

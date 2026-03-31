@@ -50,7 +50,7 @@ The `units-core` layer lives at `layers/units-core/` in this repo. Projects
 reference it with `path = "layers/units-core"`:
 
 ```python
-layer("git@github.com:YoeDistro/yoe-ng.git",
+layer("https://github.com/YoeDistro/yoe-ng.git",
       ref = "main",
       path = "layers/units-core")
 ```
