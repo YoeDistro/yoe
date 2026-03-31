@@ -3,9 +3,8 @@ def autotools(name, version, source, sha256="", deps=[], runtime_deps=[],
               license="", description="", build=[], **kwargs):
     if not build:
         build = [
-            # Run autoreconf if configure doesn't exist (git sources).
-            # AUTOPOINT=true skips autopoint (gettext) which is not in the container.
-            "test -f configure || AUTOPOINT=true autoreconf -fi",
+            # Run autoreconf if configure doesn't exist (git sources)
+            "test -f configure || autoreconf -fi",
             "./configure --prefix=$PREFIX " + " ".join(configure_args),
             # Override maintainer-mode tools so make doesn't try to re-run
             # versioned autotools (e.g. aclocal-1.16) that aren't in the container

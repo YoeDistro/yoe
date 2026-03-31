@@ -12,10 +12,10 @@ and this project adheres to
   classes no longer requires restarting the TUI. The project is re-evaluated from
   Starlark on each build, picking up any changes to build steps, deps, or
   configuration.
-- **Fix autoreconf autopoint failure** — the autotools class now sets
-  `AUTOPOINT=true` when running `autoreconf`, preventing failures on packages
-  like xz that reference gettext in their build system but don't need it at build
-  time.
+- **Fix xz autoreconf failure** — xz's `configure.ac` uses `AM_GNU_GETTEXT`
+  macros which require gettext's m4 files. The xz unit now provides stub m4
+  macros and skips `autopoint`, allowing `autoreconf` to succeed without gettext
+  installed in the container.
 - **Cross-architecture builds** — build arm64 and riscv64 images on x86_64
   hosts using QEMU user-mode emulation. Target arch is resolved from the machine
   definition. Run `yoe container binfmt` for one-time setup, then
