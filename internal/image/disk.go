@@ -230,6 +230,8 @@ func createExt4Partition(partImg string, sizeMB int, rootfs string, p yoestar.Pa
 		if err := yoe.RunInContainer(yoe.ContainerRunConfig{
 			Command:    mkfsCmd,
 			ProjectDir: projectDir,
+			Stdout:     w,
+			Stderr:     w,
 		}); err != nil {
 			return fmt.Errorf("mkfs.ext4: %w", err)
 		}

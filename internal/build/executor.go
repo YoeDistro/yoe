@@ -1,6 +1,7 @@
 package build
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -22,6 +23,7 @@ type BuildEvent struct {
 }
 
 type Options struct {
+	Ctx        context.Context // optional; nil means background
 	Force      bool   // rebuild even if cached
 	Clean      bool   // delete build dir before rebuilding (implies Force)
 	NoCache    bool   // skip all caches
@@ -85,8 +87,17 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		}
 	}
 
+	ctx := opts.Ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	// Build in order
 	for _, name := range order {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("build cancelled")
+		}
+
 		unit := proj.Units[name]
 		hash := hashes[name]
 
@@ -104,7 +115,7 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		fmt.Fprintf(w, "%-20s [building]\n", name)
 		notify(name, "building")
 
-		if err := buildOne(proj, dag, unit, hash, opts, w); err != nil {
+		if err := buildOne(ctx, proj, dag, unit, hash, opts, w); err != nil {
 			notify(name, "failed")
 			// Show which remaining units are blocked by this failure
 			blocked := blockedUnits(dag, name, order)
@@ -126,9 +137,13 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 	return nil
 }
 
-func buildOne(proj *yoestar.Project, dag *resolve.DAG, unit *yoestar.Unit, hash string, opts Options, w io.Writer) error {
+func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit *yoestar.Unit, hash string, opts Options, w io.Writer) error {
 	buildDir := UnitBuildDir(opts.ProjectDir, unit.Name)
 	EnsureDir(buildDir)
+
+	// Remove the cache marker before starting so a cancelled or failed
+	// build does not leave a stale marker that makes it appear cached.
+	os.Remove(CacheMarkerPath(opts.ProjectDir, unit.Name, hash))
 
 	// Open build log. In verbose mode, tee to terminal + log file.
 	// In normal mode, log only — on error, print the log path.
@@ -209,9 +224,13 @@ func buildOne(proj *yoestar.Project, dag *resolve.DAG, unit *yoestar.Unit, hash 
 
 	// Execute each build step inside the container with bwrap
 	for i, cmd := range commands {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("build cancelled")
+		}
 		fmt.Fprintf(logW, "  [%d/%d] %s\n", i+1, len(commands), cmd)
 
 		cfg := &SandboxConfig{
+			Ctx:        ctx,
 			SrcDir:     srcDir,
 			DestDir:    destDir,
 			Sysroot:    sysroot,

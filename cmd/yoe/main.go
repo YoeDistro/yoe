@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"sort"
 
@@ -177,8 +180,12 @@ func cmdBuild(args []string) {
 		}
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
 	proj := loadProject()
 	opts := build.Options{
+		Ctx:        ctx,
 		Force:      force,
 		Clean:      clean,
 		NoCache:    noCache,
@@ -214,7 +221,7 @@ func cmdContainer(args []string) {
 
 	switch args[0] {
 	case "build":
-		if err := yoe.EnsureImage(); err != nil {
+		if err := yoe.EnsureImage(os.Stderr); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -223,7 +230,7 @@ func cmdContainer(args []string) {
 		cmdContainerShell()
 	case "status":
 		fmt.Printf("Container version: %s (image: yoe-ng:%s)\n", yoe.ContainerVersion(), yoe.ContainerVersion())
-		if err := yoe.EnsureImage(); err != nil {
+		if err := yoe.EnsureImage(io.Discard); err != nil {
 			fmt.Println("Container image: not built")
 		} else {
 			fmt.Println("Container image: ready")
@@ -371,7 +378,9 @@ func loadProject() *yoestar.Project {
 	if dir == "" {
 		dir = "."
 	}
-	proj, err := yoestar.LoadProject(dir)
+	proj, err := yoestar.LoadProject(dir,
+		yoestar.WithLayerSync(layer.SyncIfNeeded),
+	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

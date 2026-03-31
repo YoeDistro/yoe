@@ -1,8 +1,10 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"os/exec"
 	"os/user"
@@ -30,6 +32,7 @@ type Mount struct {
 
 // ContainerRunConfig configures a single command execution inside the container.
 type ContainerRunConfig struct {
+	Ctx         context.Context   // optional; nil means background
 	Command     string            // shell command to run
 	ProjectDir  string            // mounted as /project
 	Mounts      []Mount           // additional bind mounts
@@ -46,8 +49,14 @@ var ensureErr error
 // RunInContainer executes a shell command inside the build container.
 // The container image is built lazily on first invocation.
 func RunInContainer(cfg ContainerRunConfig) error {
+	// Use the configured stderr for image build progress, falling back
+	// to os.Stderr when no writer is set (CLI mode).
 	ensureOnce.Do(func() {
-		ensureErr = EnsureImage()
+		w := cfg.Stderr
+		if w == nil {
+			w = os.Stderr
+		}
+		ensureErr = EnsureImage(w)
 	})
 	if ensureErr != nil {
 		return fmt.Errorf("container image: %w", ensureErr)
@@ -63,6 +72,13 @@ func RunInContainer(cfg ContainerRunConfig) error {
 		return err
 	}
 
+	// Assign a unique container name so we can stop it on cancellation.
+	// docker run --rm + docker stop is safe: --rm removes the container
+	// after it exits, and docker stop gracefully terminates it.
+	name := fmt.Sprintf("yoe-%d", rand.Int())
+	// Insert --name after "run" (args[0])
+	args = append(args[:1], append([]string{"--name", name}, args[1:]...)...)
+
 	args = append(args, cfg.Command)
 
 	stderr := cfg.Stderr
@@ -70,6 +86,26 @@ func RunInContainer(cfg ContainerRunConfig) error {
 		stderr = os.Stderr
 	}
 	fmt.Fprintf(stderr, "[yoe] container: %s\n", cfg.Command)
+
+	ctx := cfg.Ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	// When the context is cancelled, stop the container explicitly.
+	// exec.CommandContext only kills the docker CLI client, not the
+	// container itself.
+	done := make(chan struct{})
+	if ctx != context.Background() {
+		go func() {
+			select {
+			case <-ctx.Done():
+				//nolint:gosec // best-effort cleanup
+				exec.Command(runtime, "stop", "-t", "3", name).Run()
+			case <-done:
+			}
+		}()
+	}
 
 	cmd := exec.Command(runtime, args...)
 	cmd.Stdout = cfg.Stdout
@@ -81,7 +117,14 @@ func RunInContainer(cfg ContainerRunConfig) error {
 		cmd.Stdin = os.Stdin
 	}
 
-	return cmd.Run()
+	err = cmd.Run()
+	close(done)
+
+	// If the context was cancelled, the error is expected.
+	if ctx.Err() != nil {
+		return fmt.Errorf("build cancelled")
+	}
+	return err
 }
 
 // containerRunArgs builds the docker/podman run arguments (without the
@@ -127,8 +170,9 @@ func containerRunArgs(cfg ContainerRunConfig) ([]string, error) {
 }
 
 // EnsureImage checks if the versioned container image exists and builds it
-// if not.
-func EnsureImage() error {
+// if not. The optional writer receives build progress; if nil, output is
+// discarded (safe for TUI mode).
+func EnsureImage(w io.Writer) error {
 	runtime, err := detectRuntime()
 	if err != nil {
 		return err
@@ -140,7 +184,10 @@ func EnsureImage() error {
 		return nil
 	}
 
-	fmt.Fprintf(os.Stderr, "[yoe] building container image %s...\n", tag)
+	if w == nil {
+		w = io.Discard
+	}
+	fmt.Fprintf(w, "[yoe] building container image %s...\n", tag)
 
 	tmpDir, err := os.MkdirTemp("", "yoe-container-build-*")
 	if err != nil {
@@ -154,8 +201,8 @@ func EnsureImage() error {
 	}
 
 	cmd = exec.Command(runtime, "build", "-t", tag, tmpDir)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = w
+	cmd.Stderr = w
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("building container image: %w", err)
 	}

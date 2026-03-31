@@ -90,6 +90,44 @@ func Sync(proj *yoestar.Project, w io.Writer) (map[string]string, error) {
 	return result, nil
 }
 
+// SyncIfNeeded clones any layers that are not already cached. Unlike Sync,
+// it does not fetch/update layers that already exist — keeping it fast enough
+// to call on every build without adding latency.
+func SyncIfNeeded(layers []yoestar.LayerRef, w io.Writer) error {
+	cacheDir, err := CacheDir()
+	if err != nil {
+		return err
+	}
+
+	for _, l := range layers {
+		if l.Local != "" {
+			continue
+		}
+
+		name := LayerName(l)
+		layerDir := filepath.Join(cacheDir, name)
+
+		if _, err := os.Stat(filepath.Join(layerDir, ".git")); err == nil {
+			continue // already cloned
+		}
+
+		ref := l.Ref
+		if ref == "" {
+			ref = "main"
+		}
+
+		fmt.Fprintf(w, "[yoe] cloning layer %s (ref: %s)...\n", name, ref)
+		cmd := exec.Command("git", "clone", "--depth", "1", "--branch", ref, l.URL, layerDir)
+		cmd.Stdout = w
+		cmd.Stderr = w
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("cloning layer %s: %w", name, err)
+		}
+	}
+
+	return nil
+}
+
 // ResolveLayerPaths returns the layer name → directory mapping for a project.
 // Uses local overrides when set, otherwise checks the cache.
 func ResolveLayerPaths(proj *yoestar.Project, projectRoot string) (map[string]string, error) {

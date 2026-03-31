@@ -8,6 +8,30 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-03-30
+
+- **TUI scrolling** — both the unit list and detail log views are now
+  scrollable. The unit list shows `↑`/`↓` overflow indicators when there are
+  more units than fit on screen. The detail view supports `j`/`k`,
+  `PgUp`/`PgDn`, `g`/`G` navigation through the full build output and log, with
+  auto-follow during active builds.
+- **Auto-sync layers** — `yoe build` and other commands that load the project
+  now automatically clone missing layers on first use, matching the lazy
+  container-build pattern. Existing cached layers are not fetched/updated, so
+  there is no added latency on subsequent runs. Explicit `yoe layer sync` is
+  still available to update layers.
+- **TUI confirmation prompts** — quitting (`q`/`ctrl+c`) and cancelling a build
+  (`x`) now prompt for confirmation when builds are active, preventing
+  accidental loss of in-progress builds. Declining a prompt clears the message
+  cleanly.
+- **Fix build cancellation not stopping containers** — cancelling a build (via
+  TUI quit or `ctrl+c` on the CLI) now explicitly stops the Docker container
+  (`docker stop`) instead of only killing the CLI client, which left containers
+  running in the background.
+- **Fix stale cache after cancelled builds** — the cache marker is now removed
+  before building so a cancelled or failed rebuild no longer appears cached from
+  a previous successful build.
+
 ## [0.3.1] - 2026-03-30
 
 **ALL UNITS ARE NOW BUILDING**
