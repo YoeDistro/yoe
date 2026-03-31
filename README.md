@@ -65,9 +65,9 @@ Embedded Linux is hard not because the concepts are complex, but because there
 are _many_ concepts that interact in non-obvious ways: toolchain flags,
 dependency ordering, kernel configuration, package splitting, layer composition,
 image assembly, device trees, bootloaders. Traditional build systems manage this
-complexity through documentation that developers must read and internalize.
+complexity through complexity.
 
-Yoe-NG takes a different approach: **the build system is the documentation.**
+Yoe-NG takes a different approach: **Simplify things as much as possible.**
 Starlark units are readable by both humans and AI. The dependency graph is
 queryable. Build logs are structured. An AI assistant that understands all of
 this can:
@@ -172,32 +172,31 @@ relates to each of these systems, including when you should use them instead.
 
 ## 🔧 Motivation
 
-The Yocto Project is a powerful embedded Linux build system, but it carries
-significant complexity: BitBake, extensive metadata, cross-compilation
-toolchains, and a steep learning curve. Much of this complexity exists to solve
-problems that modern language ecosystems have already addressed — dependency
-management, reproducible builds, and caching.
+Existing embedded Linux build systems (Yocto, Buildroot) were designed in a
+world where ARM hardware was slow, applications were written in C, and
+developers configured everything by hand. Three things have changed:
 
-Yoe-NG asks: what if we started fresh with these assumptions?
+1. **ARM and RISC-V hardware is fast.** Modern ARM boards and cloud instances
+   (AWS Graviton, Hetzner CAX) build at speeds that make cross-compilation
+   unnecessary for most workloads. For development, QEMU user-mode emulation
+   lets you build ARM images on x86 without a cross-toolchain — slower, but
+   correct and simple.
 
-- **AI changes the interface.** The hardest part of embedded Linux is knowing
-  what to configure and how. An AI assistant that understands the build system
-  can guide developers through unit creation, debug build failures, and audit
-  security — without requiring them to memorize a build system's quirks.
-- **Native compilation is fast enough.** With modern hardware (including
-  powerful ARM/RISC-V boards and cloud CI), cross-compilation is no longer a
-  hard requirement for most workloads.
-- **Language-native package managers work.** Go modules, Cargo, npm, and pip
-  already handle dependency resolution and reproducibility. Wrapping them in
-  another layer (units, bbappends) adds friction without proportional benefit.
-- **Simpler tooling is better tooling.** A single Go binary with a TUI is easier
-  to install, maintain, and extend than a Python-based build system with
-  thousands of metadata files.
-- **Structured metadata enables AI.** Starlark is deterministic, sandboxed, and
-  readable by both humans and AI. Combined with a queryable dependency graph
-  (`yoe desc`, `yoe refs`, `yoe graph`), the entire build state is accessible to
-  AI assistants — unlike shell-based build systems where critical state is
-  hidden in environment variables and implicit ordering.
+2. **Applications are moving to modern languages.** Go, Rust, Zig, and Python
+   have their own dependency management, reproducible builds, and caching. The
+   elaborate cross-compilation and sysroot machinery in traditional build systems
+   was designed for C/C++ — wrapping Go modules or Cargo in BitBake recipes adds
+   friction without proportional benefit.
+
+3. **AI changes the interface.** The hardest part of embedded Linux is knowing
+   what to configure and how. An AI assistant that understands the build system
+   can guide developers through unit creation, debug build failures, and audit
+   security — without requiring them to memorize a build system's quirks. But
+   this only works if the build metadata is structured and queryable, not buried
+   in shell scripts and environment variables.
+
+Yoe-NG is built for this new world: native builds, language-native package
+managers, structured Starlark metadata, and AI as a first-class interface.
 
 ## ⚙️ Design Principles
 
