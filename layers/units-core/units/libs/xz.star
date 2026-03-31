@@ -7,5 +7,5 @@ autotools(
     tag = "v5.6.3",
     license = "LGPL-2.1-or-later",
     description = "XZ Utils compression library and tools",
-    deps = ["gettext"],
+    configure_args = ["--disable-nls"],
 )
