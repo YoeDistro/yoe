@@ -74,12 +74,15 @@ type execDoneMsg struct {
 	err error
 }
 
+type notifyMsg string
+
 // model is the Bubble Tea model for the yoe TUI.
 type model struct {
 	proj       *yoestar.Project
 	projectDir string
 	arch       string
-	warning    string // persistent warning banner (e.g., binfmt missing)
+	warning      string // persistent warning banner (e.g., binfmt missing)
+	notification string // transient global notification (e.g., container rebuild)
 	dag        *resolve.DAG
 	units      []string
 	hashes     map[string]string
@@ -157,6 +160,14 @@ func Run(proj *yoestar.Project, projectDir string) error {
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	tuiProgram = p
+
+	yoe.OnNotify = func(msg string) {
+		if tuiProgram != nil {
+			tuiProgram.Send(notifyMsg(msg))
+		}
+	}
+	defer func() { yoe.OnNotify = nil }()
+
 	_, err = p.Run()
 	return err
 }
@@ -221,6 +232,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.message = fmt.Sprintf("Command error: %v", msg.err)
 		}
+		return m, nil
+
+	case notifyMsg:
+		m.notification = string(msg)
 		return m, nil
 
 	case tea.KeyMsg:
@@ -762,6 +777,11 @@ func (m model) viewUnits() string {
 	if m.warning != "" {
 		warnStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("226")).Bold(true)
 		b.WriteString(fmt.Sprintf("  %s\n", warnStyle.Render(m.warning)))
+	}
+	// Global notification (e.g., container rebuild)
+	if m.notification != "" {
+		notifyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("226")).Bold(true)
+		b.WriteString(fmt.Sprintf("  %s\n", notifyStyle.Render("⏳ "+m.notification)))
 	}
 	b.WriteString("\n")
 

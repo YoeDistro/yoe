@@ -1,5 +1,5 @@
 # Yoe-NG build container (Tier 0)
-# Version: 13
+# Version: 14
 #
 # Tools-only container for build execution. The yoe CLI runs on the host
 # and invokes this container only for build commands that need the
@@ -43,7 +43,8 @@ RUN apk add --no-cache \
     findutils \
     sed \
     python3 \
-    py3-setuptools
+    py3-setuptools \
+    cmake
 
 # x86-only packages (bootloader, firmware) — skip on other arches
 RUN if [ "$(uname -m)" = "x86_64" ]; then \

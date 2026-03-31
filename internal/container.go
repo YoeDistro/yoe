@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	containerVersion = "13"
+	containerVersion = "14"
 	containerImage   = "yoe-ng"
 )
 
@@ -68,6 +68,10 @@ type ContainerRunConfig struct {
 	Stdout      io.Writer         // override stdout (default: os.Stdout)
 	Stderr      io.Writer         // override stderr (default: os.Stderr)
 }
+
+// OnNotify is an optional callback for global notifications (e.g., TUI).
+// Non-empty string = show notification, empty string = clear it.
+var OnNotify func(string)
 
 var ensureMu sync.Mutex
 var ensuredArches = map[string]error{}
@@ -240,6 +244,11 @@ func EnsureImage(arch string, w io.Writer) error {
 		w = io.Discard
 	}
 	fmt.Fprintf(w, "[yoe] building container image %s...\n", tag)
+
+	if OnNotify != nil {
+		OnNotify(fmt.Sprintf("Building container image %s...", tag))
+		defer func() { OnNotify("") }()
+	}
 
 	tmpDir, err := os.MkdirTemp("", "yoe-container-build-*")
 	if err != nil {

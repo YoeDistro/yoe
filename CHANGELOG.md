@@ -8,6 +8,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **TUI global notifications** — the TUI now shows a yellow banner for
+  background operations like container image rebuilds. Previously these events
+  were only visible in build log files.
+- **cmake added to build container** — cmake is now available as a bootstrap
+  tool in the container (version bump to 14), enabling units that use the cmake
+  build system.
+- **xz switched to cmake** — the xz unit now uses the cmake class instead of
+  autotools with gettext workarounds, simplifying the build definition.
 - **TUI reloads .star files before each build** — editing unit definitions or
   classes no longer requires restarting the TUI. The project is re-evaluated from
   Starlark on each build, picking up any changes to build steps, deps, or
