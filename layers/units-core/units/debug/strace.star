@@ -7,7 +7,7 @@ unit(
     description = "System call tracer for Linux",
     build = [
         "./bootstrap",
-        "./configure --prefix=$PREFIX --enable-mpers=no",
+        "./configure --prefix=$PREFIX --enable-mpers=no --without-libdw",
         "make -j$NPROC",
         "make DESTDIR=$DESTDIR install",
     ],
