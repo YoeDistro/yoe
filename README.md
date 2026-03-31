@@ -13,6 +13,9 @@ One Go binary. Readable Starlark config files. AI that understands your
 dependency graph. Build ARM images on your x86 laptop, on native hardware, or in
 cloud CI — same tool, same config, same results.
 
+Note: much of what is in the docs has not been implemented yet, and is mostly
+vision.
+
 ## 🚀 Getting Started
 
 Prerequisites: a Linux host (x86_64 or ARM64) with Git and Docker (or Podman)
@@ -21,7 +24,6 @@ installed. (only x86_64/Docker host has been tested, ARM64 testing appreciated)
 ```sh
 # Download the yoe binary
 curl -L https://github.com/yoe/yoe-ng/releases/latest/download/yoe-Linux-x86_64 -o yoe
-(project is not public yet, so download manually from releases page)
 chmod +x yoe
 sudo mv yoe /usr/local/bin/
 
@@ -29,20 +31,22 @@ sudo mv yoe /usr/local/bin/
 yoe init yoe-test
 cd yoe-test
 
-# Fetch layers (downloads units-core)
-yoe layer sync
+# start the TUI (see screenshot below)
+yoe
 
-# Build the base image (builds all required packages, then assembles the image)
-yoe build base-image
+# navigate to the base-image and press 'b' to build.
 
-# Boot it in QEMU
-yoe run base-image
+# when build is complete, press 'r' to run.
 
 # Log in a user: root, no password
 
 # Power off when finished (inside running image)
 poweroff
 ```
+
+There are also CLI variants of the above commands (`build`, `run`, etc.).
+
+<img width="1743" height="1597" alt="image" src="https://github.com/user-attachments/assets/99e297f3-b424-422a-8b24-45fb82de81fb" />
 
 `dev-image` is another included image with a few more things in it.
 
@@ -134,8 +138,7 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
 - **Tooling written in Go** — single static binary, no runtime dependencies, TUI
   built with [Bubble Tea](https://github.com/charmbracelet/bubbletea), fast
   enough, trivial to distribute
-- **Build dependencies isolated with bubblewrap** — no Docker daemon required,
-  no host dependency pollution
+- **Build dependencies isolated with bubblewrap** — no host dependency pollution
 - **Easy BSP support** — support for many boards, inclusive of hardware
   ecosystem
 - **Global cache of pre-built assets** — minimize time building from source
@@ -143,10 +146,14 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
 - **Rebuilding from source is first class, but not required** — fully traceable,
   no golden images
 - **Modern languages** (Go, Rust, Zig, Python, JavaScript) — uses native
-  language package managers, caches packages where possible
+  language package managers, caches packages where possible <<<<<<< HEAD
 - **No cross compilation** — native builds via QEMU user-mode emulation or real
   ARM/RISC-V hardware. Build environment is per-unit, not global — each unit
-  runs in its own isolated container.
+  runs in its own isolated container. ||||||| 1c9fca0
+- # **No cross compilation** — native builds on modern ARM/RISC-V hardware
+- **No cross compilation** — leverage native builds on modern ARM/RISC-V
+  hardware
+  > > > > > > > origin/main
 - **Starlark for units and build rules** — Python-like, deterministic, sandboxed
   (see [Build Languages](docs/build-languages.md))
 - **Leverage existing ecosystems** — integrate with language-native build
