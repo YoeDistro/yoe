@@ -205,7 +205,7 @@ func cmdBuild(args []string) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	proj := loadProject()
+	proj := loadProjectWithMachine(machineName)
 	targetArch, err := resolveTargetArch(proj, machineName)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -430,13 +430,21 @@ func cmdClean(args []string) {
 }
 
 func loadProject() *yoestar.Project {
+	return loadProjectWithMachine("")
+}
+
+func loadProjectWithMachine(machineName string) *yoestar.Project {
 	dir := os.Getenv("YOE_PROJECT")
 	if dir == "" {
 		dir = "."
 	}
-	proj, err := yoestar.LoadProject(dir,
+	opts := []yoestar.LoadOption{
 		yoestar.WithLayerSync(layer.SyncIfNeeded),
-	)
+	}
+	if machineName != "" {
+		opts = append(opts, yoestar.WithMachine(machineName))
+	}
+	proj, err := yoestar.LoadProject(dir, opts...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
