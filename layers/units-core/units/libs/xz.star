@@ -10,12 +10,11 @@ autotools(
     configure_args = ["--disable-nls"],
     build = [
         # xz's configure.ac uses AM_GNU_GETTEXT which requires gettext m4
-        # macros and po/ infrastructure. Stub the macros and create the
-        # missing po/Makefile.in.in so autoreconf and configure succeed
-        # without gettext installed. --disable-nls ensures none of this
-        # is actually used at build time.
-        "mkdir -p m4 po && printf '%s\\n' 'AC_DEFUN([AM_GNU_GETTEXT_REQUIRE_VERSION],[])' 'AC_DEFUN([AM_GNU_GETTEXT_VERSION],[])' 'AC_DEFUN([AM_GNU_GETTEXT],[])' > m4/gettext-stub.m4",
-        "printf 'all install install-data install-data-yes install-strip clean distclean mostlyclean:\\n' > po/Makefile.in.in",
+        # macros. Stub them out so autoreconf succeeds without gettext.
+        "mkdir -p m4 && printf '%s\\n' 'AC_DEFUN([AM_GNU_GETTEXT_REQUIRE_VERSION],[])' 'AC_DEFUN([AM_GNU_GETTEXT_VERSION],[])' 'AC_DEFUN([AM_GNU_GETTEXT],[])' > m4/gettext-stub.m4",
+        # Remove po from SUBDIRS in configure.ac so configure doesn't
+        # generate po/Makefile and make doesn't descend into po/.
+        "sed -i 's/ po / /' configure.ac",
         "test -f configure || AUTOPOINT=true autoreconf -fi",
         "./configure --prefix=$PREFIX --disable-nls",
         "make -j$NPROC ACLOCAL=true AUTOCONF=true AUTOMAKE=true AUTOHEADER=true MAKEINFO=true",
