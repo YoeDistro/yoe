@@ -77,6 +77,7 @@ yoe build openssh          # [yoe] container: bwrap ... make -j$(nproc)
 
 # Manage the container image:
 yoe container build        # rebuild the container image
+yoe container binfmt       # register QEMU user-mode for cross-arch builds
 yoe container status       # show container image status
 ```
 
@@ -644,5 +645,26 @@ build environments:
 | aarch64      | `alpine:latest` (arm64) | GitHub ARM runners, Hetzner CAX | RPi 4/5, ARM servers    |
 | riscv64      | `alpine:edge` (riscv64) | Limited                         | SiFive, StarFive boards |
 
-For riscv64, QEMU user-mode emulation on an x86_64 host is a practical fallback
-until native CI runners become widely available.
+#### Cross-Architecture Builds via QEMU User-Mode
+
+Any architecture can be built on any host using QEMU user-mode emulation
+(binfmt_misc). Yoe builds and runs a genuine foreign-arch Docker container — no
+cross-compilation toolchain needed:
+
+```sh
+# One-time setup (persists until reboot)
+yoe container binfmt
+
+# Build ARM64 on an x86_64 host
+yoe build base-image --machine qemu-arm64
+
+# Run it
+yoe run base-image --machine qemu-arm64
+```
+
+Performance is ~5-20x slower than native, which is fine for iterating on
+individual packages. For full system rebuilds, use native hardware or cloud CI
+with architecture-matched runners.
+
+Build output is stored under `build/<arch>/<unit>/` so multiple architectures
+can coexist in the same project tree.

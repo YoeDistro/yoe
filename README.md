@@ -10,7 +10,8 @@ all with full understanding of your project's dependency graph and build state.
 
 ## 🚀 Getting Started
 
-Prerequisites: an x86_64 Linux host with Git and Docker (or Podman) installed.
+Prerequisites: a Linux host (x86_64 or ARM64) with Git and Docker (or Podman)
+installed.
 
 ```sh
 # Download the yoe binary
@@ -37,6 +38,24 @@ yoe run base-image
 # Power off when finished (inside running image)
 poweroff
 ```
+
+### Cross-Architecture Builds
+
+Build ARM64 images on an x86_64 host using QEMU user-mode emulation:
+
+```sh
+# One-time setup: register QEMU user-mode emulation
+yoe container binfmt
+
+# Build for ARM64
+yoe build base-image --machine qemu-arm64
+
+# Run it
+yoe run base-image --machine qemu-arm64
+```
+
+No cross-compilation toolchain needed — the build runs inside a genuine ARM64
+Docker container, transparently emulated by the host kernel.
 
 `dev-image` is another included image with a few more things in it.
 
@@ -90,7 +109,8 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
   no golden images
 - **Modern languages** (Go, Rust, Zig, Python, JavaScript) — uses native
   language package managers, caches packages where possible
-- **No cross compilation** — native builds on modern ARM/RISC-V hardware
+- **No cross compilation** — native builds via QEMU user-mode emulation or real
+  ARM/RISC-V hardware
 - **Starlark for units and build rules** — Python-like, deterministic, sandboxed
   (see [Build Languages](docs/build-languages.md))
 - **Leverage existing ecosystems** — integrate with language-native build
@@ -184,11 +204,15 @@ Yoe-NG asks: what if we started fresh with these assumptions?
 
 Instead of maintaining cross-toolchains, Yoe-NG targets native builds:
 
-- Build on the target architecture directly (real hardware or emulated/VM).
-- Use cloud CI with native architecture runners (e.g., ARM64 GitHub Actions
-  runners, Hetzner ARM boxes).
-- QEMU user-mode emulation as a fallback for architectures without cheap native
-  hardware.
+- **QEMU user-mode emulation** — build ARM64 or RISC-V images on any x86_64
+  workstation. The build runs inside a genuine foreign-arch Docker container,
+  transparently emulated via binfmt_misc. One command to set up
+  (`yoe container binfmt`), then `--machine qemu-arm64` just works. ~5-20x
+  slower than native, but fine for iterating on a few packages.
+- **Native hardware** — build on the target architecture directly (ARM64
+  dev boards, RISC-V boards).
+- **Cloud CI** — use native architecture runners (e.g., ARM64 GitHub Actions
+  runners, AWS Graviton, Hetzner ARM boxes) for full-speed CI builds.
 
 This eliminates an entire class of build issues (sysroot management, host
 contamination, cross-pkg-config, etc.).
