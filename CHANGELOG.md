@@ -8,10 +8,15 @@ and this project adheres to
 
 ## [Unreleased]
 
-- **Fix in-progress builds shown as failed** — opening a second `yoe` instance
-  while a build is running no longer marks that unit as failed. A PID-based lock
-  file (`.building`) is written during builds so other instances can detect
-  in-progress work.
+- **Build lock files** — a PID-based `.lock` file is written during builds so
+  other `yoe` instances can detect in-progress work instead of marking active
+  builds as failed. Builds are skipped if another process is already building the
+  same unit.
+- **`yoe clean --locks`** — removes stale lock files left behind by crashed or
+  killed builds.
+- **TUI edit for cached layers** — pressing `e` on a unit now also searches the
+  layer cache, so editing works for units from layers cloned via
+  `yoe layer sync`.
 
 ## [0.3.3] - 2026-03-30
 
