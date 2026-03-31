@@ -24,9 +24,16 @@ tested configuration)
 
 ```sh
 # Download the yoe binary
+# Linux x86_64:
 curl -L https://github.com/yoe/yoe-ng/releases/latest/download/yoe-Linux-x86_64 -o yoe
+# macOS Apple Silicon:
+curl -L https://github.com/yoe/yoe-ng/releases/latest/download/yoe-Darwin-arm64 -o yoe
+
 chmod +x yoe
-sudo mv yoe /usr/local/bin/
+mkdir -p ~/bin
+mv yoe ~/bin/
+# Make sure ~/bin is in your PATH (add to ~/.bashrc or ~/.zshrc if needed)
+export PATH="$HOME/bin:$PATH"
 
 # Create a new project
 yoe init yoe-test
