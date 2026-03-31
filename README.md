@@ -18,8 +18,9 @@ vision.
 
 ## 🚀 Getting Started
 
-Prerequisites: a Linux host (x86_64 or ARM64) with Git and Docker (or Podman)
-installed. (only x86_64/Docker host has been tested, ARM64 testing appreciated)
+Prerequisites: Linux or macOS with Git and Docker (or Podman) installed.
+Windows users: install WSL2 and use the Linux binary. (Linux x86_64/Docker is
+the most tested configuration)
 
 ```sh
 # Download the yoe binary
@@ -146,14 +147,10 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
 - **Rebuilding from source is first class, but not required** — fully traceable,
   no golden images
 - **Modern languages** (Go, Rust, Zig, Python, JavaScript) — uses native
-  language package managers, caches packages where possible <<<<<<< HEAD
+  language package managers, caches packages where possible
 - **No cross compilation** — native builds via QEMU user-mode emulation or real
   ARM/RISC-V hardware. Build environment is per-unit, not global — each unit
-  runs in its own isolated container. ||||||| 1c9fca0
-- # **No cross compilation** — native builds on modern ARM/RISC-V hardware
-- **No cross compilation** — leverage native builds on modern ARM/RISC-V
-  hardware
-  > > > > > > > origin/main
+  runs in its own isolated container.
 - **Starlark for units and build rules** — Python-like, deterministic, sandboxed
   (see [Build Languages](docs/build-languages.md))
 - **Leverage existing ecosystems** — integrate with language-native build
