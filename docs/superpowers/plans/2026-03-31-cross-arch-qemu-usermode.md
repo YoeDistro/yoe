@@ -16,8 +16,7 @@ include arch to avoid collisions.
 **Tech Stack:** Go, Docker/Podman, QEMU user-mode (binfmt_misc),
 tonistiigi/binfmt
 
-**Spec:**
-`docs/superpowers/specs/2026-03-31-cross-arch-qemu-usermode-design.md`
+**Spec:** `docs/superpowers/specs/2026-03-31-cross-arch-qemu-usermode-design.md`
 
 ---
 
@@ -134,8 +133,10 @@ Update all callers of these functions throughout `executor.go` to pass
 - Line 84: `IsBuildCached(opts.ProjectDir, opts.Arch, name, hash)`
 - Line 110: `IsBuildCached(opts.ProjectDir, opts.Arch, name, hash)`
 - Line 132: `writeCacheMarker(opts.ProjectDir, opts.Arch, name, hash)`
-- Line 146: `os.Remove(CacheMarkerPath(opts.ProjectDir, opts.Arch, unit.Name, hash))`
-- Line 149: `lockPath := BuildingLockPath(opts.ProjectDir, opts.Arch, unit.Name)`
+- Line 146:
+  `os.Remove(CacheMarkerPath(opts.ProjectDir, opts.Arch, unit.Name, hash))`
+- Line 149:
+  `lockPath := BuildingLockPath(opts.ProjectDir, opts.Arch, unit.Name)`
 - Line 370: `IsBuildCached(opts.ProjectDir, opts.Arch, name, hashes[name])`
 - Line 386: `IsBuildCached(opts.ProjectDir, opts.Arch, name, hashes[name])`
 
@@ -166,8 +167,8 @@ Update callers in `flash.go` and `qemu.go` to pass arch (from the machine).
 - [ ] **Step 4: Update TUI status checks**
 
 In `internal/tui/app.go`, the `Run` function checks build status using
-`IsBuildCached`, `IsBuildInProgress`, and `HasBuildLog`. These all need the
-arch parameter. The TUI needs to know the project's default arch:
+`IsBuildCached`, `IsBuildInProgress`, and `HasBuildLog`. These all need the arch
+parameter. The TUI needs to know the project's default arch:
 
 ```go
 arch := build.Arch() // host arch — will be refined in Task 3
@@ -184,9 +185,9 @@ for _, name := range units {
 }
 ```
 
-Also update the log path in `case "l"` and the clean path in `updateConfirm`
-to use `build.UnitBuildDir(m.projectDir, m.arch, name)`. Store `arch` as a
-field on the `model` struct.
+Also update the log path in `case "l"` and the clean path in `updateConfirm` to
+use `build.UnitBuildDir(m.projectDir, m.arch, name)`. Store `arch` as a field on
+the `model` struct.
 
 - [ ] **Step 5: Update executor_test.go**
 
@@ -267,8 +268,8 @@ func RepoDir(proj *yoestar.Project, projectDir, arch string) string {
 
 - [ ] **Step 2: Update GenerateIndex to accept arch**
 
-In `internal/repo/index.go`, change the `GenerateIndex` signature to accept
-arch and use it instead of hardcoded `x86_64`:
+In `internal/repo/index.go`, change the `GenerateIndex` signature to accept arch
+and use it instead of hardcoded `x86_64`:
 
 ```go
 func GenerateIndex(repoDir, arch string) error {
@@ -492,8 +493,8 @@ func resolveTargetArch(proj *yoestar.Project, units []string, machineName string
 
 - [ ] **Step 3: Update TUI to use default machine arch**
 
-In `internal/tui/app.go`, add `arch` field to the `model` struct and set it
-from the project's default machine:
+In `internal/tui/app.go`, add `arch` field to the `model` struct and set it from
+the project's default machine:
 
 ```go
 arch := build.Arch()
@@ -718,8 +719,8 @@ func containerRunArgs(cfg ContainerRunConfig) ([]string, error) {
 
 - [ ] **Step 6: Pass arch through sandbox**
 
-In `internal/build/sandbox.go`, `RunInSandbox` and `RunSimple` need to pass
-arch to `ContainerRunConfig`. Add `Arch` field to `SandboxConfig`:
+In `internal/build/sandbox.go`, `RunInSandbox` and `RunSimple` need to pass arch
+to `ContainerRunConfig`. Add `Arch` field to `SandboxConfig`:
 
 ```go
 type SandboxConfig struct {
@@ -890,8 +891,8 @@ binfmt before cross-arch container builds."
 
 ### Task 6: QEMU System Emulation Improvements
 
-Update Dockerfile with multi-arch QEMU binaries and fix `yoe run` for
-cross-arch execution (KVM vs TCG detection).
+Update Dockerfile with multi-arch QEMU binaries and fix `yoe run` for cross-arch
+execution (KVM vs TCG detection).
 
 **Files:**
 
@@ -901,8 +902,8 @@ cross-arch execution (KVM vs TCG detection).
 
 - [ ] **Step 1: Add QEMU binaries to Dockerfile**
 
-In `containers/Dockerfile.build`, add arm64 and riscv64 QEMU after the
-existing x86_64 line:
+In `containers/Dockerfile.build`, add arm64 and riscv64 QEMU after the existing
+x86_64 line:
 
 ```dockerfile
     qemu-system-x86_64 \
@@ -930,8 +931,8 @@ const (
 
 - [ ] **Step 3: Fix QEMU KVM vs TCG detection**
 
-In `internal/device/qemu.go`, replace the unconditional `-enable-kvm` with
-smart detection:
+In `internal/device/qemu.go`, replace the unconditional `-enable-kvm` with smart
+detection:
 
 ```go
 func baseQEMUArgs(machine *yoestar.Machine, opts QEMUOptions) []string {
@@ -1018,9 +1019,9 @@ uses -cpu max (TCG) instead of -cpu host -enable-kvm."
 Add under `[Unreleased]`:
 
 ```markdown
-- **Cross-architecture builds** — build arm64 and riscv64 images on x86_64
-  hosts using QEMU user-mode emulation. Target arch is resolved from the
-  machine definition. Run `yoe container binfmt` for one-time setup, then
+- **Cross-architecture builds** — build arm64 and riscv64 images on x86_64 hosts
+  using QEMU user-mode emulation. Target arch is resolved from the machine
+  definition. Run `yoe container binfmt` for one-time setup, then
   `yoe build base-image --machine qemu-arm64` works transparently.
 - **Arch-aware build directories** — build output is now stored under
   `build/<arch>/<unit>/` and APK repos under `build/repo/<arch>/`, supporting

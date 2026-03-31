@@ -1,7 +1,6 @@
 # Cross-Architecture Builds via QEMU User-Mode Emulation
 
-**Date:** 2026-03-31
-**Status:** Draft
+**Date:** 2026-03-31 **Status:** Draft
 
 ## Problem
 
@@ -13,10 +12,10 @@ a barrier for developers with x86 workstations targeting ARM boards.
 
 Use QEMU user-mode emulation (binfmt_misc) so Docker can run foreign-arch
 containers transparently. When the target machine's arch differs from the host,
-yoe builds and uses a container image for the target arch. Inside that container,
-everything — gcc, make, configure scripts — runs as genuine ARM binaries,
-emulated by the host kernel via binfmt_misc. The build executor, bwrap sandbox,
-and unit definitions are unchanged.
+yoe builds and uses a container image for the target arch. Inside that
+container, everything — gcc, make, configure scripts — runs as genuine ARM
+binaries, emulated by the host kernel via binfmt_misc. The build executor, bwrap
+sandbox, and unit definitions are unchanged.
 
 ## Design Decisions
 
@@ -36,8 +35,8 @@ and unit definitions are unchanged.
 - **Direct kernel boot for arm64 QEMU** — simplest path, no firmware or
   bootloader needed. U-Boot/UEFI can be added later for real hardware.
 - **QEMU system emulation for `yoe run`** — install `qemu-system-aarch64` and
-  `qemu-system-riscv64` alongside the existing x86 binary. Auto-detect
-  native (KVM) vs cross (TCG) at runtime.
+  `qemu-system-riscv64` alongside the existing x86 binary. Auto-detect native
+  (KVM) vs cross (TCG) at runtime.
 
 ## Architecture
 
@@ -72,13 +71,12 @@ and set `TargetArch`. When building a standalone unit without a machine context,
 - Foreign arch: `yoe-ng:11-arm64`, `yoe-ng:11-riscv64`
 
 **`EnsureImage(arch string)`** — accept target arch parameter. When arch differs
-from host, build with `docker buildx build --platform linux/<arch>`. The existing
-Dockerfile works as-is — Alpine's `apk add` installs native packages for
-whatever platform the container runs on.
+from host, build with `docker buildx build --platform linux/<arch>`. The
+existing Dockerfile works as-is — Alpine's `apk add` installs native packages
+for whatever platform the container runs on.
 
-**`RunInContainer`** — accept target arch. Select the correct container tag.
-Add `--platform linux/<arch>` to the `docker run` args for foreign-arch
-containers.
+**`RunInContainer`** — accept target arch. Select the correct container tag. Add
+`--platform linux/<arch>` to the `docker run` args for foreign-arch containers.
 
 **`containerRunArgs`** — add `--platform` flag when target != host.
 
@@ -127,9 +125,10 @@ build/
     ...
 ```
 
-**`UnitBuildDir(projectDir, unitName string)`** → `UnitBuildDir(projectDir,
-arch, unitName string)`. This is the single function that determines build
-paths; all callers already have access to the target arch via `Options`.
+**`UnitBuildDir(projectDir, unitName string)`** →
+`UnitBuildDir(projectDir, arch, unitName string)`. This is the single function
+that determines build paths; all callers already have access to the target arch
+via `Options`.
 
 **Repo directory layout** — already uses `build/repo/x86_64/` (hardcoded).
 Parameterize `RepoDir` to accept arch instead of hardcoding:
@@ -141,17 +140,16 @@ build/
     arm64/
 ```
 
-**`RepoDir`** — replace hardcoded `x86_64` with target arch parameter.
-The existing TODO comment on line 23 of `repo/local.go` already flags this.
+**`RepoDir`** — replace hardcoded `x86_64` with target arch parameter. The
+existing TODO comment on line 23 of `repo/local.go` already flags this.
 
-**Sysroot** — currently `build/sysroot/`. Change to `build/<arch>/sysroot/`
-to match the build directory layout.
+**Sysroot** — currently `build/sysroot/`. Change to `build/<arch>/sysroot/` to
+match the build directory layout.
 
 ### 5. Fix Hardcoded x86_64 in APK Packaging
 
-**`internal/artifact/apk.go`** — `.PKGINFO` currently writes
-`arch = x86_64`. Change to accept target arch parameter and write
-`arch = <target_arch>`.
+**`internal/artifact/apk.go`** — `.PKGINFO` currently writes `arch = x86_64`.
+Change to accept target arch parameter and write `arch = <target_arch>`.
 
 **`internal/image/rootfs.go`** — APK repo lookup currently checks `x86_64/`
 subdirectory. Parameterize to use target arch.
@@ -167,14 +165,14 @@ available, use `-enable-kvm -cpu host` (fast). When cross-arch, use `-cpu max`
 runtime rather than changing the machine template.
 
 **Direct kernel boot for arm64** — `yoe run` with an arm64 image uses
-`-kernel <vmlinuz> -append <cmdline>` instead of firmware boot. The kernel
-path comes from the image's build output.
+`-kernel <vmlinuz> -append <cmdline>` instead of firmware boot. The kernel path
+comes from the image's build output.
 
 ### 7. Machine Template Updates
 
 The existing `qemu-arm64` machine template in `init.go` is correct for both
-native and emulated use. The `cpu = "host"` value is overridden at runtime
-when KVM is unavailable (see section 5).
+native and emulated use. The `cpu = "host"` value is overridden at runtime when
+KVM is unavailable (see section 5).
 
 No changes needed to machine templates or Starlark definitions.
 
@@ -197,8 +195,8 @@ workload. I/O-bound builds fare better than CPU-bound ones.
 - Iterating on a few packages: acceptable for development workflow
 - Container image build (one-time): ~1-2 minutes for ARM Alpine + toolchain
 
-Future optimization: remote native builder support could be added later for
-CI or large rebuilds without changing the user-facing model.
+Future optimization: remote native builder support could be added later for CI
+or large rebuilds without changing the user-facing model.
 
 ## User Experience
 

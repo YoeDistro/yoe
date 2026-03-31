@@ -107,8 +107,8 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
 - **Per-unit build environment** — architecture is determined at the unit/task
   level, not globally. Each unit runs in its own build environment — currently a
   Docker container with optional bwrap sandbox. The build environment strategy
-  (Docker, bwrap, sysroot tools, future options) is an implementation detail that
-  can vary per unit or per architecture as needed.
+  (Docker, bwrap, sysroot tools, future options) is an implementation detail
+  that can vary per unit or per architecture as needed.
 - **Build sysroot** — after each unit builds, its output is installed into
   `build/sysroot/` so subsequent units can find deps' headers/libraries
 - **Starlark** for all units and config (Python-like, deterministic, sandboxed)
