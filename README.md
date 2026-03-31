@@ -168,7 +168,9 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
 - **Composable layers** — pull in units/packages using GitHub URLs; vendor BSP,
   product, and core layers compose through Starlark `load()` function calls
 - **Image-based device management** — full image updates, OSTree, BDiff
-- **Good SDK story** — binary SDKs, pre-built packages like Chromium
+- **Good SDK story** — binary SDKs, use Docker where it makes sense, and
+  aggressive caching to reduce the pain of packages like Chromium that are slow
+  to build.
 - **Parallel** — no global lock or global resource, support running concurrent
   versions of `yoe` concurrently. This is essential for rapid development using
   AI.
