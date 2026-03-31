@@ -78,6 +78,7 @@ type model struct {
 	proj       *yoestar.Project
 	projectDir string
 	arch       string
+	dag        *resolve.DAG
 	units      []string
 	hashes     map[string]string
 	statuses   map[string]unitStatus
@@ -142,6 +143,7 @@ func Run(proj *yoestar.Project, projectDir string) error {
 		proj:       proj,
 		projectDir: projectDir,
 		arch:       arch,
+		dag:        dag,
 		units:      units,
 		hashes:     hashes,
 		statuses:   statuses,
@@ -619,6 +621,7 @@ func (m model) updateSetupMachine(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if mach, ok := m.proj.Machines[m.machines[m.machineCursor]]; ok {
 			m.arch = mach.Arch
 		}
+		m.recomputeStatuses()
 		m.message = fmt.Sprintf("Machine set to %s", m.machines[m.machineCursor])
 		m.setupField = ""
 		m.view = viewUnits
@@ -1143,6 +1146,31 @@ func (m *model) adjustListOffset() {
 	}
 	if m.listOffset < 0 {
 		m.listOffset = 0
+	}
+}
+
+// recomputeStatuses recomputes hashes and cache statuses for the current arch.
+// Called when the machine (and thus arch) changes.
+func (m *model) recomputeStatuses() {
+	hashes, err := resolve.ComputeAllHashes(m.dag, m.arch)
+	if err != nil {
+		return
+	}
+	m.hashes = hashes
+	for _, name := range m.units {
+		if m.building[name] {
+			continue // don't override in-progress builds
+		}
+		hash := hashes[name]
+		if build.IsBuildCached(m.projectDir, m.arch, name, hash) {
+			m.statuses[name] = statusCached
+		} else if build.IsBuildInProgress(m.projectDir, m.arch, name) {
+			m.statuses[name] = statusBuilding
+		} else if build.HasBuildLog(m.projectDir, m.arch, name) {
+			m.statuses[name] = statusFailed
+		} else {
+			m.statuses[name] = statusNone
+		}
 	}
 }
 
