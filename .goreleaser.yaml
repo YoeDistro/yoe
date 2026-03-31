@@ -17,10 +17,14 @@ builds:
       - CGO_ENABLED=0
     goos:
       - linux
+      - darwin
     goarch:
       - arm64
       - amd64
       - riscv64
+    ignore:
+      - goos: darwin
+        goarch: riscv64
 
 archives:
   - formats: ['binary']

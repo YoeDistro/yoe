@@ -8,6 +8,44 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-03-31
+
+**ARM BUILDS ON X86 NOW WORK**
+
+- **TUI global notifications** — the TUI now shows a yellow banner for
+  background operations like container image rebuilds. Previously these events
+  were only visible in build log files.
+- **cmake added to build container** — cmake is now available as a bootstrap
+  tool in the container (version bump to 14), enabling units that use the cmake
+  build system.
+- **xz switched to cmake** — the xz unit now uses the cmake class instead of
+  autotools with gettext workarounds, simplifying the build definition.
+- **TUI reloads .star files before each build** — editing unit definitions or
+  classes no longer requires restarting the TUI. The project is re-evaluated
+  from Starlark on each build, picking up any changes to build steps, deps, or
+  configuration.
+- **Fix xz autoreconf failure** — xz's `configure.ac` uses `AM_GNU_GETTEXT`
+  macros which require gettext's m4 files. The xz unit now provides stub m4
+  macros and skips `autopoint`, allowing `autoreconf` to succeed without gettext
+  installed in the container.
+- **Cross-architecture builds** — build arm64 and riscv64 images on x86_64 hosts
+  using QEMU user-mode emulation. Target arch is resolved from the machine
+  definition. Run `yoe container binfmt` for one-time setup, then
+  `yoe build base-image --machine qemu-arm64` works transparently.
+- **Arch-aware build directories** — build output is now stored under
+  `build/<arch>/<unit>/` and APK repos under `build/repo/<arch>/`, supporting
+  multi-arch builds in the same project. **Note:** existing build caches under
+  `build/<unit>/` will need to be rebuilt (`yoe clean --all`).
+- **`yoe container binfmt`** — new command to register QEMU user-mode emulation
+  for cross-architecture container builds. Shows what it will do and prompts for
+  confirmation.
+- **Multi-arch QEMU** — `yoe run` now auto-detects cross-architecture execution
+  and uses software emulation (`-cpu max`) instead of KVM. Container includes
+  `qemu-system-aarch64` and `qemu-system-riscv64`.
+- **TUI setup menu** — press `s` to open a setup view for selecting the target
+  machine. Shows available machines with their architecture and highlights the
+  current selection. Designed to accommodate future setup options.
+
 ## [0.3.4] - 2026-03-30
 
 - **Build lock files** — a PID-based `.lock` file is written during builds so

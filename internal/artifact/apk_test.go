@@ -31,7 +31,7 @@ func TestCreateAPK(t *testing.T) {
 		RuntimeDeps: []string{"glibc"},
 	}
 
-	apkPath, err := CreateAPK(unit, destDir, outputDir)
+	apkPath, err := CreateAPK(unit, destDir, outputDir, "x86_64")
 	if err != nil {
 		t.Fatalf("CreateAPK: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestCreateAPK_EmptyDestDir(t *testing.T) {
 		Version: "1.0.0",
 	}
 
-	apkPath, err := CreateAPK(unit, destDir, outputDir)
+	apkPath, err := CreateAPK(unit, destDir, outputDir, "x86_64")
 	if err != nil {
 		t.Fatalf("CreateAPK: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestGeneratePKGINFO(t *testing.T) {
 		RuntimeDeps: []string{"zlib", "openssl"},
 	}
 
-	info := generatePKGINFO(unit, t.TempDir(), "abc123")
+	info := generatePKGINFO(unit, t.TempDir(), "abc123", "x86_64")
 
 	if !strings.Contains(info, "pkgname = test") {
 		t.Error("missing pkgname")
@@ -193,7 +193,7 @@ func _disabledTestDebugAPKStreams(t *testing.T) {
 	t.Logf("dataTar: %d bytes, err: %v", len(dataTar), derr)
 
 	unit := &yoestar.Unit{Name: "test", Version: "1.0"}
-	apkPath, _ := CreateAPK(unit, destDir, filepath.Join(t.TempDir(), "out"))
+	apkPath, _ := CreateAPK(unit, destDir, filepath.Join(t.TempDir(), "out"), "x86_64")
 	
 	data, _ := os.ReadFile(apkPath)
 	t.Logf("APK size: %d bytes", len(data))

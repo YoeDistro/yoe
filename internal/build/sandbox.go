@@ -16,6 +16,7 @@ import (
 // SandboxConfig defines the bubblewrap sandbox for a unit build.
 type SandboxConfig struct {
 	Ctx        context.Context
+	Arch       string // target architecture
 	BuildRoot  string
 	SrcDir     string
 	DestDir    string
@@ -27,13 +28,20 @@ type SandboxConfig struct {
 }
 
 // RunInSandbox executes a command inside a bubblewrap sandbox within the
-// build container.
+// build container. For cross-arch builds (QEMU user-mode), bwrap's user
+// namespaces are not available, so we fall back to running directly in
+// the container (which is already isolated via Docker).
 func RunInSandbox(cfg *SandboxConfig, command string) error {
+	if cfg.Arch != "" && cfg.Arch != yoe.HostArch() {
+		return RunSimple(cfg, command)
+	}
+
 	bwrapCmd := bwrapCommand(cfg, command)
 	mounts := containerMountsForBuild(cfg)
 
 	return yoe.RunInContainer(yoe.ContainerRunConfig{
 		Ctx:        cfg.Ctx,
+		Arch:       cfg.Arch,
 		Command:    bwrapCmd,
 		ProjectDir: cfg.ProjectDir,
 		Mounts:     mounts,
@@ -59,6 +67,7 @@ func RunSimple(cfg *SandboxConfig, command string) error {
 
 	return yoe.RunInContainer(yoe.ContainerRunConfig{
 		Ctx:        cfg.Ctx,
+		Arch:       cfg.Arch,
 		Command:    fullCmd,
 		ProjectDir: cfg.ProjectDir,
 		Mounts:     mounts,
@@ -192,13 +201,13 @@ func StageSysroot(destDir, buildDir string) error {
 
 // AssembleSysroot merges the sysroot-stage dirs of all transitive deps
 // into a unit's private sysroot.
-func AssembleSysroot(sysrootDir string, dag *resolve.DAG, unit string, projectDir string) error {
+func AssembleSysroot(sysrootDir string, dag *resolve.DAG, unit string, projectDir string, arch string) error {
 	os.RemoveAll(sysrootDir)
 	if err := os.MkdirAll(sysrootDir, 0755); err != nil {
 		return err
 	}
 	for _, dep := range dag.TransitiveDeps(unit) {
-		stageDir := filepath.Join(UnitBuildDir(projectDir, dep), "sysroot-stage")
+		stageDir := filepath.Join(UnitBuildDir(projectDir, arch, dep), "sysroot-stage")
 		if _, err := os.Stat(stageDir); err != nil {
 			continue // dep has no staged output (e.g., image)
 		}
@@ -244,6 +253,6 @@ func Arch() string {
 }
 
 // UnitBuildDir returns the build directory for a unit.
-func UnitBuildDir(projectDir, unitName string) string {
-	return filepath.Join(projectDir, "build", unitName)
+func UnitBuildDir(projectDir, arch, unitName string) string {
+	return filepath.Join(projectDir, "build", arch, unitName)
 }

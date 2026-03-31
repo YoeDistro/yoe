@@ -37,6 +37,9 @@ type Options struct {
 
 // BuildUnits builds the specified units (or all if names is empty).
 func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer) error {
+	// Warn if old-style build directories exist (no arch subdirectory)
+	warnOldLayout(opts.ProjectDir, opts.Arch, w)
+
 	dag, err := resolve.BuildDAG(proj)
 	if err != nil {
 		return err
@@ -81,7 +84,7 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 	for _, name := range order {
 		hash := hashes[name]
 		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
-		if !forceThis && !opts.NoCache && IsBuildCached(opts.ProjectDir, name, hash) {
+		if !forceThis && !opts.NoCache && IsBuildCached(opts.ProjectDir, opts.Arch, name, hash) {
 			notify(name, "cached")
 		} else {
 			notify(name, "waiting")
@@ -107,7 +110,7 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
 
 		if !forceThis && !opts.NoCache {
-			if IsBuildCached(opts.ProjectDir, name, hash) {
+			if IsBuildCached(opts.ProjectDir, opts.Arch, name, hash) {
 				fmt.Fprintf(w, "%-20s [cached] %s\n", name, hash[:12])
 				continue
 			}
@@ -130,7 +133,7 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		}
 
 		// Write cache marker
-		writeCacheMarker(opts.ProjectDir, name, hash)
+		writeCacheMarker(opts.ProjectDir, opts.Arch, name, hash)
 		fmt.Fprintf(w, "%-20s [done] %s\n", name, hash[:12])
 		notify(name, "done")
 	}
@@ -139,21 +142,21 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 }
 
 func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit *yoestar.Unit, hash string, opts Options, w io.Writer) error {
-	buildDir := UnitBuildDir(opts.ProjectDir, unit.Name)
+	buildDir := UnitBuildDir(opts.ProjectDir, opts.Arch, unit.Name)
 	EnsureDir(buildDir)
 
 	// Skip if another process is already building this unit.
-	if IsBuildInProgress(opts.ProjectDir, unit.Name) {
+	if IsBuildInProgress(opts.ProjectDir, opts.Arch, unit.Name) {
 		fmt.Fprintf(w, "  %s: build already in progress, skipping\n", unit.Name)
 		return nil
 	}
 
 	// Remove the cache marker before starting so a cancelled or failed
 	// build does not leave a stale marker that makes it appear cached.
-	os.Remove(CacheMarkerPath(opts.ProjectDir, unit.Name, hash))
+	os.Remove(CacheMarkerPath(opts.ProjectDir, opts.Arch, unit.Name, hash))
 
 	// Write a lock file so other yoe instances can detect an in-progress build.
-	lockPath := BuildingLockPath(opts.ProjectDir, unit.Name)
+	lockPath := BuildingLockPath(opts.ProjectDir, opts.Arch, unit.Name)
 	os.WriteFile(lockPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0644)
 	defer os.Remove(lockPath)
 
@@ -176,7 +179,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	// Image units go through a different path — assemble rootfs
 	if unit.Class == "image" {
 		outputDir := filepath.Join(buildDir, "output")
-		if err := image.Assemble(unit, proj, opts.ProjectDir, outputDir, logW); err != nil {
+		if err := image.Assemble(unit, proj, opts.ProjectDir, outputDir, opts.Arch, logW); err != nil {
 			if !opts.Verbose {
 				fmt.Fprintf(w, "  build log: %s\n", logPath)
 			}
@@ -200,7 +203,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	// Prepare source (fetch + extract + patch, or reuse dev source).
 	// Units without a source field (e.g., musl) skip this step.
 	if unit.Source != "" {
-		if _, err := source.Prepare(opts.ProjectDir, unit, w); err != nil {
+		if _, err := source.Prepare(opts.ProjectDir, opts.Arch, unit, w); err != nil {
 			return fmt.Errorf("preparing source: %w", err)
 		}
 	} else {
@@ -216,7 +219,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 
 	// Assemble per-unit sysroot from transitive deps
 	sysroot := filepath.Join(buildDir, "sysroot")
-	if err := AssembleSysroot(sysroot, dag, unit.Name, opts.ProjectDir); err != nil {
+	if err := AssembleSysroot(sysroot, dag, unit.Name, opts.ProjectDir, opts.Arch); err != nil {
 		return fmt.Errorf("assembling sysroot: %w", err)
 	}
 	env := map[string]string{
@@ -243,6 +246,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 
 		cfg := &SandboxConfig{
 			Ctx:        ctx,
+			Arch:       opts.Arch,
 			SrcDir:     srcDir,
 			DestDir:    destDir,
 			Sysroot:    sysroot,
@@ -261,14 +265,14 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 
 	// Package the output into an .apk and publish to the local repo
 	if unit.Class != "image" {
-		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"))
+		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), opts.Arch)
 		if err != nil {
 			return fmt.Errorf("creating apk: %w", err)
 		}
 		fmt.Fprintf(w, "  → %s\n", filepath.Base(apkPath))
 
-		repoDir := repo.RepoDir(nil, opts.ProjectDir)
-		if err := repo.Publish(apkPath, repoDir); err != nil {
+		repoDir := repo.RepoDir(nil, opts.ProjectDir, opts.Arch)
+		if err := repo.Publish(apkPath, repoDir, opts.Arch); err != nil {
 			return fmt.Errorf("publishing to repo: %w", err)
 		}
 
@@ -383,7 +387,7 @@ func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[strin
 		unit := proj.Units[name]
 		cached := ""
 		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
-		if !forceThis && IsBuildCached(opts.ProjectDir, name, hashes[name]) {
+		if !forceThis && IsBuildCached(opts.ProjectDir, opts.Arch, name, hashes[name]) {
 			cached = " [cached, skip]"
 		}
 		fmt.Fprintf(w, "  %-20s [%s] %s%s\n", name, unit.Class, hashes[name][:12], cached)
@@ -393,32 +397,32 @@ func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[strin
 
 // --- Simple file-based cache ---
 
-func CacheMarkerPath(projectDir, name, hash string) string {
-	return filepath.Join(projectDir, "build", name, ".yoe-hash")
+func CacheMarkerPath(projectDir, arch, name, hash string) string {
+	return filepath.Join(UnitBuildDir(projectDir, arch, name), ".yoe-hash")
 }
 
-func IsBuildCached(projectDir, name, hash string) bool {
-	data, err := os.ReadFile(CacheMarkerPath(projectDir, name, hash))
+func IsBuildCached(projectDir, arch, name, hash string) bool {
+	data, err := os.ReadFile(CacheMarkerPath(projectDir, arch, name, hash))
 	if err != nil {
 		return false
 	}
 	return string(data) == hash
 }
 
-func HasBuildLog(projectDir, name string) bool {
-	_, err := os.Stat(filepath.Join(projectDir, "build", name, "build.log"))
+func HasBuildLog(projectDir, arch, name string) bool {
+	_, err := os.Stat(filepath.Join(UnitBuildDir(projectDir, arch, name), "build.log"))
 	return err == nil
 }
 
 // BuildingLockPath returns the path of the lock file written during a build.
-func BuildingLockPath(projectDir, name string) string {
-	return filepath.Join(projectDir, "build", name, ".lock")
+func BuildingLockPath(projectDir, arch, name string) string {
+	return filepath.Join(UnitBuildDir(projectDir, arch, name), ".lock")
 }
 
 // IsBuildInProgress returns true if another process is currently building this unit.
 // It checks for the lock file and verifies the PID is still alive.
-func IsBuildInProgress(projectDir, name string) bool {
-	data, err := os.ReadFile(BuildingLockPath(projectDir, name))
+func IsBuildInProgress(projectDir, arch, name string) bool {
+	data, err := os.ReadFile(BuildingLockPath(projectDir, arch, name))
 	if err != nil {
 		return false
 	}
@@ -428,8 +432,31 @@ func IsBuildInProgress(projectDir, name string) bool {
 	return err == nil
 }
 
-func writeCacheMarker(projectDir, name, hash string) {
-	path := CacheMarkerPath(projectDir, name, hash)
+func writeCacheMarker(projectDir, arch, name, hash string) {
+	path := CacheMarkerPath(projectDir, arch, name, hash)
 	EnsureDir(filepath.Dir(path))
 	os.WriteFile(path, []byte(hash), 0644)
+}
+
+// warnOldLayout checks for old-style build directories (build/<unit>/ instead
+// of build/<arch>/<unit>/) and prints a warning if found.
+func warnOldLayout(projectDir, arch string, w io.Writer) {
+	entries, err := os.ReadDir(filepath.Join(projectDir, "build"))
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if !e.IsDir() || e.Name() == "repo" || e.Name() == "shell" || e.Name() == "sysroot" || e.Name() == arch {
+			continue
+		}
+		old := filepath.Join(projectDir, "build", e.Name())
+		if _, err := os.Stat(filepath.Join(old, ".yoe-hash")); err == nil {
+			fmt.Fprintf(w, "[yoe] warning: old build layout detected. Run 'yoe clean --all' to remove stale artifacts.\n")
+			return
+		}
+		if _, err := os.Stat(filepath.Join(old, "build.log")); err == nil {
+			fmt.Fprintf(w, "[yoe] warning: old build layout detected. Run 'yoe clean --all' to remove stale artifacts.\n")
+			return
+		}
+	}
 }

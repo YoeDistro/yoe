@@ -153,12 +153,29 @@ func cmdLayer(args []string) {
 	}
 }
 
+func resolveTargetArch(proj *yoestar.Project, machineName string) (string, error) {
+	if machineName != "" {
+		m, ok := proj.Machines[machineName]
+		if !ok {
+			return "", fmt.Errorf("machine %q not found", machineName)
+		}
+		return m.Arch, nil
+	}
+	// Use the default machine's arch
+	if m, ok := proj.Machines[proj.Defaults.Machine]; ok {
+		return m.Arch, nil
+	}
+	// Fallback to host arch
+	return build.Arch(), nil
+}
+
 func cmdBuild(args []string) {
 	force := false
 	clean := false
 	noCache := false
 	dryRun := false
 	verbose := false
+	machineName := ""
 	var units []string
 
 	for i := 0; i < len(args); i++ {
@@ -173,6 +190,11 @@ func cmdBuild(args []string) {
 			dryRun = true
 		case "--verbose", "-v":
 			verbose = true
+		case "--machine":
+			if i+1 < len(args) {
+				machineName = args[i+1]
+				i++
+			}
 		case "--all":
 			// build all — units stays empty
 		default:
@@ -183,7 +205,12 @@ func cmdBuild(args []string) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	proj := loadProject()
+	proj := loadProjectWithMachine(machineName)
+	targetArch, err := resolveTargetArch(proj, machineName)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 	opts := build.Options{
 		Ctx:        ctx,
 		Force:      force,
@@ -192,7 +219,7 @@ func cmdBuild(args []string) {
 		DryRun:     dryRun,
 		Verbose:    verbose,
 		ProjectDir: projectDir(),
-		Arch:       build.Arch(),
+		Arch:       targetArch,
 	}
 
 	if err := build.BuildUnits(proj, units, opts, os.Stdout); err != nil {
@@ -215,13 +242,13 @@ func projectDir() string {
 
 func cmdContainer(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s container <build|shell|status>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s container <build|shell|status|binfmt>\n", os.Args[0])
 		os.Exit(1)
 	}
 
 	switch args[0] {
 	case "build":
-		if err := yoe.EnsureImage(os.Stderr); err != nil {
+		if err := yoe.EnsureImage("", os.Stderr); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -230,10 +257,28 @@ func cmdContainer(args []string) {
 		cmdContainerShell()
 	case "status":
 		fmt.Printf("Container version: %s (image: yoe-ng:%s)\n", yoe.ContainerVersion(), yoe.ContainerVersion())
-		if err := yoe.EnsureImage(io.Discard); err != nil {
+		if err := yoe.EnsureImage("", io.Discard); err != nil {
 			fmt.Println("Container image: not built")
 		} else {
 			fmt.Println("Container image: ready")
+		}
+	case "binfmt":
+		fmt.Println("This will register QEMU user-mode emulation for foreign architectures")
+		fmt.Println("by running a privileged Docker container (tonistiigi/binfmt).")
+		fmt.Println()
+		fmt.Println("This enables building arm64 and riscv64 images on your " + build.Arch() + " host.")
+		fmt.Println("The registration persists until reboot.")
+		fmt.Println()
+		fmt.Print("Proceed? (y/n) ")
+		var answer string
+		fmt.Scanln(&answer)
+		if answer != "y" && answer != "Y" {
+			fmt.Println("Cancelled.")
+			return
+		}
+		if err := yoe.RegisterBinfmt(os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
 		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown container subcommand: %s\n", args[0])
@@ -243,12 +288,12 @@ func cmdContainer(args []string) {
 
 func cmdContainerShell() {
 	projectDir := projectDir()
-	sysroot := filepath.Join(projectDir, "build", "shell", "sysroot")
+	sysroot := filepath.Join(projectDir, "build", build.Arch(), "shell", "sysroot")
 	build.EnsureDir(sysroot)
 
 	// Use a temp dir for src/destdir so the sandbox mounts are valid
-	srcDir := filepath.Join(projectDir, "build", "shell", "src")
-	destDir := filepath.Join(projectDir, "build", "shell", "destdir")
+	srcDir := filepath.Join(projectDir, "build", build.Arch(), "shell", "src")
+	destDir := filepath.Join(projectDir, "build", build.Arch(), "shell", "destdir")
 	build.EnsureDir(srcDir)
 	build.EnsureDir(destDir)
 
@@ -371,27 +416,35 @@ func cmdClean(args []string) {
 	}
 
 	if locks {
-		if err := yoe.CleanLocks(dir); err != nil {
+		if err := yoe.CleanLocks(dir, build.Arch()); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 		return
 	}
 
-	if err := yoe.RunClean(dir, all, force, units); err != nil {
+	if err := yoe.RunClean(dir, build.Arch(), all, force, units); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
 func loadProject() *yoestar.Project {
+	return loadProjectWithMachine("")
+}
+
+func loadProjectWithMachine(machineName string) *yoestar.Project {
 	dir := os.Getenv("YOE_PROJECT")
 	if dir == "" {
 		dir = "."
 	}
-	proj, err := yoestar.LoadProject(dir,
+	opts := []yoestar.LoadOption{
 		yoestar.WithLayerSync(layer.SyncIfNeeded),
-	)
+	}
+	if machineName != "" {
+		opts = append(opts, yoestar.WithMachine(machineName))
+	}
+	proj, err := yoestar.LoadProject(dir, opts...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -480,7 +533,7 @@ func cmdDev(args []string) {
 			fmt.Fprintf(os.Stderr, "Usage: %s dev extract <unit>\n", os.Args[0])
 			os.Exit(1)
 		}
-		if err := yoe.DevExtract(dir, args[1], os.Stdout); err != nil {
+		if err := yoe.DevExtract(dir, build.Arch(), args[1], os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -489,12 +542,12 @@ func cmdDev(args []string) {
 			fmt.Fprintf(os.Stderr, "Usage: %s dev diff <unit>\n", os.Args[0])
 			os.Exit(1)
 		}
-		if err := yoe.DevDiff(dir, args[1], os.Stdout); err != nil {
+		if err := yoe.DevDiff(dir, build.Arch(), args[1], os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 	case "status":
-		if err := yoe.DevStatus(dir, os.Stdout); err != nil {
+		if err := yoe.DevStatus(dir, build.Arch(), os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -552,7 +605,7 @@ func cmdLog(args []string) {
 	var logPath string
 
 	if unitName != "" {
-		logPath = filepath.Join(dir, "build", unitName, "build.log")
+		logPath = filepath.Join(build.UnitBuildDir(dir, build.Arch(), unitName), "build.log")
 	} else {
 		logPath = findLatestBuildLog(dir)
 	}
@@ -596,7 +649,7 @@ func cmdDiagnose(args []string) {
 	var logPath string
 
 	if unitName != "" {
-		logPath = filepath.Join(dir, "build", unitName, "build.log")
+		logPath = filepath.Join(build.UnitBuildDir(dir, build.Arch(), unitName), "build.log")
 	} else {
 		logPath = findLatestBuildLog(dir)
 	}
@@ -628,8 +681,8 @@ func cmdDiagnose(args []string) {
 }
 
 func findLatestBuildLog(projectDir string) string {
-	buildDir := filepath.Join(projectDir, "build")
-	entries, err := os.ReadDir(buildDir)
+	archDir := filepath.Join(projectDir, "build", build.Arch())
+	entries, err := os.ReadDir(archDir)
 	if err != nil {
 		return ""
 	}
@@ -644,7 +697,7 @@ func findLatestBuildLog(projectDir string) string {
 		if !e.IsDir() {
 			continue
 		}
-		p := filepath.Join(buildDir, e.Name(), "build.log")
+		p := filepath.Join(archDir, e.Name(), "build.log")
 		info, err := os.Stat(p)
 		if err != nil {
 			continue
@@ -761,7 +814,7 @@ func cmdRepo(args []string) {
 	}
 
 	proj := loadProject()
-	repoDir := repo.RepoDir(proj, projectDir())
+	repoDir := repo.RepoDir(proj, projectDir(), build.Arch())
 
 	switch args[0] {
 	case "list":

@@ -28,8 +28,8 @@ func TestContainerRunArgs_Basic(t *testing.T) {
 	assertContains(t, args, "/home/user/myproject:/project")
 
 	last3 := args[len(args)-3:]
-	if last3[0] != containerTag() {
-		t.Errorf("expected image tag %q, got %q", containerTag(), last3[0])
+	if last3[0] != containerTag("") {
+		t.Errorf("expected image tag %q, got %q", containerTag(""), last3[0])
 	}
 	if last3[1] != "bash" || last3[2] != "-c" {
 		t.Errorf("expected 'bash -c', got %v", last3)

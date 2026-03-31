@@ -15,7 +15,7 @@ func TestDevExtract(t *testing.T) {
 	setupDevTestProject(t, dir)
 
 	// Create a fake build/openssh/src git repo simulating a fetched source
-	srcDir := filepath.Join(dir, "build", "openssh", "src")
+	srcDir := filepath.Join(dir, "build", "x86_64", "openssh", "src")
 	os.MkdirAll(srcDir, 0755)
 
 	// Init git repo with upstream content
@@ -34,7 +34,7 @@ func TestDevExtract(t *testing.T) {
 
 	// Extract patches
 	var buf bytes.Buffer
-	if err := DevExtract(dir, "openssh", &buf); err != nil {
+	if err := DevExtract(dir, "x86_64", "openssh", &buf); err != nil {
 		t.Fatalf("DevExtract: %v", err)
 	}
 
@@ -62,7 +62,7 @@ func TestDevExtract_NoCommits(t *testing.T) {
 	dir := t.TempDir()
 	setupDevTestProject(t, dir)
 
-	srcDir := filepath.Join(dir, "build", "openssh", "src")
+	srcDir := filepath.Join(dir, "build", "x86_64", "openssh", "src")
 	os.MkdirAll(srcDir, 0755)
 
 	run(t, srcDir, "git", "init")
@@ -74,7 +74,7 @@ func TestDevExtract_NoCommits(t *testing.T) {
 	run(t, srcDir, "git", "tag", "upstream")
 
 	var buf bytes.Buffer
-	if err := DevExtract(dir, "openssh", &buf); err != nil {
+	if err := DevExtract(dir, "x86_64", "openssh", &buf); err != nil {
 		t.Fatalf("DevExtract: %v", err)
 	}
 
@@ -87,7 +87,7 @@ func TestDevDiff(t *testing.T) {
 	dir := t.TempDir()
 	setupDevTestProject(t, dir)
 
-	srcDir := filepath.Join(dir, "build", "openssh", "src")
+	srcDir := filepath.Join(dir, "build", "x86_64", "openssh", "src")
 	os.MkdirAll(srcDir, 0755)
 
 	run(t, srcDir, "git", "init")
@@ -103,7 +103,7 @@ func TestDevDiff(t *testing.T) {
 	run(t, srcDir, "git", "commit", "-m", "my change")
 
 	var buf bytes.Buffer
-	if err := DevDiff(dir, "openssh", &buf); err != nil {
+	if err := DevDiff(dir, "x86_64", "openssh", &buf); err != nil {
 		t.Fatalf("DevDiff: %v", err)
 	}
 
@@ -117,7 +117,7 @@ func TestDevStatus(t *testing.T) {
 	setupDevTestProject(t, dir)
 
 	// openssh: has local commits
-	srcDir := filepath.Join(dir, "build", "openssh", "src")
+	srcDir := filepath.Join(dir, "build", "x86_64", "openssh", "src")
 	os.MkdirAll(srcDir, 0755)
 	run(t, srcDir, "git", "init")
 	run(t, srcDir, "git", "config", "user.email", "test@test.com")
@@ -131,7 +131,7 @@ func TestDevStatus(t *testing.T) {
 	run(t, srcDir, "git", "commit", "-m", "local fix")
 
 	var buf bytes.Buffer
-	if err := DevStatus(dir, &buf); err != nil {
+	if err := DevStatus(dir, "x86_64", &buf); err != nil {
 		t.Fatalf("DevStatus: %v", err)
 	}
 

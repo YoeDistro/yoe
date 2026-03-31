@@ -13,7 +13,7 @@ import (
 
 // DevExtract extracts local commits in a unit's build directory as patch
 // files and updates the unit's patches list.
-func DevExtract(projectDir, unitName string, w io.Writer) error {
+func DevExtract(projectDir, arch, unitName string, w io.Writer) error {
 	proj, err := yoestar.LoadProject(projectDir)
 	if err != nil {
 		return err
@@ -24,7 +24,7 @@ func DevExtract(projectDir, unitName string, w io.Writer) error {
 		return fmt.Errorf("unit %q not found", unitName)
 	}
 
-	srcDir := unitSrcDir(projectDir, unitName)
+	srcDir := unitSrcDir(projectDir, arch, unitName)
 	if _, err := os.Stat(filepath.Join(srcDir, ".git")); os.IsNotExist(err) {
 		return fmt.Errorf("%s is not a git repo — build the recipe first with yoe build", srcDir)
 	}
@@ -93,8 +93,8 @@ func DevExtract(projectDir, unitName string, w io.Writer) error {
 }
 
 // DevDiff shows local commits beyond upstream in a unit's build directory.
-func DevDiff(projectDir, unitName string, w io.Writer) error {
-	srcDir := unitSrcDir(projectDir, unitName)
+func DevDiff(projectDir, arch, unitName string, w io.Writer) error {
+	srcDir := unitSrcDir(projectDir, arch, unitName)
 	if _, err := os.Stat(filepath.Join(srcDir, ".git")); os.IsNotExist(err) {
 		return fmt.Errorf("%s is not a git repo — build the recipe first", srcDir)
 	}
@@ -115,13 +115,13 @@ func DevDiff(projectDir, unitName string, w io.Writer) error {
 }
 
 // DevStatus shows which units have local modifications.
-func DevStatus(projectDir string, w io.Writer) error {
+func DevStatus(projectDir, arch string, w io.Writer) error {
 	proj, err := yoestar.LoadProject(projectDir)
 	if err != nil {
 		return err
 	}
 
-	buildDir := filepath.Join(projectDir, "build")
+	buildDir := filepath.Join(projectDir, "build", arch)
 	found := false
 
 	for name := range proj.Units {
@@ -150,8 +150,8 @@ func DevStatus(projectDir string, w io.Writer) error {
 	return nil
 }
 
-func unitSrcDir(projectDir, unitName string) string {
-	return filepath.Join(projectDir, "build", unitName, "src")
+func unitSrcDir(projectDir, arch, unitName string) string {
+	return filepath.Join(projectDir, "build", arch, unitName, "src")
 }
 
 func gitCmd(dir string, args ...string) (string, error) {

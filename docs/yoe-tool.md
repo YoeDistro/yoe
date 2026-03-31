@@ -39,7 +39,7 @@ yoe graph           Visualize the dependency DAG
 yoe log             Show build log (most recent or specific unit)
 yoe diagnose        Launch Claude Code to diagnose a build failure
 yoe clean           Remove build artifacts
-yoe container       Manage the build container (build, status)
+yoe container       Manage the build container (build, binfmt, status)
 ```
 
 All commands except `init`, `version`, and `container` run inside an Alpine
@@ -95,6 +95,9 @@ yoe build base-image
 
 # Build an image for a specific machine
 yoe build base-image --machine raspberrypi4
+
+# Build for ARM64 on an x86_64 host (uses QEMU user-mode emulation)
+yoe build base-image --machine qemu-arm64
 
 # Build all units (packages and images)
 yoe build --all
@@ -208,10 +211,10 @@ write to mounted devices or devices that look like system disks.
 
 ### `yoe run`
 
-Launches a built image in QEMU for development and testing. QEMU runs with KVM
-hardware virtualization, so the host and guest architecture must match (e.g.,
-x86_64 host runs x86_64 images). For testing other architectures, use native
-hardware or native CI runners.
+Launches a built image in QEMU for development and testing. When the host and
+target architecture match, QEMU uses KVM hardware virtualization for near-native
+speed. For cross-architecture images (e.g., ARM64 on x86_64), QEMU runs in
+software emulation mode automatically.
 
 ```sh
 # Run the most recently built image (auto-detects machine/image)
@@ -219,6 +222,9 @@ yoe run
 
 # Run a specific image unit
 yoe run dev-image --machine qemu-x86_64
+
+# Run an ARM64 image on an x86_64 host (software emulation)
+yoe run base-image --machine qemu-arm64
 
 # Forward host port 2222 to guest SSH (port 22)
 yoe run --port 2222:22

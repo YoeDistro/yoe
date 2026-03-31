@@ -23,7 +23,7 @@ func toContainerPath(projectDir, hostPath string) (string, error) {
 // GenerateDiskImage creates a partitioned disk image from a rootfs directory.
 // Disk tools (sfdisk, mkfs, dd, etc.) run inside the container via
 // RunInContainer; pure file operations stay on the host.
-func GenerateDiskImage(rootfs, imgPath string, unit *yoestar.Unit, projectDir string, w io.Writer) error {
+func GenerateDiskImage(rootfs, imgPath string, unit *yoestar.Unit, projectDir, arch string, w io.Writer) error {
 	partitions := unit.Partitions
 	if len(partitions) == 0 {
 		partitions = []yoestar.Partition{
@@ -103,9 +103,11 @@ func GenerateDiskImage(rootfs, imgPath string, unit *yoestar.Unit, projectDir st
 		offsetMB += sizeMB
 	}
 
-	// Install syslinux bootloader (MBR + VBR + ldlinux.sys)
-	if err := installBootloader(imgPath, rootfs, unit, projectDir, w); err != nil {
-		fmt.Fprintf(w, "  Warning: could not install bootloader: %v\n", err)
+	// Install syslinux bootloader (x86 only — arm64/riscv64 use direct kernel boot)
+	if arch == "x86_64" {
+		if err := installBootloader(imgPath, rootfs, unit, projectDir, w); err != nil {
+			fmt.Fprintf(w, "  Warning: could not install bootloader: %v\n", err)
+		}
 	}
 
 	info, _ := os.Stat(imgPath)

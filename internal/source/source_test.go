@@ -89,7 +89,7 @@ func TestPrepare(t *testing.T) {
 		Source:  srv.URL + "/test-1.0.tar.gz",
 	}
 
-	srcDir, err := Prepare(projectDir, unit, os.Stdout)
+	srcDir, err := Prepare(projectDir, "x86_64", unit, os.Stdout)
 	if err != nil {
 		t.Fatalf("Prepare: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestPrepare_WithPatches(t *testing.T) {
 		Patches: []string{"patches/test-pkg/fix.patch"},
 	}
 
-	srcDir, err := Prepare(projectDir, unit, os.Stdout)
+	srcDir, err := Prepare(projectDir, "x86_64", unit, os.Stdout)
 	if err != nil {
 		t.Fatalf("Prepare: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestPrepare_WithPatches(t *testing.T) {
 
 func TestPrepare_DevMode(t *testing.T) {
 	projectDir := t.TempDir()
-	srcDir := filepath.Join(projectDir, "build", "test-pkg", "src")
+	srcDir := filepath.Join(projectDir, "build", "x86_64", "test-pkg", "src")
 	os.MkdirAll(srcDir, 0755)
 
 	// Set up a git repo with local commits
@@ -194,7 +194,7 @@ func TestPrepare_DevMode(t *testing.T) {
 		Source: "https://example.com/should-not-fetch.tar.gz",
 	}
 
-	result, err := Prepare(projectDir, unit, os.Stdout)
+	result, err := Prepare(projectDir, "x86_64", unit, os.Stdout)
 	if err != nil {
 		t.Fatalf("Prepare: %v", err)
 	}

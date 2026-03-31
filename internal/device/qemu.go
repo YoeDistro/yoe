@@ -41,7 +41,7 @@ func RunQEMU(proj *yoestar.Project, unitName, machineName, projectDir string, op
 	}
 
 	// Find the built image
-	imgPath := findImage(projectDir, unitName)
+	imgPath := findImage(projectDir, machine.Arch, unitName)
 	if imgPath == "" {
 		return fmt.Errorf("no built image for %q — run yoe build %s first", unitName, unitName)
 	}
@@ -60,6 +60,20 @@ func RunQEMU(proj *yoestar.Project, unitName, machineName, projectDir string, op
 			a = append(a, "-netdev", "user,id=net0")
 			a = append(a, "-device", "virtio-net-pci,netdev=net0")
 		}
+
+		// Direct kernel boot: when no firmware is configured, pass
+		// -kernel and -append for architectures that need it (arm64, riscv64).
+		needsDirectBoot := machine.QEMU == nil || machine.QEMU.Firmware == ""
+		if needsDirectBoot && machine.Kernel.Unit != "" {
+			kernelPath := findKernelImage(projectDir, machine.Arch, machine.Kernel.Unit)
+			if kernelPath != "" {
+				a = append(a, "-kernel", kernelPath)
+				if machine.Kernel.Cmdline != "" {
+					a = append(a, "-append", machine.Kernel.Cmdline)
+				}
+			}
+		}
+
 		return a
 	}
 
@@ -102,6 +116,18 @@ func RunQEMU(proj *yoestar.Project, unitName, machineName, projectDir string, op
 	})
 }
 
+// findKernelImage locates the kernel image (vmlinuz) from a kernel unit's
+// build output.
+func findKernelImage(projectDir, arch, kernelUnit string) string {
+	// Check the unit's destdir for /boot/vmlinuz
+	destDir := filepath.Join(projectDir, "build", arch, kernelUnit, "destdir")
+	vmlinuz := filepath.Join(destDir, "boot", "vmlinuz")
+	if _, err := os.Stat(vmlinuz); err == nil {
+		return vmlinuz
+	}
+	return ""
+}
+
 func qemuBinary(arch string) string {
 	switch arch {
 	case "arm64":
@@ -113,32 +139,56 @@ func qemuBinary(arch string) string {
 	}
 }
 
+func detectHostArch() string {
+	out, err := exec.Command("uname", "-m").Output()
+	if err != nil {
+		return "x86_64"
+	}
+	arch := strings.TrimSpace(string(out))
+	switch arch {
+	case "aarch64":
+		return "arm64"
+	default:
+		return arch
+	}
+}
+
 func baseQEMUArgs(machine *yoestar.Machine, opts QEMUOptions) []string {
 	var args []string
 
-	// Machine type
+	hostArch := detectHostArch()
+	crossArch := machine.Arch != hostArch
+
 	qemu := machine.QEMU
 	if qemu != nil {
 		if qemu.Machine != "" {
 			args = append(args, "-machine", qemu.Machine)
 		}
-		if qemu.CPU != "" {
+		if crossArch {
+			args = append(args, "-cpu", "max")
+		} else if qemu.CPU != "" {
 			args = append(args, "-cpu", qemu.CPU)
 		}
 	} else {
-		// Defaults per arch
 		switch machine.Arch {
 		case "arm64":
-			args = append(args, "-machine", "virt", "-cpu", "host")
+			args = append(args, "-machine", "virt")
 		case "riscv64":
-			args = append(args, "-machine", "virt", "-cpu", "host")
+			args = append(args, "-machine", "virt")
 		default:
-			args = append(args, "-machine", "q35", "-cpu", "host")
+			args = append(args, "-machine", "q35")
+		}
+		if crossArch {
+			args = append(args, "-cpu", "max")
+		} else {
+			args = append(args, "-cpu", "host")
 		}
 	}
 
-	// Enable KVM
-	args = append(args, "-enable-kvm")
+	// Enable KVM only for same-arch
+	if !crossArch {
+		args = append(args, "-enable-kvm")
+	}
 
 	// Memory
 	mem := opts.Memory

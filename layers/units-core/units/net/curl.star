@@ -7,7 +7,7 @@ autotools(
     tag = "curl-8_11_1",
     license = "MIT",
     description = "Command-line tool and library for transferring data with URLs",
-    deps = ["openssl", "zlib"],
-    runtime_deps = ["openssl", "zlib"],
+    deps = ["openssl", "zlib", "zstd"],
+    runtime_deps = ["openssl", "zlib", "zstd"],
     configure_args = ["--with-openssl", "--without-libpsl"],
 )

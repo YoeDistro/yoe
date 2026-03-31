@@ -9,7 +9,7 @@ import (
 
 // builtins returns the predeclared names available in all .star files.
 func (e *Engine) builtins() starlark.StringDict {
-	return starlark.StringDict{
+	d := starlark.StringDict{
 		"project":     starlark.NewBuiltin("project", e.fnProject),
 		"defaults":    starlark.NewBuiltin("defaults", fnDefaults),
 		"repository":  starlark.NewBuiltin("repository", fnRepository),
@@ -33,6 +33,13 @@ func (e *Engine) builtins() starlark.StringDict {
 		"True":        starlark.True,
 		"False":       starlark.False,
 	}
+
+	// Merge engine variables (e.g., ARCH set after machine loading).
+	for k, v := range e.vars {
+		d[k] = v
+	}
+
+	return d
 }
 
 // --- Helper: extract keyword args ---
@@ -498,3 +505,4 @@ func (e *Engine) fnCommand(thread *starlark.Thread, _ *starlark.Builtin, _ starl
 
 	return starlark.None, nil
 }
+

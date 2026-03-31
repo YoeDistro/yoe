@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"go.starlark.net/starlark"
 )
 
 // LoadOption configures optional behavior for LoadProject / LoadProjectFromRoot.
@@ -13,6 +15,7 @@ type LoadOption func(*loadConfig)
 
 type loadConfig struct {
 	layerSync func([]LayerRef, io.Writer) error
+	machine   string // override default machine before evaluating units/images
 }
 
 // WithLayerSync provides a callback that is invoked after PROJECT.star is
@@ -20,6 +23,13 @@ type loadConfig struct {
 // The callback receives the layer list and a writer for progress output.
 func WithLayerSync(fn func([]LayerRef, io.Writer) error) LoadOption {
 	return func(c *loadConfig) { c.layerSync = fn }
+}
+
+// WithMachine overrides the project's default machine before units and
+// images are evaluated. This allows target_arch() in Starlark to return
+// the correct architecture for the specified machine.
+func WithMachine(name string) LoadOption {
+	return func(c *loadConfig) { c.machine = name }
 }
 
 // LoadProject finds the project root, evaluates all .star files, and returns
@@ -120,20 +130,45 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		}
 	}
 
-	// Evaluate all machine definitions
+	// Phase 1: Evaluate all machine definitions (project + layers).
+	// Machines must be loaded before units/images so that target_arch()
+	// returns the correct value during Starlark evaluation.
 	if err := evalDir(eng, root, "machines"); err != nil {
 		return nil, err
 	}
+	if eng.layerRoots != nil {
+		for _, layerPath := range eng.layerRoots {
+			if err := evalDir(eng, layerPath, "machines"); err != nil {
+				return nil, err
+			}
+		}
+	}
 
-	// Evaluate all units
+	// Apply machine override before evaluating units/images.
+	if cfg.machine != "" {
+		if proj := eng.Project(); proj != nil {
+			proj.Defaults.Machine = cfg.machine
+		}
+	}
+
+	// Set ARCH variable for phase 2 so Starlark files can use it
+	// (e.g., conditional artifacts in image definitions).
+	// Always set a value — default to x86_64 if no machine is configured.
+	arch := "x86_64"
+	if proj := eng.Project(); proj != nil {
+		if m, ok := eng.Machines()[proj.Defaults.Machine]; ok {
+			arch = m.Arch
+		}
+	}
+	eng.SetVar("ARCH", starlark.String(arch))
+
+	// Phase 2: Evaluate units and images (project + layers).
 	if err := evalDir(eng, root, "units"); err != nil {
 		return nil, err
 	}
-
-	// Evaluate machines, units, and images from local layers
 	if eng.layerRoots != nil {
 		for _, layerPath := range eng.layerRoots {
-			for _, subdir := range []string{"machines", "units", "images"} {
+			for _, subdir := range []string{"units", "images"} {
 				if err := evalDir(eng, layerPath, subdir); err != nil {
 					return nil, err
 				}

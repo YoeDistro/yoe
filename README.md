@@ -1,19 +1,26 @@
 # 🐧 Yoe Next Generation
 
-Yoe-NG is an **AI-native embedded Linux distribution builder** — a simpler
-alternative to Yocto, designed from the ground up to be driven by AI assistants.
+**For teams building edge products in Go, Rust, Zig, Python, etc. who need Linux
+on ARM/RISC-V without the complexity of Yocto.**
 
-Every operation has a CLI equivalent, but the primary workflow is
-conversational: describe what you need, and the AI generates units, configures
-machines, traces dependencies, diagnoses build failures, and audits security —
-all with full understanding of your project's dependency graph and build state.
+Yoe-NG is an embedded Linux distribution builder designed for modern edge
+development. Your application is written in Go or Rust. Your target is an ARM
+board. You need a minimal Linux image with your app, the right kernel, and
+nothing else. You shouldn't need to learn BitBake, manage cross-toolchains, or
+read a thousand-page manual to get there.
 
-Note: much of what is in the docs has not been implemented yet, and is mostly 
+One Go binary. Readable Starlark config files. AI that understands your
+dependency graph. Build ARM images on your x86 laptop, on native hardware, or in
+cloud CI — same tool, same config, same results.
+
+Note: much of what is in the docs has not been implemented yet, and is mostly
 vision.
 
 ## 🚀 Getting Started
 
-Prerequisites: an x86_64 Linux host with Git and Docker (or Podman) installed.
+Prerequisites: Linux or macOS with Git and Docker (or Podman) installed. Windows
+users: install WSL2 and use the Linux binary. (Linux x86_64/Docker is the most
+tested configuration)
 
 ```sh
 # Download the yoe binary
@@ -38,11 +45,59 @@ yoe
 poweroff
 ```
 
-`dev-image` is another included image with a few more things in it.
-
 There are also CLI variants of the above commands (`build`, `run`, etc.).
 
 <img width="1743" height="1597" alt="image" src="https://github.com/user-attachments/assets/99e297f3-b424-422a-8b24-45fb82de81fb" />
+
+`dev-image` is another included image with a few more things in it.
+
+### Cross-Architecture Builds
+
+Build ARM64 images on an x86_64 host using QEMU user-mode emulation:
+
+```sh
+# One-time setup: register QEMU user-mode emulation
+yoe container binfmt
+
+# Build for ARM64
+yoe build base-image --machine qemu-arm64
+
+# Run it
+yoe run base-image --machine qemu-arm64
+```
+
+(or run the above in TUI be selecting machine in setup first)
+
+No cross-compilation toolchain needed — the build runs inside a genuine ARM64
+Docker container, transparently emulated by the host kernel.
+
+## 🔧 Motivation
+
+Existing embedded Linux build systems (Yocto, Buildroot) were designed in a
+world where ARM hardware was slow, applications were written in C, and
+developers configured everything by hand. Three things have changed:
+
+1. **ARM and RISC-V hardware is fast.** Modern ARM boards and cloud instances
+   (AWS Graviton, Hetzner CAX) build at speeds that make cross-compilation
+   unnecessary for most workloads. For development, QEMU user-mode emulation
+   lets you build ARM images on x86 without a cross-toolchain — slower, but
+   correct and simple.
+
+2. **Applications are moving to modern languages.** Go, Rust, Zig, and Python
+   have their own dependency management, reproducible builds, and caching. The
+   elaborate cross-compilation and sysroot machinery in traditional build
+   systems was designed for C/C++ — wrapping Go modules or Cargo in BitBake
+   recipes adds friction without proportional benefit.
+
+3. **AI changes the interface.** The hardest part of embedded Linux is knowing
+   what to configure and how. An AI assistant that understands the build system
+   can guide developers through unit creation, debug build failures, and audit
+   security — without requiring them to memorize a build system's quirks. But
+   this only works if the build metadata is structured and queryable, not buried
+   in shell scripts and environment variables.
+
+Yoe-NG is built for this new world: native builds, language-native package
+managers, structured Starlark metadata, and AI as a first-class interface.
 
 ## 🤖 Why AI-Native
 
@@ -50,9 +105,9 @@ Embedded Linux is hard not because the concepts are complex, but because there
 are _many_ concepts that interact in non-obvious ways: toolchain flags,
 dependency ordering, kernel configuration, package splitting, layer composition,
 image assembly, device trees, bootloaders. Traditional build systems manage this
-complexity through documentation that developers must read and internalize.
+complexity through complexity.
 
-Yoe-NG takes a different approach: **the build system is the documentation.**
+Yoe-NG takes a different approach: **Simplify things as much as possible.**
 Starlark units are readable by both humans and AI. The dependency graph is
 queryable. Build logs are structured. An AI assistant that understands all of
 this can:
@@ -93,8 +148,9 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
   no golden images
 - **Modern languages** (Go, Rust, Zig, Python, JavaScript) — uses native
   language package managers, caches packages where possible
-- **No cross compilation** — leverage native builds on modern ARM/RISC-V
-  hardware
+- **No cross compilation** — native builds via QEMU user-mode emulation or real
+  ARM/RISC-V hardware. Build environment is per-unit, not global — each unit
+  runs in its own isolated container.
 - **Starlark for units and build rules** — Python-like, deterministic, sandboxed
   (see [Build Languages](docs/build-languages.md))
 - **Leverage existing ecosystems** — integrate with language-native build
@@ -153,46 +209,21 @@ each while avoiding their respective pain points:
 See [Comparisons](docs/comparisons.md) for detailed analysis of how Yoe-NG
 relates to each of these systems, including when you should use them instead.
 
-## 🔧 Motivation
-
-The Yocto Project is a powerful embedded Linux build system, but it carries
-significant complexity: BitBake, extensive metadata, cross-compilation
-toolchains, and a steep learning curve. Much of this complexity exists to solve
-problems that modern language ecosystems have already addressed — dependency
-management, reproducible builds, and caching.
-
-Yoe-NG asks: what if we started fresh with these assumptions?
-
-- **AI changes the interface.** The hardest part of embedded Linux is knowing
-  what to configure and how. An AI assistant that understands the build system
-  can guide developers through unit creation, debug build failures, and audit
-  security — without requiring them to memorize a build system's quirks.
-- **Native compilation is fast enough.** With modern hardware (including
-  powerful ARM/RISC-V boards and cloud CI), cross-compilation is no longer a
-  hard requirement for most workloads.
-- **Language-native package managers work.** Go modules, Cargo, npm, and pip
-  already handle dependency resolution and reproducibility. Wrapping them in
-  another layer (units, bbappends) adds friction without proportional benefit.
-- **Simpler tooling is better tooling.** A single Go binary with a TUI is easier
-  to install, maintain, and extend than a Python-based build system with
-  thousands of metadata files.
-- **Structured metadata enables AI.** Starlark is deterministic, sandboxed, and
-  readable by both humans and AI. Combined with a queryable dependency graph
-  (`yoe desc`, `yoe refs`, `yoe graph`), the entire build state is accessible to
-  AI assistants — unlike shell-based build systems where critical state is
-  hidden in environment variables and implicit ordering.
-
 ## ⚙️ Design Principles
 
 ### 🚫 No Cross Compilation
 
 Instead of maintaining cross-toolchains, Yoe-NG targets native builds:
 
-- Build on the target architecture directly (real hardware or emulated/VM).
-- Use cloud CI with native architecture runners (e.g., ARM64 GitHub Actions
-  runners, Hetzner ARM boxes).
-- QEMU user-mode emulation as a fallback for architectures without cheap native
-  hardware.
+- **QEMU user-mode emulation** — build ARM64 or RISC-V images on any x86_64
+  workstation. The build runs inside a genuine foreign-arch Docker container,
+  transparently emulated via binfmt_misc. One command to set up
+  (`yoe container binfmt`), then `--machine qemu-arm64` just works. ~5-20x
+  slower than native, but fine for iterating on a few packages.
+- **Native hardware** — build on the target architecture directly (ARM64 dev
+  boards, RISC-V boards).
+- **Cloud CI** — use native architecture runners (e.g., ARM64 GitHub Actions
+  runners, AWS Graviton, Hetzner ARM boxes) for full-speed CI builds.
 
 This eliminates an entire class of build issues (sysroot management, host
 contamination, cross-pkg-config, etc.).

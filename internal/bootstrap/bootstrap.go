@@ -48,13 +48,13 @@ func Stage0(proj *yoestar.Project, projectDir string, w io.Writer) error {
 	}
 
 	// Build each bootstrap unit without sandbox isolation (using host tools)
-	repoDir := repo.RepoDir(proj, projectDir)
+	repoDir := repo.RepoDir(proj, projectDir, arch)
 
 	for _, name := range bootstrapUnits {
 		unit := proj.Units[name]
 		fmt.Fprintf(w, "\n--- Building %s %s ---\n", unit.Name, unit.Version)
 
-		buildDir := build.UnitBuildDir(projectDir, unit.Name)
+		buildDir := build.UnitBuildDir(projectDir, arch, unit.Name)
 		destDir := filepath.Join(buildDir, "destdir")
 
 		// Clean and prepare
@@ -91,13 +91,13 @@ func Stage0(proj *yoestar.Project, projectDir string, w io.Writer) error {
 		}
 
 		// Package the output
-		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"))
+		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), arch)
 		if err != nil {
 			return fmt.Errorf("packaging %s: %w", unit.Name, err)
 		}
 
 		// Publish to the local repo
-		if err := repo.Publish(apkPath, repoDir); err != nil {
+		if err := repo.Publish(apkPath, repoDir, arch); err != nil {
 			return fmt.Errorf("publishing %s: %w", unit.Name, err)
 		}
 
@@ -116,7 +116,7 @@ func Stage1(proj *yoestar.Project, projectDir string, w io.Writer) error {
 	fmt.Fprintln(w)
 
 	arch := build.Arch()
-	repoDir := repo.RepoDir(proj, projectDir)
+	repoDir := repo.RepoDir(proj, projectDir, arch)
 
 	// Verify Stage 0 packages exist in the repo
 	if err := verifyStage0(repoDir); err != nil {
@@ -134,7 +134,7 @@ func Stage1(proj *yoestar.Project, projectDir string, w io.Writer) error {
 		unit := proj.Units[name]
 		fmt.Fprintf(w, "\n--- Rebuilding %s %s (self-hosted) ---\n", unit.Name, unit.Version)
 
-		buildDir := build.UnitBuildDir(projectDir, unit.Name)
+		buildDir := build.UnitBuildDir(projectDir, arch, unit.Name)
 		destDir := filepath.Join(buildDir, "destdir")
 
 		os.RemoveAll(destDir)
@@ -170,11 +170,11 @@ func Stage1(proj *yoestar.Project, projectDir string, w io.Writer) error {
 		}
 
 		// Package and publish (overwriting Stage 0 packages)
-		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"))
+		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), arch)
 		if err != nil {
 			return fmt.Errorf("packaging %s: %w", unit.Name, err)
 		}
-		if err := repo.Publish(apkPath, repoDir); err != nil {
+		if err := repo.Publish(apkPath, repoDir, arch); err != nil {
 			return fmt.Errorf("publishing %s: %w", unit.Name, err)
 		}
 
@@ -187,7 +187,7 @@ func Stage1(proj *yoestar.Project, projectDir string, w io.Writer) error {
 
 // Status shows the current bootstrap state.
 func Status(proj *yoestar.Project, projectDir string, w io.Writer) error {
-	repoDir := repo.RepoDir(proj, projectDir)
+	repoDir := repo.RepoDir(proj, projectDir, build.Arch())
 
 	fmt.Fprintf(w, "Bootstrap status for %s\n\n", proj.Name)
 	fmt.Fprintf(w, "Repository: %s\n", repoDir)

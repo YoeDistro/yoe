@@ -15,6 +15,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	yoe "github.com/YoeDistro/yoe-ng/internal"
 	"github.com/YoeDistro/yoe-ng/internal/build"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
@@ -42,6 +43,7 @@ type viewKind int
 const (
 	viewUnits viewKind = iota
 	viewDetail
+	viewSetup
 )
 
 // Unit status
@@ -72,10 +74,16 @@ type execDoneMsg struct {
 	err error
 }
 
+type notifyMsg string
+
 // model is the Bubble Tea model for the yoe TUI.
 type model struct {
 	proj       *yoestar.Project
 	projectDir string
+	arch       string
+	warning      string // persistent warning banner (e.g., binfmt missing)
+	notification string // transient global notification (e.g., container rebuild)
+	dag        *resolve.DAG
 	units      []string
 	hashes     map[string]string
 	statuses   map[string]unitStatus
@@ -97,6 +105,12 @@ type model struct {
 	searching  bool   // true = search input active
 	searchText string // current search query
 	filtered   []int  // indices into units matching search
+
+	// Setup view
+	machines    []string // sorted machine names
+	setupCursor int      // cursor within setup options
+	setupField  string   // "" = top-level, "machine" = picking machine
+	machineCursor int    // cursor within machine list
 }
 
 // Run launches the TUI.
@@ -107,6 +121,9 @@ func Run(proj *yoestar.Project, projectDir string) error {
 	}
 
 	arch := build.Arch()
+	if m, ok := proj.Machines[proj.Defaults.Machine]; ok {
+		arch = m.Arch
+	}
 	hashes, err := resolve.ComputeAllHashes(dag, arch)
 	if err != nil {
 		return fmt.Errorf("computing hashes: %w", err)
@@ -116,27 +133,41 @@ func Run(proj *yoestar.Project, projectDir string) error {
 	statuses := make(map[string]unitStatus, len(units))
 	for _, name := range units {
 		hash := hashes[name]
-		if build.IsBuildCached(projectDir, name, hash) {
+		if build.IsBuildCached(projectDir, arch, name, hash) {
 			statuses[name] = statusCached
-		} else if build.IsBuildInProgress(projectDir, name) {
+		} else if build.IsBuildInProgress(projectDir, arch, name) {
 			statuses[name] = statusBuilding
-		} else if build.HasBuildLog(projectDir, name) {
+		} else if build.HasBuildLog(projectDir, arch, name) {
 			statuses[name] = statusFailed
 		}
 	}
 
+	machines := sortedKeys(proj.Machines)
+
 	m := model{
 		proj:       proj,
 		projectDir: projectDir,
+		arch:       arch,
+		dag:        dag,
 		units:      units,
 		hashes:     hashes,
 		statuses:   statuses,
 		building:   make(map[string]bool),
 		cancels:    make(map[string]context.CancelFunc),
+		machines:   machines,
 	}
+	m.checkBinfmtWarning()
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	tuiProgram = p
+
+	yoe.OnNotify = func(msg string) {
+		if tuiProgram != nil {
+			tuiProgram.Send(notifyMsg(msg))
+		}
+	}
+	defer func() { yoe.OnNotify = nil }()
+
 	_, err = p.Run()
 	return err
 }
@@ -203,6 +234,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case notifyMsg:
+		m.notification = string(msg)
+		return m, nil
+
 	case tea.KeyMsg:
 		// Handle confirmation prompt
 		if m.confirm != "" {
@@ -218,6 +253,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateUnits(msg)
 		case viewDetail:
 			return m.updateDetail(msg)
+		case viewSetup:
+			return m.updateSetup(msg)
 		}
 	}
 	return m, nil
@@ -338,7 +375,7 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "l":
 		if m.cursor < len(m.units) {
 			name := m.units[m.cursor]
-			logPath := filepath.Join(m.projectDir, "build", name, "build.log")
+			logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.arch, name), "build.log")
 			if _, err := os.Stat(logPath); err == nil {
 				return m, m.execEditor(logPath)
 			}
@@ -349,7 +386,7 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "d":
 		if m.cursor < len(m.units) {
 			name := m.units[m.cursor]
-			logPath := filepath.Join(m.projectDir, "build", name, "build.log")
+			logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.arch, name), "build.log")
 			c := exec.Command("claude", fmt.Sprintf("diagnose %s", logPath))
 			c.Dir = m.projectDir
 			return m, tea.ExecProcess(c, func(err error) tea.Msg {
@@ -369,7 +406,7 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.cursor < len(m.units) {
 			name := m.units[m.cursor]
 			if u, ok := m.proj.Units[name]; ok && u.Class == "image" {
-				c := exec.Command(os.Args[0], "run", name)
+				c := exec.Command(os.Args[0], "run", name, "--machine", m.proj.Defaults.Machine)
 				c.Dir = m.projectDir
 				return m, tea.ExecProcess(c, func(err error) tea.Msg {
 					return execDoneMsg{err: err}
@@ -396,6 +433,20 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searching = true
 		m.searchText = ""
 		m.filtered = nil
+		return m, nil
+
+	case "s":
+		m.view = viewSetup
+		m.setupCursor = 0
+		m.setupField = ""
+		// Set machineCursor to current machine
+		m.machineCursor = 0
+		for i, name := range m.machines {
+			if name == m.proj.Defaults.Machine {
+				m.machineCursor = i
+				break
+			}
+		}
 		return m, nil
 	}
 	return m, nil
@@ -500,7 +551,7 @@ func (m model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		} else if strings.HasPrefix(action, "clean:") {
 			name := strings.TrimPrefix(action, "clean:")
-			buildDir := filepath.Join(m.projectDir, "build", name)
+			buildDir := build.UnitBuildDir(m.projectDir, m.arch, name)
 			if err := os.RemoveAll(buildDir); err != nil {
 				m.message = fmt.Sprintf("Clean failed: %v", err)
 			} else {
@@ -526,6 +577,74 @@ func (m model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	default:
 		m.message = ""
+	}
+	return m, nil
+}
+
+// Setup option names — add new options here.
+var setupOptions = []string{"Machine"}
+
+func (m model) updateSetup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.setupField == "machine" {
+		return m.updateSetupMachine(msg)
+	}
+
+	switch msg.String() {
+	case "esc", "q":
+		m.view = viewUnits
+		return m, nil
+
+	case "up", "k":
+		if m.setupCursor > 0 {
+			m.setupCursor--
+		}
+		return m, nil
+
+	case "down", "j":
+		if m.setupCursor < len(setupOptions)-1 {
+			m.setupCursor++
+		}
+		return m, nil
+
+	case "enter":
+		switch setupOptions[m.setupCursor] {
+		case "Machine":
+			m.setupField = "machine"
+		}
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m model) updateSetupMachine(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.setupField = ""
+		return m, nil
+
+	case "up", "k":
+		if m.machineCursor > 0 {
+			m.machineCursor--
+		}
+		return m, nil
+
+	case "down", "j":
+		if m.machineCursor < len(m.machines)-1 {
+			m.machineCursor++
+		}
+		return m, nil
+
+	case "enter":
+		m.proj.Defaults.Machine = m.machines[m.machineCursor]
+		if mach, ok := m.proj.Machines[m.machines[m.machineCursor]]; ok {
+			m.arch = mach.Arch
+		}
+		m.recomputeStatuses()
+		m.checkBinfmtWarning()
+		m.message = fmt.Sprintf("Machine set to %s", m.machines[m.machineCursor])
+		m.setupField = ""
+		m.view = viewUnits
+		return m, nil
 	}
 	return m, nil
 }
@@ -601,7 +720,7 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.startBuild(m.detailUnit)
 
 	case "d":
-		logPath := filepath.Join(m.projectDir, "build", m.detailUnit, "build.log")
+		logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.arch, m.detailUnit), "build.log")
 		c := exec.Command("claude", fmt.Sprintf("diagnose %s", logPath))
 		c.Dir = m.projectDir
 		return m, tea.ExecProcess(c, func(err error) tea.Msg {
@@ -610,7 +729,7 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "r":
 		if u, ok := m.proj.Units[m.detailUnit]; ok && u.Class == "image" {
-			c := exec.Command(os.Args[0], "run", m.detailUnit)
+			c := exec.Command(os.Args[0], "run", m.detailUnit, "--machine", m.proj.Defaults.Machine)
 			c.Dir = m.projectDir
 			return m, tea.ExecProcess(c, func(err error) tea.Msg {
 				return execDoneMsg{err: err}
@@ -620,7 +739,7 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "l":
-		logPath := filepath.Join(m.projectDir, "build", m.detailUnit, "build.log")
+		logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.arch, m.detailUnit), "build.log")
 		if _, err := os.Stat(logPath); err == nil {
 			return m, m.execEditor(logPath)
 		}
@@ -636,6 +755,8 @@ func (m model) View() string {
 	switch m.view {
 	case viewDetail:
 		return m.viewDetail()
+	case viewSetup:
+		return m.viewSetup()
 	default:
 		return m.viewUnits()
 	}
@@ -647,10 +768,22 @@ func (m model) viewUnits() string {
 	// Header
 	machine := m.proj.Defaults.Machine
 	image := m.proj.Defaults.Image
-	b.WriteString(fmt.Sprintf("  %s  Machine: %s  Image: %s\n\n",
+	b.WriteString(fmt.Sprintf("  %s  Machine: %s  Image: %s\n",
 		titleStyle.Render("Yoe-NG"),
 		headerStyle.Render(machine),
 		headerStyle.Render(image)))
+
+	// Warning banner
+	if m.warning != "" {
+		warnStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("226")).Bold(true)
+		b.WriteString(fmt.Sprintf("  %s\n", warnStyle.Render(m.warning)))
+	}
+	// Global notification (e.g., container rebuild)
+	if m.notification != "" {
+		notifyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("226")).Bold(true)
+		b.WriteString(fmt.Sprintf("  %s\n", notifyStyle.Render("⏳ "+m.notification)))
+	}
+	b.WriteString("\n")
 
 	// Column header
 	b.WriteString(fmt.Sprintf("  %s %s %s\n",
@@ -715,10 +848,10 @@ func (m model) viewUnits() string {
 	if m.searching {
 		b.WriteString(fmt.Sprintf("  /%s▌", m.searchText))
 	} else {
-		help := "  b build  x cancel  e edit  d diagnose  l log  c clean  / search  q quit"
+		help := "  b build  x cancel  e edit  d diagnose  l log  c clean  s setup  / search  q quit"
 		if m.cursor < len(m.units) {
 			if u, ok := m.proj.Units[m.units[m.cursor]]; ok && u.Class == "image" {
-				help = "  b build  x cancel  r run  e edit  d diagnose  l log  c clean  / search  q quit"
+				help = "  b build  x cancel  r run  e edit  d diagnose  l log  c clean  s setup  / search  q quit"
 			}
 		}
 		b.WriteString(helpStyle.Render(help))
@@ -726,6 +859,68 @@ func (m model) viewUnits() string {
 	b.WriteString("\n")
 
 	// Status message
+	if m.message != "" {
+		b.WriteString("\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Render("  "+m.message))
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+func (m model) viewSetup() string {
+	var b strings.Builder
+
+	b.WriteString(fmt.Sprintf("  %s\n\n", titleStyle.Render("Setup")))
+
+	if m.setupField == "machine" {
+		// Machine picker
+		b.WriteString(headerStyle.Render("  Select Machine"))
+		b.WriteString("\n\n")
+
+		for i, name := range m.machines {
+			cursor := "  "
+			style := dimStyle
+			if i == m.machineCursor {
+				cursor = "→ "
+				style = selectedStyle
+			}
+			current := ""
+			if name == m.proj.Defaults.Machine {
+				current = cachedStyle.Render(" (current)")
+			}
+			arch := ""
+			if mach, ok := m.proj.Machines[name]; ok {
+				arch = dimStyle.Render(fmt.Sprintf("  %s", mach.Arch))
+			}
+			b.WriteString(fmt.Sprintf("%s%s%s%s\n", cursor, style.Render(name), arch, current))
+		}
+
+		b.WriteString("\n")
+		b.WriteString(helpStyle.Render("  enter select  esc back"))
+		b.WriteString("\n")
+	} else {
+		// Top-level setup menu
+		for i, opt := range setupOptions {
+			cursor := "  "
+			style := dimStyle
+			if i == m.setupCursor {
+				cursor = "→ "
+				style = selectedStyle
+			}
+			value := ""
+			switch opt {
+			case "Machine":
+				value = headerStyle.Render(m.proj.Defaults.Machine)
+			}
+			b.WriteString(fmt.Sprintf("%s%s  %s\n", cursor, style.Render(opt), value))
+		}
+
+		b.WriteString("\n")
+		b.WriteString(helpStyle.Render("  enter select  esc back  q quit"))
+		b.WriteString("\n")
+	}
+
 	if m.message != "" {
 		b.WriteString("\n")
 		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Render("  "+m.message))
@@ -859,10 +1054,11 @@ func (m *model) startBuild(name string) tea.Cmd {
 
 	proj := m.proj
 	projectDir := m.projectDir
+	arch := m.arch
 	unitName := name
 
 	// Write executor output to a log file so detail view can tail it
-	outputPath := filepath.Join(projectDir, "build", unitName, ".output.log")
+	outputPath := filepath.Join(build.UnitBuildDir(projectDir, arch, unitName), ".output.log")
 	build.EnsureDir(filepath.Dir(outputPath))
 
 	return func() tea.Msg {
@@ -873,11 +1069,19 @@ func (m *model) startBuild(name string) tea.Cmd {
 		}
 		defer f.Close()
 
-		err = build.BuildUnits(proj, []string{unitName}, build.Options{
+		// Reload project from .star files so we pick up any changes
+		// made since the TUI started (e.g., edited build steps).
+		freshProj, err := yoestar.LoadProject(projectDir)
+		if err != nil {
+			fmt.Fprintf(f, "warning: could not reload project: %v, using cached config\n", err)
+			freshProj = proj
+		}
+
+		err = build.BuildUnits(freshProj, []string{unitName}, build.Options{
 			Ctx:        ctx,
 			Force:      true,
 			ProjectDir: projectDir,
-			Arch:       build.Arch(),
+			Arch:       arch,
 			OnEvent: func(ev build.BuildEvent) {
 				if tuiProgram != nil {
 					tuiProgram.Send(buildEventMsg{
@@ -903,9 +1107,10 @@ func (m model) execEditor(path string) tea.Cmd {
 }
 
 func (m *model) refreshDetail() {
-	outputPath := filepath.Join(m.projectDir, "build", m.detailUnit, ".output.log")
+	unitDir := build.UnitBuildDir(m.projectDir, m.arch, m.detailUnit)
+	outputPath := filepath.Join(unitDir, ".output.log")
 	m.outputLines = readFileAll(outputPath)
-	logPath := filepath.Join(m.projectDir, "build", m.detailUnit, "build.log")
+	logPath := filepath.Join(unitDir, "build.log")
 	m.logLines = readFileAll(logPath)
 	if m.autoFollow {
 		m.scrollToBottom()
@@ -980,6 +1185,41 @@ func (m *model) adjustListOffset() {
 	}
 	if m.listOffset < 0 {
 		m.listOffset = 0
+	}
+}
+
+// recomputeStatuses recomputes hashes and cache statuses for the current arch.
+// Called when the machine (and thus arch) changes.
+func (m *model) recomputeStatuses() {
+	hashes, err := resolve.ComputeAllHashes(m.dag, m.arch)
+	if err != nil {
+		return
+	}
+	m.hashes = hashes
+	for _, name := range m.units {
+		if m.building[name] {
+			continue // don't override in-progress builds
+		}
+		hash := hashes[name]
+		if build.IsBuildCached(m.projectDir, m.arch, name, hash) {
+			m.statuses[name] = statusCached
+		} else if build.IsBuildInProgress(m.projectDir, m.arch, name) {
+			m.statuses[name] = statusBuilding
+		} else if build.HasBuildLog(m.projectDir, m.arch, name) {
+			m.statuses[name] = statusFailed
+		} else {
+			m.statuses[name] = statusNone
+		}
+	}
+}
+
+// checkBinfmtWarning sets or clears the warning banner based on whether
+// binfmt_misc is registered for the current target arch.
+func (m *model) checkBinfmtWarning() {
+	if err := yoe.CheckBinfmt(m.arch); err != nil {
+		m.warning = "⚠ Cross-arch build: run 'yoe container binfmt' to register QEMU emulation for " + m.arch
+	} else {
+		m.warning = ""
 	}
 }
 
