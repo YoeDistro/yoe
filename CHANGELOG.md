@@ -8,6 +8,9 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **HTTPS layer URLs** — `yoe init` now uses HTTPS URLs for the units-core layer
+  instead of SSH, removing the need for SSH key setup to get started.
+
 ## [0.3.2] - 2026-03-30
 
 - **TUI scrolling** — both the unit list and detail log views are now
