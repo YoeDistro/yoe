@@ -5,7 +5,7 @@ machine(
     kernel = kernel(
         unit = "linux",
         defconfig = "defconfig",
-        cmdline = "console=ttyAMA0 root=/dev/vda2 rw",
+        cmdline = "console=ttyAMA0 root=/dev/vda1 rw",
     ),
     qemu = qemu_config(
         machine = "virt",
