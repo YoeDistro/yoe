@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **TUI setup menu** — press `s` to open a setup view for selecting the target
+  machine. Shows available machines with their architecture and highlights the
+  current selection. Designed to accommodate future setup options.
+
 ## [0.3.4] - 2026-03-30
 
 - **Build lock files** — a PID-based `.lock` file is written during builds so

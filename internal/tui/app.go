@@ -42,6 +42,7 @@ type viewKind int
 const (
 	viewUnits viewKind = iota
 	viewDetail
+	viewSetup
 )
 
 // Unit status
@@ -97,6 +98,12 @@ type model struct {
 	searching  bool   // true = search input active
 	searchText string // current search query
 	filtered   []int  // indices into units matching search
+
+	// Setup view
+	machines    []string // sorted machine names
+	setupCursor int      // cursor within setup options
+	setupField  string   // "" = top-level, "machine" = picking machine
+	machineCursor int    // cursor within machine list
 }
 
 // Run launches the TUI.
@@ -125,6 +132,8 @@ func Run(proj *yoestar.Project, projectDir string) error {
 		}
 	}
 
+	machines := sortedKeys(proj.Machines)
+
 	m := model{
 		proj:       proj,
 		projectDir: projectDir,
@@ -133,6 +142,7 @@ func Run(proj *yoestar.Project, projectDir string) error {
 		statuses:   statuses,
 		building:   make(map[string]bool),
 		cancels:    make(map[string]context.CancelFunc),
+		machines:   machines,
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
@@ -218,6 +228,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateUnits(msg)
 		case viewDetail:
 			return m.updateDetail(msg)
+		case viewSetup:
+			return m.updateSetup(msg)
 		}
 	}
 	return m, nil
@@ -397,6 +409,20 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searchText = ""
 		m.filtered = nil
 		return m, nil
+
+	case "s":
+		m.view = viewSetup
+		m.setupCursor = 0
+		m.setupField = ""
+		// Set machineCursor to current machine
+		m.machineCursor = 0
+		for i, name := range m.machines {
+			if name == m.proj.Defaults.Machine {
+				m.machineCursor = i
+				break
+			}
+		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -530,6 +556,69 @@ func (m model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// Setup option names — add new options here.
+var setupOptions = []string{"Machine"}
+
+func (m model) updateSetup(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.setupField == "machine" {
+		return m.updateSetupMachine(msg)
+	}
+
+	switch msg.String() {
+	case "esc", "q":
+		m.view = viewUnits
+		return m, nil
+
+	case "up", "k":
+		if m.setupCursor > 0 {
+			m.setupCursor--
+		}
+		return m, nil
+
+	case "down", "j":
+		if m.setupCursor < len(setupOptions)-1 {
+			m.setupCursor++
+		}
+		return m, nil
+
+	case "enter":
+		switch setupOptions[m.setupCursor] {
+		case "Machine":
+			m.setupField = "machine"
+		}
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m model) updateSetupMachine(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.setupField = ""
+		return m, nil
+
+	case "up", "k":
+		if m.machineCursor > 0 {
+			m.machineCursor--
+		}
+		return m, nil
+
+	case "down", "j":
+		if m.machineCursor < len(m.machines)-1 {
+			m.machineCursor++
+		}
+		return m, nil
+
+	case "enter":
+		m.proj.Defaults.Machine = m.machines[m.machineCursor]
+		m.message = fmt.Sprintf("Machine set to %s", m.machines[m.machineCursor])
+		m.setupField = ""
+		m.view = viewUnits
+		return m, nil
+	}
+	return m, nil
+}
+
 func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
@@ -636,6 +725,8 @@ func (m model) View() string {
 	switch m.view {
 	case viewDetail:
 		return m.viewDetail()
+	case viewSetup:
+		return m.viewSetup()
 	default:
 		return m.viewUnits()
 	}
@@ -715,10 +806,10 @@ func (m model) viewUnits() string {
 	if m.searching {
 		b.WriteString(fmt.Sprintf("  /%s▌", m.searchText))
 	} else {
-		help := "  b build  x cancel  e edit  d diagnose  l log  c clean  / search  q quit"
+		help := "  b build  x cancel  e edit  d diagnose  l log  c clean  s setup  / search  q quit"
 		if m.cursor < len(m.units) {
 			if u, ok := m.proj.Units[m.units[m.cursor]]; ok && u.Class == "image" {
-				help = "  b build  x cancel  r run  e edit  d diagnose  l log  c clean  / search  q quit"
+				help = "  b build  x cancel  r run  e edit  d diagnose  l log  c clean  s setup  / search  q quit"
 			}
 		}
 		b.WriteString(helpStyle.Render(help))
@@ -726,6 +817,68 @@ func (m model) viewUnits() string {
 	b.WriteString("\n")
 
 	// Status message
+	if m.message != "" {
+		b.WriteString("\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Render("  "+m.message))
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+func (m model) viewSetup() string {
+	var b strings.Builder
+
+	b.WriteString(fmt.Sprintf("  %s\n\n", titleStyle.Render("Setup")))
+
+	if m.setupField == "machine" {
+		// Machine picker
+		b.WriteString(headerStyle.Render("  Select Machine"))
+		b.WriteString("\n\n")
+
+		for i, name := range m.machines {
+			cursor := "  "
+			style := dimStyle
+			if i == m.machineCursor {
+				cursor = "→ "
+				style = selectedStyle
+			}
+			current := ""
+			if name == m.proj.Defaults.Machine {
+				current = cachedStyle.Render(" (current)")
+			}
+			arch := ""
+			if mach, ok := m.proj.Machines[name]; ok {
+				arch = dimStyle.Render(fmt.Sprintf("  %s", mach.Arch))
+			}
+			b.WriteString(fmt.Sprintf("%s%s%s%s\n", cursor, style.Render(name), arch, current))
+		}
+
+		b.WriteString("\n")
+		b.WriteString(helpStyle.Render("  enter select  esc back"))
+		b.WriteString("\n")
+	} else {
+		// Top-level setup menu
+		for i, opt := range setupOptions {
+			cursor := "  "
+			style := dimStyle
+			if i == m.setupCursor {
+				cursor = "→ "
+				style = selectedStyle
+			}
+			value := ""
+			switch opt {
+			case "Machine":
+				value = headerStyle.Render(m.proj.Defaults.Machine)
+			}
+			b.WriteString(fmt.Sprintf("%s%s  %s\n", cursor, style.Render(opt), value))
+		}
+
+		b.WriteString("\n")
+		b.WriteString(helpStyle.Render("  enter select  esc back  q quit"))
+		b.WriteString("\n")
+	}
+
 	if m.message != "" {
 		b.WriteString("\n")
 		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Render("  "+m.message))
