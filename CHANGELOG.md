@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **TUI reloads .star files before each build** — editing unit definitions or
+  classes no longer requires restarting the TUI. The project is re-evaluated from
+  Starlark on each build, picking up any changes to build steps, deps, or
+  configuration.
 - **Fix autoreconf autopoint failure** — the autotools class now sets
   `AUTOPOINT=true` when running `autoreconf`, preventing failures on packages
   like xz that reference gettext in their build system but don't need it at build

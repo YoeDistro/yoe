@@ -1049,7 +1049,15 @@ func (m *model) startBuild(name string) tea.Cmd {
 		}
 		defer f.Close()
 
-		err = build.BuildUnits(proj, []string{unitName}, build.Options{
+		// Reload project from .star files so we pick up any changes
+		// made since the TUI started (e.g., edited build steps).
+		freshProj, err := yoestar.LoadProject(projectDir)
+		if err != nil {
+			fmt.Fprintf(f, "warning: could not reload project: %v, using cached config\n", err)
+			freshProj = proj
+		}
+
+		err = build.BuildUnits(freshProj, []string{unitName}, build.Options{
 			Ctx:        ctx,
 			Force:      true,
 			ProjectDir: projectDir,
