@@ -115,6 +115,9 @@ func Run(proj *yoestar.Project, projectDir string) error {
 	}
 
 	arch := build.Arch()
+	if m, ok := proj.Machines[proj.Defaults.Machine]; ok {
+		arch = m.Arch
+	}
 	hashes, err := resolve.ComputeAllHashes(dag, arch)
 	if err != nil {
 		return fmt.Errorf("computing hashes: %w", err)

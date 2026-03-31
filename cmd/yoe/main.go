@@ -153,12 +153,32 @@ func cmdLayer(args []string) {
 	}
 }
 
+func resolveTargetArch(proj *yoestar.Project, units []string, machineName string) string {
+	if machineName != "" {
+		if m, ok := proj.Machines[machineName]; ok {
+			return m.Arch
+		}
+	}
+	// If building an image unit, use the default machine's arch
+	for _, name := range units {
+		if u, ok := proj.Units[name]; ok && u.Class == "image" {
+			mn := proj.Defaults.Machine
+			if m, ok := proj.Machines[mn]; ok {
+				return m.Arch
+			}
+		}
+	}
+	// Default to host arch
+	return build.Arch()
+}
+
 func cmdBuild(args []string) {
 	force := false
 	clean := false
 	noCache := false
 	dryRun := false
 	verbose := false
+	machineName := ""
 	var units []string
 
 	for i := 0; i < len(args); i++ {
@@ -173,6 +193,11 @@ func cmdBuild(args []string) {
 			dryRun = true
 		case "--verbose", "-v":
 			verbose = true
+		case "--machine":
+			if i+1 < len(args) {
+				machineName = args[i+1]
+				i++
+			}
 		case "--all":
 			// build all — units stays empty
 		default:
@@ -184,6 +209,7 @@ func cmdBuild(args []string) {
 	defer stop()
 
 	proj := loadProject()
+	targetArch := resolveTargetArch(proj, units, machineName)
 	opts := build.Options{
 		Ctx:        ctx,
 		Force:      force,
@@ -192,7 +218,7 @@ func cmdBuild(args []string) {
 		DryRun:     dryRun,
 		Verbose:    verbose,
 		ProjectDir: projectDir(),
-		Arch:       build.Arch(),
+		Arch:       targetArch,
 	}
 
 	if err := build.BuildUnits(proj, units, opts, os.Stdout); err != nil {
