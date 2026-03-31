@@ -241,7 +241,7 @@ func projectDir() string {
 
 func cmdContainer(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s container <build|shell|status>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s container <build|shell|status|binfmt>\n", os.Args[0])
 		os.Exit(1)
 	}
 
@@ -260,6 +260,24 @@ func cmdContainer(args []string) {
 			fmt.Println("Container image: not built")
 		} else {
 			fmt.Println("Container image: ready")
+		}
+	case "binfmt":
+		fmt.Println("This will register QEMU user-mode emulation for foreign architectures")
+		fmt.Println("by running a privileged Docker container (tonistiigi/binfmt).")
+		fmt.Println()
+		fmt.Println("This enables building arm64 and riscv64 images on your " + build.Arch() + " host.")
+		fmt.Println("The registration persists until reboot.")
+		fmt.Println()
+		fmt.Print("Proceed? (y/n) ")
+		var answer string
+		fmt.Scanln(&answer)
+		if answer != "y" && answer != "Y" {
+			fmt.Println("Cancelled.")
+			return
+		}
+		if err := yoe.RegisterBinfmt(os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
 		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown container subcommand: %s\n", args[0])

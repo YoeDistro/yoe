@@ -288,6 +288,27 @@ func binfmtArchName(arch string) string {
 	}
 }
 
+// RegisterBinfmt registers QEMU user-mode emulation for foreign architectures
+// using the tonistiigi/binfmt Docker image. Requires --privileged.
+func RegisterBinfmt(w io.Writer) error {
+	runtime, err := detectRuntime()
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintln(w, "[yoe] registering binfmt_misc handlers...")
+	cmd := exec.Command(runtime, "run", "--privileged", "--rm",
+		"tonistiigi/binfmt", "--install", "arm64,riscv64")
+	cmd.Stdout = w
+	cmd.Stderr = w
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("registering binfmt: %w", err)
+	}
+
+	fmt.Fprintln(w, "Done. Registered: arm64, riscv64")
+	return nil
+}
+
 // ContainerVersion returns the container version embedded in this binary.
 func ContainerVersion() string {
 	return containerVersion
