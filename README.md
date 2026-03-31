@@ -1,7 +1,7 @@
 # 🐧 Yoe Next Generation
 
-**For teams building edge products in Go, Rust, and Python who need Linux on
-ARM/RISC-V without the complexity of Yocto.**
+**For teams building edge products in Go, Rust, Zig, Python, etc. who need Linux
+on ARM/RISC-V without the complexity of Yocto.**
 
 Yoe-NG is an embedded Linux distribution builder designed for modern edge
 development. Your application is written in Go or Rust. Your target is an ARM
@@ -16,7 +16,7 @@ cloud CI — same tool, same config, same results.
 ## 🚀 Getting Started
 
 Prerequisites: a Linux host (x86_64 or ARM64) with Git and Docker (or Podman)
-installed. (only x86_64 host has been tested, ARM64 testing appreciated)
+installed. (only x86_64/Docker host has been tested, ARM64 testing appreciated)
 
 ```sh
 # Download the yoe binary
@@ -44,6 +44,8 @@ yoe run base-image
 poweroff
 ```
 
+`dev-image` is another included image with a few more things in it.
+
 ### Cross-Architecture Builds
 
 Build ARM64 images on an x86_64 host using QEMU user-mode emulation:
@@ -59,10 +61,10 @@ yoe build base-image --machine qemu-arm64
 yoe run base-image --machine qemu-arm64
 ```
 
+(or run the above in TUI be selecting machine in setup first)
+
 No cross-compilation toolchain needed — the build runs inside a genuine ARM64
 Docker container, transparently emulated by the host kernel.
-
-`dev-image` is another included image with a few more things in it.
 
 ## 🔧 Motivation
 
