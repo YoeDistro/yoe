@@ -110,7 +110,44 @@ Error: binfmt_misc not registered for arm64.
 Run 'yoe container binfmt' to enable cross-architecture builds.
 ```
 
-### 4. Fix Hardcoded x86_64 in APK Packaging
+### 4. Arch-Aware Build and Repo Directories
+
+**Build directory layout** — currently `build/<unitname>/`. Change to
+`build/<arch>/<unitname>/` so builds for different architectures don't collide:
+
+```
+build/
+  x86_64/
+    busybox/
+    openssh/
+    ...
+  arm64/
+    busybox/
+    openssh/
+    ...
+```
+
+**`UnitBuildDir(projectDir, unitName string)`** → `UnitBuildDir(projectDir,
+arch, unitName string)`. This is the single function that determines build
+paths; all callers already have access to the target arch via `Options`.
+
+**Repo directory layout** — already uses `build/repo/x86_64/` (hardcoded).
+Parameterize `RepoDir` to accept arch instead of hardcoding:
+
+```
+build/
+  repo/
+    x86_64/
+    arm64/
+```
+
+**`RepoDir`** — replace hardcoded `x86_64` with target arch parameter.
+The existing TODO comment on line 23 of `repo/local.go` already flags this.
+
+**Sysroot** — currently `build/sysroot/`. Change to `build/<arch>/sysroot/`
+to match the build directory layout.
+
+### 5. Fix Hardcoded x86_64 in APK Packaging
 
 **`internal/artifact/apk.go`** — `.PKGINFO` currently writes
 `arch = x86_64`. Change to accept target arch parameter and write
@@ -119,10 +156,7 @@ Run 'yoe container binfmt' to enable cross-architecture builds.
 **`internal/image/rootfs.go`** — APK repo lookup currently checks `x86_64/`
 subdirectory. Parameterize to use target arch.
 
-**`internal/repo/`** — repo directory structure should use arch subdirectories:
-`build/repo/<arch>/`.
-
-### 5. QEMU System Emulation for `yoe run`
+### 6. QEMU System Emulation for `yoe run`
 
 **Install additional QEMU binaries** — add `qemu-system-aarch64` and
 `qemu-system-riscv64` to the Dockerfile. Bump container version.
@@ -136,7 +170,7 @@ runtime rather than changing the machine template.
 `-kernel <vmlinuz> -append <cmdline>` instead of firmware boot. The kernel
 path comes from the image's build output.
 
-### 6. Machine Template Updates
+### 7. Machine Template Updates
 
 The existing `qemu-arm64` machine template in `init.go` is correct for both
 native and emulated use. The `cpu = "host"` value is overridden at runtime
