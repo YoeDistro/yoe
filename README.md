@@ -58,6 +58,20 @@ There are also CLI variants of the above commands (`build`, `run`, etc.).
 
 `dev-image` is another included image with a few more things in it.
 
+**What just happened:**
+
+1. `yoe init` created a project with a `PROJECT.star` config and a default
+   x86_64 QEMU machine.
+2. On first build, `yoe` automatically built a Docker container with the
+   toolchain (gcc, make, etc.) and fetched the `units-core` layer from GitHub.
+3. It built ~10 packages from source (busybox, linux kernel, openssl, etc.)
+   inside the container, each isolated in its own bubblewrap sandbox.
+4. It assembled a bootable disk image from those packages.
+5. `yoe run` launched the image in QEMU with KVM acceleration.
+
+Everything is in the project directory — no global state, no hidden caches
+outside the tree.
+
 ### Cross-Architecture Builds
 
 Build ARM64 images on an x86_64 host using QEMU user-mode emulation:
