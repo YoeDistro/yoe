@@ -43,7 +43,7 @@ func TestAssemble(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := Assemble(unit, proj, projectDir, outputDir, &buf); err != nil {
+	if err := Assemble(unit, proj, projectDir, outputDir, "x86_64", &buf); err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
 

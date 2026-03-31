@@ -761,7 +761,7 @@ func cmdRepo(args []string) {
 	}
 
 	proj := loadProject()
-	repoDir := repo.RepoDir(proj, projectDir())
+	repoDir := repo.RepoDir(proj, projectDir(), build.Arch())
 
 	switch args[0] {
 	case "list":

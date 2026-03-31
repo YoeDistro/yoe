@@ -13,7 +13,7 @@ import (
 )
 
 // Assemble creates a root filesystem image from an image unit.
-func Assemble(unit *yoestar.Unit, proj *yoestar.Project, projectDir, outputDir string, w io.Writer) error {
+func Assemble(unit *yoestar.Unit, proj *yoestar.Project, projectDir, outputDir, arch string, w io.Writer) error {
 	rootfs := filepath.Join(outputDir, "rootfs")
 	os.RemoveAll(rootfs)
 	if err := os.MkdirAll(rootfs, 0755); err != nil {
@@ -24,7 +24,7 @@ func Assemble(unit *yoestar.Unit, proj *yoestar.Project, projectDir, outputDir s
 	// are included automatically (e.g., openssh pulls in openssl, zlib).
 	repoDir := repo.RepoBaseDir(proj, projectDir)
 	allPackages := resolvePackageDeps(unit.Artifacts, proj)
-	if err := installPackages(rootfs, repoDir, allPackages, w); err != nil {
+	if err := installPackages(rootfs, repoDir, allPackages, arch, w); err != nil {
 		return fmt.Errorf("installing packages: %w", err)
 	}
 
@@ -84,7 +84,7 @@ func resolvePackageDeps(packages []string, proj *yoestar.Project) []string {
 	return result
 }
 
-func installPackages(rootfs, repoDir string, packages []string, w io.Writer) error {
+func installPackages(rootfs, repoDir string, packages []string, arch string, w io.Writer) error {
 	if len(packages) == 0 {
 		fmt.Fprintln(w, "  (no packages to install)")
 		return nil
@@ -98,7 +98,7 @@ func installPackages(rootfs, repoDir string, packages []string, w io.Writer) err
 	absRepo, _ := filepath.Abs(repoDir)
 
 	for _, pkg := range packages {
-		apkFile := findAPK(absRepo, pkg)
+		apkFile := findAPK(absRepo, pkg, arch)
 		if apkFile == "" {
 			return fmt.Errorf("package %q not found in %s", pkg, absRepo)
 		}
@@ -115,9 +115,9 @@ func installPackages(rootfs, repoDir string, packages []string, w io.Writer) err
 }
 
 // findAPK finds the .apk file for a package name in the repo directory.
-func findAPK(repoDir, pkgName string) string {
+func findAPK(repoDir, pkgName, arch string) string {
 	// Check arch subdirectory first, then root
-	for _, dir := range []string{repoDir, filepath.Join(repoDir, "x86_64")} {
+	for _, dir := range []string{repoDir, filepath.Join(repoDir, arch)} {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			continue

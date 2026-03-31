@@ -18,7 +18,7 @@ import (
 
 // GenerateIndex scans repoDir for .apk files and produces an
 // APKINDEX.tar.gz that apk(8) can use for dependency resolution.
-func GenerateIndex(repoDir string) error {
+func GenerateIndex(repoDir, arch string) error {
 	entries, err := os.ReadDir(repoDir)
 	if err != nil {
 		return fmt.Errorf("reading repo dir: %w", err)
@@ -62,7 +62,7 @@ func GenerateIndex(repoDir string) error {
 		fmt.Fprintf(&buf, "S:%d\n", info.Size())
 		fmt.Fprintf(&buf, "I:%d\n", installedSize)
 		fmt.Fprintf(&buf, "T:%s\n", description)
-		fmt.Fprintf(&buf, "A:x86_64\n")
+		fmt.Fprintf(&buf, "A:%s\n", arch)
 		if i < len(apks)-1 {
 			buf.WriteString("\n")
 		}

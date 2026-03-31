@@ -26,7 +26,7 @@ import (
 //
 // For unsigned packages, we write only streams 2 and 3.
 // apk with --allow-untrusted accepts this format.
-func CreateAPK(unit *yoestar.Unit, destDir, outputDir string) (string, error) {
+func CreateAPK(unit *yoestar.Unit, destDir, outputDir, arch string) (string, error) {
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return "", fmt.Errorf("creating output dir: %w", err)
 	}
@@ -43,7 +43,7 @@ func CreateAPK(unit *yoestar.Unit, destDir, outputDir string) (string, error) {
 		return "", fmt.Errorf("creating %s: %w", apkPath, err)
 	}
 
-	pkginfo := generatePKGINFO(unit, destDir, "")
+	pkginfo := generatePKGINFO(unit, destDir, "", arch)
 
 	gw := gzip.NewWriter(f)
 	tw := tar.NewWriter(gw)
@@ -201,7 +201,7 @@ func writeGzipTar(w io.Writer, files map[string][]byte) error {
 }
 
 // generatePKGINFO creates the .PKGINFO metadata file content.
-func generatePKGINFO(unit *yoestar.Unit, destDir, dataHashHex string) string {
+func generatePKGINFO(unit *yoestar.Unit, destDir, dataHashHex, arch string) string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "pkgname = %s\n", unit.Name)
@@ -214,7 +214,7 @@ func generatePKGINFO(unit *yoestar.Unit, destDir, dataHashHex string) string {
 		fmt.Fprintf(&b, "license = %s\n", unit.License)
 	}
 
-	fmt.Fprintf(&b, "arch = x86_64\n")
+	fmt.Fprintf(&b, "arch = %s\n", arch)
 	fmt.Fprintf(&b, "builddate = %d\n", time.Now().Unix())
 
 	// Compute installed size

@@ -176,7 +176,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	// Image units go through a different path — assemble rootfs
 	if unit.Class == "image" {
 		outputDir := filepath.Join(buildDir, "output")
-		if err := image.Assemble(unit, proj, opts.ProjectDir, outputDir, logW); err != nil {
+		if err := image.Assemble(unit, proj, opts.ProjectDir, outputDir, opts.Arch, logW); err != nil {
 			if !opts.Verbose {
 				fmt.Fprintf(w, "  build log: %s\n", logPath)
 			}
@@ -261,14 +261,14 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 
 	// Package the output into an .apk and publish to the local repo
 	if unit.Class != "image" {
-		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"))
+		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), opts.Arch)
 		if err != nil {
 			return fmt.Errorf("creating apk: %w", err)
 		}
 		fmt.Fprintf(w, "  → %s\n", filepath.Base(apkPath))
 
-		repoDir := repo.RepoDir(nil, opts.ProjectDir)
-		if err := repo.Publish(apkPath, repoDir); err != nil {
+		repoDir := repo.RepoDir(nil, opts.ProjectDir, opts.Arch)
+		if err := repo.Publish(apkPath, repoDir, opts.Arch); err != nil {
 			return fmt.Errorf("publishing to repo: %w", err)
 		}
 
