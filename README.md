@@ -56,6 +56,20 @@ There are also CLI variants of the above commands (`build`, `run`, etc.).
 
 <img width="1743" height="1597" alt="image" src="https://github.com/user-attachments/assets/99e297f3-b424-422a-8b24-45fb82de81fb" />
 
+**What just happened:**
+
+1. `yoe init` created a project with a `PROJECT.star` config and a default
+   x86_64 QEMU machine.
+2. On first build, `yoe` automatically built a Docker container with the
+   toolchain (gcc, make, etc.) and fetched the `units-core` layer from GitHub.
+3. It built ~10 packages from source (busybox, linux kernel, openssl, etc.)
+   inside the container, each isolated in its own bubblewrap sandbox.
+4. It assembled a bootable disk image from those packages.
+5. `yoe run` launched the image in QEMU with KVM acceleration.
+
+Everything is in the project directory — no global state, no hidden caches
+outside the tree.
+
 `dev-image` is another included image with a few more things in it.
 
 ### Cross-Architecture Builds
