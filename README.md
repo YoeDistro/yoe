@@ -1,12 +1,17 @@
 # 🐧 Yoe Next Generation
 
-Yoe-NG is an **AI-native embedded Linux distribution builder** — a simpler
-alternative to Yocto, designed from the ground up to be driven by AI assistants.
+**For teams building edge products in Go, Rust, and Python who need Linux on
+ARM/RISC-V without the complexity of Yocto.**
 
-Every operation has a CLI equivalent, but the primary workflow is
-conversational: describe what you need, and the AI generates units, configures
-machines, traces dependencies, diagnoses build failures, and audits security —
-all with full understanding of your project's dependency graph and build state.
+Yoe-NG is an embedded Linux distribution builder designed for modern edge
+development. Your application is written in Go or Rust. Your target is an ARM
+board. You need a minimal Linux image with your app, the right kernel, and
+nothing else. You shouldn't need to learn BitBake, manage cross-toolchains, or
+read a thousand-page manual to get there.
+
+One Go binary. Readable Starlark config files. AI that understands your
+dependency graph. Build ARM images on your x86 laptop, on native hardware, or in
+cloud CI — same tool, same config, same results.
 
 ## 🚀 Getting Started
 
@@ -58,6 +63,34 @@ No cross-compilation toolchain needed — the build runs inside a genuine ARM64
 Docker container, transparently emulated by the host kernel.
 
 `dev-image` is another included image with a few more things in it.
+
+## 🔧 Motivation
+
+Existing embedded Linux build systems (Yocto, Buildroot) were designed in a
+world where ARM hardware was slow, applications were written in C, and
+developers configured everything by hand. Three things have changed:
+
+1. **ARM and RISC-V hardware is fast.** Modern ARM boards and cloud instances
+   (AWS Graviton, Hetzner CAX) build at speeds that make cross-compilation
+   unnecessary for most workloads. For development, QEMU user-mode emulation
+   lets you build ARM images on x86 without a cross-toolchain — slower, but
+   correct and simple.
+
+2. **Applications are moving to modern languages.** Go, Rust, Zig, and Python
+   have their own dependency management, reproducible builds, and caching. The
+   elaborate cross-compilation and sysroot machinery in traditional build
+   systems was designed for C/C++ — wrapping Go modules or Cargo in BitBake
+   recipes adds friction without proportional benefit.
+
+3. **AI changes the interface.** The hardest part of embedded Linux is knowing
+   what to configure and how. An AI assistant that understands the build system
+   can guide developers through unit creation, debug build failures, and audit
+   security — without requiring them to memorize a build system's quirks. But
+   this only works if the build metadata is structured and queryable, not buried
+   in shell scripts and environment variables.
+
+Yoe-NG is built for this new world: native builds, language-native package
+managers, structured Starlark metadata, and AI as a first-class interface.
 
 ## 🤖 Why AI-Native
 
@@ -169,34 +202,6 @@ each while avoiding their respective pain points:
 
 See [Comparisons](docs/comparisons.md) for detailed analysis of how Yoe-NG
 relates to each of these systems, including when you should use them instead.
-
-## 🔧 Motivation
-
-Existing embedded Linux build systems (Yocto, Buildroot) were designed in a
-world where ARM hardware was slow, applications were written in C, and
-developers configured everything by hand. Three things have changed:
-
-1. **ARM and RISC-V hardware is fast.** Modern ARM boards and cloud instances
-   (AWS Graviton, Hetzner CAX) build at speeds that make cross-compilation
-   unnecessary for most workloads. For development, QEMU user-mode emulation
-   lets you build ARM images on x86 without a cross-toolchain — slower, but
-   correct and simple.
-
-2. **Applications are moving to modern languages.** Go, Rust, Zig, and Python
-   have their own dependency management, reproducible builds, and caching. The
-   elaborate cross-compilation and sysroot machinery in traditional build systems
-   was designed for C/C++ — wrapping Go modules or Cargo in BitBake recipes adds
-   friction without proportional benefit.
-
-3. **AI changes the interface.** The hardest part of embedded Linux is knowing
-   what to configure and how. An AI assistant that understands the build system
-   can guide developers through unit creation, debug build failures, and audit
-   security — without requiring them to memorize a build system's quirks. But
-   this only works if the build metadata is structured and queryable, not buried
-   in shell scripts and environment variables.
-
-Yoe-NG is built for this new world: native builds, language-native package
-managers, structured Starlark metadata, and AI as a first-class interface.
 
 ## ⚙️ Design Principles
 
