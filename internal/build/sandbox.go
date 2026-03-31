@@ -28,8 +28,14 @@ type SandboxConfig struct {
 }
 
 // RunInSandbox executes a command inside a bubblewrap sandbox within the
-// build container.
+// build container. For cross-arch builds (QEMU user-mode), bwrap's user
+// namespaces are not available, so we fall back to running directly in
+// the container (which is already isolated via Docker).
 func RunInSandbox(cfg *SandboxConfig, command string) error {
+	if cfg.Arch != "" && cfg.Arch != yoe.HostArch() {
+		return RunSimple(cfg, command)
+	}
+
 	bwrapCmd := bwrapCommand(cfg, command)
 	mounts := containerMountsForBuild(cfg)
 
