@@ -153,11 +153,14 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 
 	// Set ARCH variable for phase 2 so Starlark files can use it
 	// (e.g., conditional artifacts in image definitions).
+	// Always set a value — default to x86_64 if no machine is configured.
+	arch := "x86_64"
 	if proj := eng.Project(); proj != nil {
 		if m, ok := eng.Machines()[proj.Defaults.Machine]; ok {
-			eng.SetVar("ARCH", starlark.String(m.Arch))
+			arch = m.Arch
 		}
 	}
+	eng.SetVar("ARCH", starlark.String(arch))
 
 	// Phase 2: Evaluate units and images (project + layers).
 	if err := evalDir(eng, root, "units"); err != nil {
