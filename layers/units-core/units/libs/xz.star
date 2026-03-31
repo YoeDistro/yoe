@@ -15,7 +15,7 @@ autotools(
         # without gettext installed. --disable-nls ensures none of this
         # is actually used at build time.
         "mkdir -p m4 po && printf '%s\\n' 'AC_DEFUN([AM_GNU_GETTEXT_REQUIRE_VERSION],[])' 'AC_DEFUN([AM_GNU_GETTEXT_VERSION],[])' 'AC_DEFUN([AM_GNU_GETTEXT],[])' > m4/gettext-stub.m4",
-        "touch po/Makefile.in.in",
+        "printf 'all install install-data install-data-yes install-strip clean distclean mostlyclean:\\n' > po/Makefile.in.in",
         "test -f configure || AUTOPOINT=true autoreconf -fi",
         "./configure --prefix=$PREFIX --disable-nls",
         "make -j$NPROC ACLOCAL=true AUTOCONF=true AUTOMAKE=true AUTOHEADER=true MAKEINFO=true",
