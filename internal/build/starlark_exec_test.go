@@ -15,7 +15,7 @@ type fakeExecer struct {
 	err     error
 }
 
-func (f *fakeExecer) Run(_ context.Context, _ *SandboxConfig, command string) (ExecResult, error) {
+func (f *fakeExecer) Run(_ context.Context, _ *SandboxConfig, command string, _ bool) (ExecResult, error) {
 	f.calls = append(f.calls, command)
 	return f.result, f.err
 }

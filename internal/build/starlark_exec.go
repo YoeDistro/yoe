@@ -12,7 +12,7 @@ import (
 
 // Execer abstracts command execution for testability.
 type Execer interface {
-	Run(ctx context.Context, cfg *SandboxConfig, command string) (ExecResult, error)
+	Run(ctx context.Context, cfg *SandboxConfig, command string, privileged bool) (ExecResult, error)
 }
 
 // ExecResult holds the outcome of a sandboxed command execution.
@@ -25,7 +25,7 @@ type ExecResult struct {
 // RealExecer executes commands via RunInSandbox.
 type RealExecer struct{}
 
-func (RealExecer) Run(ctx context.Context, cfg *SandboxConfig, command string) (ExecResult, error) {
+func (RealExecer) Run(ctx context.Context, cfg *SandboxConfig, command string, privileged bool) (ExecResult, error) {
 	cfg.Ctx = ctx
 
 	// Capture stdout/stderr into buffers while still writing to the log.
@@ -42,7 +42,13 @@ func (RealExecer) Run(ctx context.Context, cfg *SandboxConfig, command string) (
 		cfg.Stderr = &stderrBuf
 	}
 
-	err := RunInSandbox(cfg, command)
+	var err error
+	if privileged {
+		// Run directly in container without bwrap (for losetup, mount, etc.)
+		err = RunSimple(cfg, command)
+	} else {
+		err = RunInSandbox(cfg, command)
+	}
 
 	// Restore original writers
 	cfg.Stdout, cfg.Stderr = origStdout, origStderr
@@ -80,10 +86,17 @@ func fnRun(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kw
 	}
 
 	check := true
+	privileged := false
 	for _, kv := range kwargs {
-		if string(kv[0].(starlark.String)) == "check" {
+		key := string(kv[0].(starlark.String))
+		if key == "check" {
 			if b, ok := kv[1].(starlark.Bool); ok {
 				check = bool(b)
+			}
+		}
+		if key == "privileged" {
+			if b, ok := kv[1].(starlark.Bool); ok {
+				privileged = bool(b)
 			}
 		}
 	}
@@ -92,7 +105,7 @@ func fnRun(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kw
 	execer := thread.Local(execerKey).(Execer)
 	ctx := thread.Local(contextKey).(context.Context)
 
-	result, err := execer.Run(ctx, cfg, string(command))
+	result, err := execer.Run(ctx, cfg, string(command), privileged)
 
 	resultStruct := starlarkstruct.FromStringDict(starlark.String("result"), starlark.StringDict{
 		"exit_code": starlark.MakeInt(result.ExitCode),
