@@ -140,6 +140,11 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
   something fails, the user should be looking at the code they wrote, not
   machine-generated output. Prefer direct execution over code generation.
 
+- **No backward compatibility concerns.** The project is pre-1.0. Do not add
+  compatibility shims, legacy conversion paths, or deprecated-but-still-working
+  code. When a design changes, update everything to the new design and delete
+  the old code.
+
 ## Working on This Codebase
 
 - **No shortcuts.** Build systems are fragile. Always implement the correct fix,

@@ -1,7 +1,6 @@
 # Tasks, Starlark Build Functions, and Machine-Portable Images
 
-**Date:** 2026-04-01
-**Status:** Draft
+**Date:** 2026-04-01 **Status:** Draft
 
 ## Problem
 
@@ -9,8 +8,8 @@ Three related limitations in the current build model:
 
 1. **Build steps are shell strings.** The `build = [...]` list generates
    commands that Go executes later. When something fails, the user debugs
-   machine-generated shell, not the code they wrote. Complex build logic
-   (image assembly, conditional steps) is awkward as string concatenation.
+   machine-generated shell, not the code they wrote. Complex build logic (image
+   assembly, conditional steps) is awkward as string concatenation.
 
 2. **Images aren't portable across machines.** `base-image` must hard-code
    machine-specific packages (`syslinux` on x86, `rpi-firmware` on RPi) and
@@ -27,8 +26,8 @@ Three new concepts that work together:
 
 ### 1. Tasks Replace Build Step Lists
 
-The `build = [...]` string list is replaced by `tasks = [...]`. Each task is
-a named build step with either a shell command or a Starlark function:
+The `build = [...]` string list is replaced by `tasks = [...]`. Each task is a
+named build step with either a shell command or a Starlark function:
 
 ```python
 unit(
@@ -41,13 +40,13 @@ unit(
 )
 ```
 
-**Backward compatibility:** `build = [...]` continues to work. Internally
-converted to unnamed tasks. Existing units need no changes.
+All existing units must be migrated from `build = [...]` to `tasks = [...]`.
+The `build` field is removed.
 
 ### 2. Starlark Build Functions
 
-A task's `fn` field accepts a Starlark callable instead of a shell string.
-The function can call `run()` to execute commands directly:
+A task's `fn` field accepts a Starlark callable instead of a shell string. The
+function can call `run()` to execute commands directly:
 
 ```python
 def install_packages(packages):
@@ -68,6 +67,7 @@ unit(
 ```
 
 **`run()` builtin:**
+
 - Executes a shell command in the current build environment (container or bwrap)
 - Default: raises Starlark error on non-zero exit (like `set -e`)
 - `check=False`: returns a result struct with `exit_code` and `output`
@@ -93,8 +93,8 @@ tasks = [
 
 ### 3. Per-Task Containers
 
-Each task can specify a Docker container image. When set, that task runs in
-the specified container instead of the default Alpine build container:
+Each task can specify a Docker container image. When set, that task runs in the
+specified container instead of the default Alpine build container:
 
 ```python
 unit(
@@ -110,8 +110,8 @@ unit(
 )
 ```
 
-**Resolution order:** task container → unit container → default Alpine
-container with bwrap.
+**Resolution order:** task container → unit container → default Alpine container
+with bwrap.
 
 ## Machine-Portable Images
 
@@ -307,8 +307,8 @@ Calling it during eval raises an error.
 The executor iterates tasks instead of build step strings. For each task:
 
 - `run` field (string) → execute in container/bwrap (current behavior)
-- `fn` field (callable) → invoke Starlark function in a build-time thread
-  with `run()` available
+- `fn` field (callable) → invoke Starlark function in a build-time thread with
+  `run()` available
 
 ```go
 for _, task := range unit.Tasks {
@@ -335,8 +335,7 @@ type Task struct {
 type Unit struct {
     // ... existing fields ...
     Container string   // default container for all tasks
-    Tasks     []Task   // replaces Build for new-style units
-    Build     []string // legacy, converted to Tasks internally
+    Tasks     []Task   // named build steps
     Provides  string   // virtual package name (e.g., "linux")
 }
 ```
@@ -363,12 +362,6 @@ Set as predeclared Starlark variables after phase 1 (machine loading):
 - `MACHINE_CONFIG` — struct built from the active machine definition
 - `PROVIDES` — dict built from all loaded units' `provides` fields and the
   machine's `kernel.provides`
-
-### 6. Backward Compatibility
-
-- `build = [...]` internally converted to `tasks = [task("step-N", run=cmd)]`
-- `image()` as a Go-side class continues to work until migrated to Starlark
-- Per-task containers are optional — omitting falls through to default
 
 ## Error Handling
 
@@ -400,21 +393,19 @@ if result.exit_code != 0:
   `layers/units-core/classes/image.star`
 - **`internal/image/disk.go`** — disk image creation moves to Starlark
   `create_disk_image()` function using shell commands
-- **Per-image `MACHINE == ...` conditionals** — replaced by `MACHINE_CONFIG`
-  and `PROVIDES`
+- **Per-image `MACHINE == ...` conditionals** — replaced by `MACHINE_CONFIG` and
+  `PROVIDES`
 - **`docs/superpowers/plans/per-recipe-containers.md`** — superseded by this
   spec
 
-## Migration Path
+## Implementation Order
 
-1. Implement tasks + `run()` builtin + per-task containers
-2. Add `MACHINE_CONFIG`, `PROVIDES`, machine `packages`/`partitions`
-3. Rewrite `image()` class in Starlark using `run()`
-4. Remove Go image assembly code (`internal/image/`)
-5. Migrate other classes (autotools, cmake) to use tasks if beneficial
-
-Steps 1-3 are the initial implementation. Steps 4-5 are cleanup after
-validation.
+1. Implement `task()` builtin, remove `build` field, migrate all units to tasks
+2. Implement `run()` builtin and Starlark build function support (`fn` field)
+3. Add `MACHINE_CONFIG`, `PROVIDES`, machine `packages`/`partitions`
+4. Rewrite `image()` class in Starlark using `run()`, remove Go image assembly
+5. Migrate all classes (autotools, cmake, go) to use tasks
+6. Add per-task container support
 
 ## What Doesn't Change
 
