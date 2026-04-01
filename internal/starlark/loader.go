@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"go.starlark.net/starlark"
+	"go.starlark.net/starlarkstruct"
 )
 
 // LoadOption configures optional behavior for LoadProject / LoadProjectFromRoot.
@@ -170,6 +171,61 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	}
 	eng.SetVar("MACHINE", starlark.String(machine))
 
+	// Set MACHINE_CONFIG — a Starlark struct exposing the active machine's
+	// configuration to unit and image definitions.
+	if proj := eng.Project(); proj != nil {
+		if m, ok := eng.Machines()[proj.Defaults.Machine]; ok {
+			machineDict := starlark.StringDict{
+				"name":     starlark.String(m.Name),
+				"arch":     starlark.String(m.Arch),
+				"packages": toStarlarkStringList(m.Packages),
+			}
+			// Add partitions as a Starlark list
+			var partList []starlark.Value
+			for _, p := range m.Partitions {
+				fields := starlark.StringDict{
+					"label": starlark.String(p.Label),
+					"type":  starlark.String(p.Type),
+					"size":  starlark.String(p.Size),
+					"root":  starlark.Bool(p.Root),
+				}
+				if len(p.Contents) > 0 {
+					fields["contents"] = toStarlarkStringList(p.Contents)
+				}
+				partList = append(partList, starlarkstruct.FromStringDict(starlark.String("partition"), fields))
+			}
+			machineDict["partitions"] = starlark.NewList(partList)
+
+			// Add kernel info
+			if m.Kernel.Unit != "" {
+				machineDict["kernel"] = starlarkstruct.FromStringDict(
+					starlark.String("kernel"), starlark.StringDict{
+						"unit":      starlark.String(m.Kernel.Unit),
+						"provides":  starlark.String(m.Kernel.Provides),
+						"defconfig": starlark.String(m.Kernel.Defconfig),
+						"cmdline":   starlark.String(m.Kernel.Cmdline),
+					})
+			}
+
+			eng.SetVar("MACHINE_CONFIG", starlarkstruct.FromStringDict(
+				starlark.String("machine_config"), machineDict))
+		}
+	}
+
+	// Set PROVIDES — a Starlark dict mapping virtual package names to concrete
+	// unit names. Initially populated from kernel.provides; updated after phase 2
+	// with unit provides.
+	provides := starlark.NewDict(4)
+	if proj := eng.Project(); proj != nil {
+		if m, ok := eng.Machines()[proj.Defaults.Machine]; ok {
+			if m.Kernel.Provides != "" {
+				_ = provides.SetKey(starlark.String(m.Kernel.Provides),
+					starlark.String(m.Kernel.Unit))
+			}
+		}
+	}
+	eng.SetVar("PROVIDES", provides)
+
 	// Phase 2: Evaluate units and images (project + layers).
 	if err := evalDir(eng, root, "units"); err != nil {
 		return nil, err
@@ -184,6 +240,15 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		}
 	}
 
+	// After evaluating units/images, add unit provides to PROVIDES dict
+	if prov, ok := eng.vars["PROVIDES"].(*starlark.Dict); ok {
+		for _, u := range eng.Units() {
+			if u.Provides != "" {
+				_ = prov.SetKey(starlark.String(u.Provides), starlark.String(u.Name))
+			}
+		}
+	}
+
 	proj := eng.Project()
 	if proj == nil {
 		return nil, fmt.Errorf("PROJECT.star did not call project()")
@@ -193,6 +258,14 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	proj.Units = eng.Units()
 
 	return proj, nil
+}
+
+func toStarlarkStringList(ss []string) *starlark.List {
+	vals := make([]starlark.Value, len(ss))
+	for i, s := range ss {
+		vals[i] = starlark.String(s)
+	}
+	return starlark.NewList(vals)
 }
 
 func evalDir(eng *Engine, root, subdir string) error {

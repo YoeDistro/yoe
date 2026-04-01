@@ -68,6 +68,8 @@ type Machine struct {
 	Kernel      KernelConfig
 	Bootloader  BootloaderConfig
 	QEMU        *QEMUConfig // nil if not a QEMU machine
+	Packages    []string    // packages added to every image for this machine
+	Partitions  []Partition // default partition layout for images
 }
 
 type KernelConfig struct {
@@ -78,6 +80,7 @@ type KernelConfig struct {
 	DeviceTrees []string
 	Unit        string
 	Cmdline     string
+	Provides    string // virtual package name (e.g., "linux")
 }
 
 type BootloaderConfig struct {

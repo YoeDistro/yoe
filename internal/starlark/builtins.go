@@ -300,13 +300,20 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 			DeviceTrees: structStringList(kernelS, "device_trees"),
 			Unit:        structString(kernelS, "unit"),
 			Cmdline:     structString(kernelS, "cmdline"),
+			Provides:    structString(kernelS, "provides"),
 		},
+		Packages: kwStringList(kwargs, "packages"),
 	}
 
-	// Handle bootloader and qemu from kwargs
+	// Handle bootloader, qemu, and partitions from kwargs
 	for _, kv := range kwargs {
 		key := string(kv[0].(starlark.String))
-		if s, ok := kv[1].(*starlarkstruct.Struct); ok {
+		switch key {
+		case "bootloader", "uboot", "qemu":
+			s, ok := kv[1].(*starlarkstruct.Struct)
+			if !ok {
+				continue
+			}
 			switch key {
 			case "bootloader":
 				m.Bootloader = BootloaderConfig{
@@ -329,6 +336,28 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 					Memory:   structString(s, "memory"),
 					Firmware: structString(s, "firmware"),
 					Display:  structString(s, "display"),
+				}
+			}
+		case "partitions":
+			if list, ok := kv[1].(*starlark.List); ok {
+				iter := list.Iterate()
+				defer iter.Done()
+				var v starlark.Value
+				for iter.Next(&v) {
+					if s, ok := v.(*starlarkstruct.Struct); ok {
+						p := Partition{
+							Label:    structString(s, "label"),
+							Type:     structString(s, "type"),
+							Size:     structString(s, "size"),
+							Contents: structStringList(s, "contents"),
+						}
+						if rv, err := s.Attr("root"); err == nil {
+							if b, ok := rv.(starlark.Bool); ok {
+								p.Root = bool(b)
+							}
+						}
+						m.Partitions = append(m.Partitions, p)
+					}
 				}
 			}
 		}
