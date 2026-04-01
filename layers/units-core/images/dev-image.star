@@ -13,8 +13,16 @@ base_files(
 image(
     name = "dev-image",
     artifacts = [
-        "base-files-dev", "busybox", "musl", "kmod", "util-linux",
-        "linux", "network-config", "openssh", "curl", "strace", "vim",
+        # Base
+        "base-files-dev", "busybox", "musl",
+        # System
+        "kmod", "util-linux", "linux",
+        # Libraries (runtime deps)
+        "openssl", "zlib", "zstd", "ncurses", "readline",
+        # Networking
+        "network-config", "openssh", "curl",
+        # Debug
+        "strace", "vim",
     ],
     hostname = "yoe-dev",
     services = ["sshd"],
