@@ -14,12 +14,24 @@ and this project adheres to
   pure Starlark.
 - **`run()` builtin** — Starlark functions can execute shell commands directly
   during builds. Errors show `.star` file and line number, not generated shell.
+  `run(cmd, check=False)` returns exit code/stdout/stderr for conditional logic.
+  `run(cmd, privileged=True)` runs directly in the container as root for
+  operations like losetup/mount that bwrap can't do.
+- **Unit scope** — units declare `scope = "machine"`, `"noarch"`, or `"arch"`
+  (default). Machine-scoped units (kernels, images) build per-machine. Build
+  directories are flat: `build/<name>.<scope>/`. Repo is flat with scope in
+  filenames: `repo/<name>-<ver>-r0.<scope>.apk`.
 - **Machine-portable images** — images no longer hard-code machine-specific
   packages or partitions. `MACHINE_CONFIG` and `PROVIDES` inject machine
   hardware specifics automatically. `base-image` works across QEMU x86, QEMU
   arm64, and Raspberry Pi without changes.
+- **`PROVIDES` virtual packages** — units and kernels declare `provides` to
+  fulfill virtual names. `provides = "linux"` on `linux-rpi4` means images that
+  list `"linux"` get the RPi kernel when building for `raspberrypi4`.
 - **Image assembly in Starlark** — disk image creation moved from Go to
   `classes/image.star` using `run()`. Fully readable, customizable, forkable.
+- **Raspberry Pi BSP layer** (`units-rpi`) — machine definitions, kernel fork
+  units, GPU firmware, and boot config for Raspberry Pi 4 and 5.
 
 ## [0.4.0] - 2026-03-31
 
