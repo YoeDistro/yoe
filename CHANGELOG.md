@@ -30,8 +30,14 @@ and this project adheres to
   list `"linux"` get the RPi kernel when building for `raspberrypi4`.
 - **Image assembly in Starlark** — disk image creation moved from Go to
   `classes/image.star` using `run()`. Fully readable, customizable, forkable.
-- **Raspberry Pi BSP layer** (`units-rpi`) — machine definitions, kernel fork
+- **Raspberry Pi BSP module** (`units-rpi`) — machine definitions, kernel fork
   units, GPU firmware, and boot config for Raspberry Pi 4 and 5.
+- **Runtime dependency resolution** — image assembly now resolves transitive
+  runtime dependencies automatically. `RUNTIME_DEPS` predeclared variable
+  available after unit evaluation. Three-phase loader: machines → units → images.
+- **Layers renamed to modules** — `layer()` → `module()`, `LAYER.star` →
+  `MODULE.star`, `yoe layer` → `yoe module`, `layers/` → `modules/`. Aligns
+  terminology with Go modules model used for dependency resolution.
 
 ## [0.4.0] - 2026-03-31
 
