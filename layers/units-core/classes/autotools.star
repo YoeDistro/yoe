@@ -4,11 +4,9 @@ def autotools(name, version, source, sha256="", deps=[], runtime_deps=[],
     if not tasks:
         tasks = [
             task("build", steps=[
-                # Always run autoreconf: git doesn't preserve timestamps so
-                # configure may be stale relative to configure.ac/m4 files.
-                # Tarball sources ship matching timestamps but autoreconf is
-                # harmless there (just regenerates identical output).
-                "autoreconf -fi",
+                # Run autoreconf if configure.ac exists: git doesn't preserve
+                # timestamps so configure may be stale relative to m4 files.
+                "test -f configure.ac && autoreconf -fi || true",
                 "./configure --prefix=$PREFIX " + " ".join(configure_args),
                 "make -j$NPROC ACLOCAL=true AUTOCONF=true AUTOMAKE=true AUTOHEADER=true MAKEINFO=true",
                 "make DESTDIR=$DESTDIR install ACLOCAL=true AUTOCONF=true AUTOMAKE=true AUTOHEADER=true MAKEINFO=true",
