@@ -101,8 +101,11 @@ unit(
 
 - Executes a shell command in the current build environment (container or bwrap)
 - Default: raises Starlark error on non-zero exit (like `set -e`)
-- `check=False`: returns a result struct with `exit_code` and `output`
+- `check=False`: returns a result struct with `exit_code`, `stdout`, and `stderr`
 - Error traces show the `.star` file and line number, not generated shell
+- Commands run with CWD set to the source directory (same as today's `build = [...]`)
+- Respects context cancellation — if the user cancels a build in the TUI, in-flight
+  `run()` calls are terminated via the context
 
 **`run()` return value:**
 
@@ -110,6 +113,7 @@ unit(
 result = run("uname -m", check=False)
 result.exit_code    # int
 result.stdout       # string
+result.stderr       # string
 ```
 
 **Mixed tasks:** A build can mix shell strings and functions:
@@ -324,14 +328,51 @@ New builtin function available during build-time Starlark execution:
 ```go
 func (e *Engine) fnRun(thread *starlark.Thread, _ *starlark.Builtin,
     args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+    // Pull sandbox config and context from the thread
+    cfg := thread.Local(sandboxKey).(*SandboxConfig)
     // Execute command via RunInSandbox or RunInContainer
-    // Return result struct with exit_code and stdout
+    // Return result struct with exit_code, stdout, and stderr
     // If check != False, raise error on non-zero exit
 }
 ```
 
 `run()` is only available during build execution, not during project evaluation.
 Calling it during eval raises an error.
+
+**Thread-local context:** The build executor attaches the sandbox config and a
+cancellable `context.Context` to the Starlark thread via `Thread.SetLocal()`
+before invoking any Starlark build function. This is how `run()` knows which
+container/bwrap sandbox to execute in, and how cancellation propagates from the
+TUI to in-flight commands. Pattern borrowed from
+[Tilt's `local()` implementation](https://github.com/tilt-dev/tilt).
+
+```go
+func newBuildThread(ctx context.Context, sandbox *SandboxConfig) *starlark.Thread {
+    t := &starlark.Thread{Name: "build"}
+    t.SetLocal(sandboxKey, sandbox)
+    t.SetLocal(contextKey, ctx)
+    return t
+}
+```
+
+**Execer interface for testability:** Command execution is abstracted behind an
+interface so unit tests can verify Starlark build logic without running real
+containers:
+
+```go
+type Execer interface {
+    Run(ctx context.Context, cfg *SandboxConfig, command string) (ExecResult, error)
+}
+
+type ExecResult struct {
+    ExitCode int
+    Stdout   string
+    Stderr   string
+}
+```
+
+The real implementation calls `RunInSandbox()`; tests inject a mock that records
+commands and returns canned results.
 
 ### 2. Build Executor: Task Dispatch
 

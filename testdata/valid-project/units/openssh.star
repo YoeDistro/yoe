@@ -7,10 +7,12 @@ unit(
     sha256 = "aaaa1111bbbb2222",
     deps = ["zlib", "openssl"],
     runtime_deps = ["zlib", "openssl"],
-    build = [
-        "./configure --prefix=$PREFIX --sysconfdir=/etc/ssh",
-        "make -j$NPROC",
-        "make DESTDIR=$DESTDIR install",
+    tasks = [
+        task("build", steps = [
+            "./configure --prefix=$PREFIX --sysconfdir=/etc/ssh",
+            "make -j$NPROC",
+            "make DESTDIR=$DESTDIR install",
+        ]),
     ],
     services = ["sshd"],
     conffiles = ["/etc/ssh/sshd_config"],

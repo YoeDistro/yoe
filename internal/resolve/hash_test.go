@@ -14,7 +14,7 @@ func TestUnitHash_Deterministic(t *testing.T) {
 		Source:  "https://example.com/openssh.tar.gz",
 		SHA256:  "abc123",
 		Deps:    []string{"zlib"},
-		Build:   []string{"make"},
+		Tasks: []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "make"}}}},
 	}
 
 	h1 := UnitHash(unit, "arm64", map[string]string{"zlib": "deadbeef"})
@@ -35,7 +35,7 @@ func TestUnitHash_ChangesOnInput(t *testing.T) {
 		Class:   "package",
 		Source:  "https://example.com/openssh.tar.gz",
 		Deps:    []string{"zlib"},
-		Build:   []string{"make"},
+		Tasks: []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "make"}}}},
 	}
 
 	h1 := UnitHash(unit, "arm64", map[string]string{"zlib": "aaa"})
@@ -63,9 +63,9 @@ func TestUnitHash_ChangesOnInput(t *testing.T) {
 
 func TestComputeAllHashes(t *testing.T) {
 	proj := makeProject(map[string]*yoestar.Unit{
-		"zlib":    {Name: "zlib", Version: "1.3", Class: "unit", Deps: nil, Build: []string{"make"}},
-		"openssl": {Name: "openssl", Version: "3.0", Class: "unit", Deps: []string{"zlib"}, Build: []string{"make"}},
-		"openssh": {Name: "openssh", Version: "9.6", Class: "unit", Deps: []string{"zlib", "openssl"}, Build: []string{"make"}},
+		"zlib":    {Name: "zlib", Version: "1.3", Class: "unit", Deps: nil, Tasks: []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "make"}}}}},
+		"openssl": {Name: "openssl", Version: "3.0", Class: "unit", Deps: []string{"zlib"}, Tasks: []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "make"}}}}},
+		"openssh": {Name: "openssh", Version: "9.6", Class: "unit", Deps: []string{"zlib", "openssl"}, Tasks: []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "make"}}}}},
 	})
 
 	dag, err := BuildDAG(proj)

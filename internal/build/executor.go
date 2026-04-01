@@ -227,10 +227,8 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		EnsureDir(srcDir)
 	}
 
-	// Determine build commands based on class
-	commands := buildCommands(unit)
-	if len(commands) == 0 {
-		fmt.Fprintf(w, "  (no build steps for %s class %q)\n", unit.Name, unit.Class)
+	if len(unit.Tasks) == 0 {
+		fmt.Fprintf(w, "  (no tasks for %s class %q)\n", unit.Name, unit.Class)
 		return nil
 	}
 
@@ -254,29 +252,35 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		"PYTHONPATH":      "/build/sysroot/usr/lib/python3.12/site-packages",
 	}
 
-	// Execute each build step inside the container with bwrap
-	for i, cmd := range commands {
-		if err := ctx.Err(); err != nil {
-			return fmt.Errorf("build cancelled")
-		}
-		fmt.Fprintf(logW, "  [%d/%d] %s\n", i+1, len(commands), cmd)
+	// Execute tasks
+	for _, t := range unit.Tasks {
+		fmt.Fprintf(logW, "  task: %s (%d steps)\n", t.Name, len(t.Steps))
 
-		cfg := &SandboxConfig{
-			Ctx:        ctx,
-			Arch:       opts.Arch,
-			SrcDir:     srcDir,
-			DestDir:    destDir,
-			Sysroot:    sysroot,
-			Env:        env,
-			ProjectDir: opts.ProjectDir,
-			Stdout:     logW,
-			Stderr:     logW,
-		}
-		if err := RunInSandbox(cfg, cmd); err != nil {
-			if !opts.Verbose {
-				fmt.Fprintf(w, "  build log: %s\n", logPath)
+		for i, step := range t.Steps {
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("build cancelled")
 			}
-			return err
+
+			if step.Command != "" {
+				fmt.Fprintf(logW, "    [%d/%d] %s\n", i+1, len(t.Steps), step.Command)
+				cfg := &SandboxConfig{
+					Ctx:        ctx,
+					Arch:       opts.Arch,
+					SrcDir:     srcDir,
+					DestDir:    destDir,
+					Sysroot:    sysroot,
+					Env:        env,
+					ProjectDir: opts.ProjectDir,
+					Stdout:     logW,
+					Stderr:     logW,
+				}
+				if err := RunInSandbox(cfg, step.Command); err != nil {
+					if !opts.Verbose {
+						fmt.Fprintf(w, "  build log: %s\n", logPath)
+					}
+					return err
+				}
+			}
 		}
 	}
 
@@ -300,59 +304,6 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	}
 
 	return nil
-}
-
-// buildCommands returns the shell commands to execute for a unit.
-func buildCommands(unit *yoestar.Unit) []string {
-	// Explicit build steps take priority
-	if len(unit.Build) > 0 {
-		return unit.Build
-	}
-
-	// Class-specific defaults
-	switch unit.Class {
-	case "autotools":
-		configureArgs := ""
-		if len(unit.ConfigureArgs) > 0 {
-			configureArgs = " " + joinArgs(unit.ConfigureArgs)
-		}
-		return []string{
-			"./configure --prefix=$PREFIX" + configureArgs,
-			"make -j$NPROC",
-			"make DESTDIR=$DESTDIR install",
-		}
-	case "cmake":
-		cmakeArgs := ""
-		if len(unit.ConfigureArgs) > 0 {
-			cmakeArgs = " " + joinArgs(unit.ConfigureArgs)
-		}
-		return []string{
-			"cmake -B build -DCMAKE_INSTALL_PREFIX=$PREFIX" + cmakeArgs,
-			"cmake --build build -j $NPROC",
-			"DESTDIR=$DESTDIR cmake --install build",
-		}
-	case "go":
-		pkg := unit.GoPackage
-		if pkg == "" {
-			pkg = "."
-		}
-		return []string{
-			fmt.Sprintf("go build -o $DESTDIR/usr/bin/%s %s", unit.Name, pkg),
-		}
-	case "image":
-		// Images are assembled, not compiled — handled separately
-		return nil
-	}
-
-	return nil
-}
-
-func joinArgs(args []string) string {
-	result := ""
-	for _, a := range args {
-		result += " " + a
-	}
-	return result
 }
 
 func filterBuildOrder(dag *resolve.DAG, fullOrder []string, names []string) ([]string, error) {

@@ -216,38 +216,17 @@ func Status(proj *yoestar.Project, projectDir string, w io.Writer) error {
 	return nil
 }
 
-// stage0Commands returns the build commands for a bootstrap unit.
-// Bootstrap builds use the host toolchain directly, so we use the unit's
-// build steps if available, or class-specific defaults.
+// stage0Commands extracts shell commands from a unit's tasks for bootstrap builds.
 func stage0Commands(unit *yoestar.Unit) []string {
-	if len(unit.Build) > 0 {
-		return unit.Build
-	}
-
-	switch unit.Class {
-	case "autotools":
-		args := ""
-		if len(unit.ConfigureArgs) > 0 {
-			args = " " + strings.Join(unit.ConfigureArgs, " ")
-		}
-		return []string{
-			"./configure --prefix=$PREFIX" + args,
-			"make -j$NPROC",
-			"make DESTDIR=$DESTDIR install",
-		}
-	case "cmake":
-		args := ""
-		if len(unit.ConfigureArgs) > 0 {
-			args = " " + strings.Join(unit.ConfigureArgs, " ")
-		}
-		return []string{
-			"cmake -B build -DCMAKE_INSTALL_PREFIX=$PREFIX" + args,
-			"cmake --build build -j $NPROC",
-			"DESTDIR=$DESTDIR cmake --install build",
+	var cmds []string
+	for _, t := range unit.Tasks {
+		for _, s := range t.Steps {
+			if s.Command != "" {
+				cmds = append(cmds, s.Command)
+			}
 		}
 	}
-
-	return nil
+	return cmds
 }
 
 func verifyStage0(repoDir string) error {

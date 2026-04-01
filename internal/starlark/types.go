@@ -1,5 +1,7 @@
 package starlark
 
+import "go.starlark.net/starlark"
+
 // Project represents an evaluated PROJECT.star.
 type Project struct {
 	Name       string
@@ -93,11 +95,11 @@ type QEMUConfig struct {
 	Display  string
 }
 
-// Unit represents an evaluated unit(), autotools(), image(), etc. call.
+// Unit represents an evaluated unit(), image(), etc. call.
 type Unit struct {
 	Name        string
 	Version     string
-	Class       string // "unit", "autotools", "cmake", "go", "image", etc.
+	Class       string // "unit", "image", etc.
 	Scope       string // "arch" (default), "machine", or "noarch"
 	Description string
 	License     string
@@ -114,9 +116,9 @@ type Unit struct {
 	RuntimeDeps []string
 
 	// Build
-	Build         []string // shell commands (for generic unit())
-	ConfigureArgs []string // for autotools/cmake
-	GoPackage     string   // for go_binary
+	Container string // default container for all tasks
+	Tasks     []Task
+	Provides  string // virtual package name
 
 	// Artifact metadata
 	Services    []string
@@ -138,6 +140,19 @@ type Partition struct {
 	Size     string // "64M", "fill", etc.
 	Root     bool
 	Contents []string
+}
+
+// Step is a single build action — either a shell command or a Starlark function.
+type Step struct {
+	Command string            // shell command (set when step is a string)
+	Fn      starlark.Callable // Starlark function (set when step is callable)
+}
+
+// Task is a named build phase containing one or more steps.
+type Task struct {
+	Name      string
+	Container string // optional container image override
+	Steps     []Step
 }
 
 // Command represents a user-defined CLI command from commands/*.star.

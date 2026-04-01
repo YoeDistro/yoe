@@ -23,11 +23,9 @@ func (e *Engine) builtins() starlark.StringDict {
 		"uboot":       starlark.NewBuiltin("uboot", fnUboot),
 		"qemu_config": starlark.NewBuiltin("qemu_config", fnQEMUConfig),
 		"unit":        starlark.NewBuiltin("unit", e.fnUnit),
-		"autotools":   starlark.NewBuiltin("autotools", e.fnAutotools),
-		"cmake":       starlark.NewBuiltin("cmake", e.fnCMake),
-		"go_binary":   starlark.NewBuiltin("go_binary", e.fnGoBinary),
 		"image":       starlark.NewBuiltin("image", e.fnImage),
 		"partition":   starlark.NewBuiltin("partition", fnPartition),
+		"task":        starlark.NewBuiltin("task", fnTask),
 		"command":     starlark.NewBuiltin("command", e.fnCommand),
 		"arg":         starlark.NewBuiltin("arg", fnArg),
 		"True":        starlark.True,
@@ -350,29 +348,77 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 	}
 
 	r := &Unit{
-		Name:          name,
-		Version:       kwString(kwargs, "version"),
-		Class:         class,
-		Scope:         kwString(kwargs, "scope"),
-		Description:   kwString(kwargs, "description"),
-		License:       kwString(kwargs, "license"),
-		Source:        kwString(kwargs, "source"),
-		SHA256:        kwString(kwargs, "sha256"),
-		Tag:           kwString(kwargs, "tag"),
-		Branch:        kwString(kwargs, "branch"),
-		Patches:       kwStringList(kwargs, "patches"),
-		Deps:          kwStringList(kwargs, "deps"),
-		RuntimeDeps:   kwStringList(kwargs, "runtime_deps"),
-		Build:         kwStringList(kwargs, "build"),
-		ConfigureArgs: kwStringList(kwargs, "configure_args"),
-		GoPackage:     kwString(kwargs, "package"),
-		Services:      kwStringList(kwargs, "services"),
-		Conffiles:     kwStringList(kwargs, "conffiles"),
-		Artifacts:     kwStringList(kwargs, "artifacts"),
-		Exclude:       kwStringList(kwargs, "exclude"),
-		Hostname:      kwString(kwargs, "hostname"),
-		Timezone:      kwString(kwargs, "timezone"),
-		Locale:        kwString(kwargs, "locale"),
+		Name:        name,
+		Version:     kwString(kwargs, "version"),
+		Class:       class,
+		Scope:       kwString(kwargs, "scope"),
+		Description: kwString(kwargs, "description"),
+		License:     kwString(kwargs, "license"),
+		Source:      kwString(kwargs, "source"),
+		SHA256:      kwString(kwargs, "sha256"),
+		Tag:         kwString(kwargs, "tag"),
+		Branch:      kwString(kwargs, "branch"),
+		Patches:     kwStringList(kwargs, "patches"),
+		Deps:        kwStringList(kwargs, "deps"),
+		RuntimeDeps: kwStringList(kwargs, "runtime_deps"),
+		Container:   kwString(kwargs, "container"),
+		Provides:    kwString(kwargs, "provides"),
+		Services:    kwStringList(kwargs, "services"),
+		Conffiles:   kwStringList(kwargs, "conffiles"),
+		Artifacts:   kwStringList(kwargs, "artifacts"),
+		Exclude:     kwStringList(kwargs, "exclude"),
+		Hostname:    kwString(kwargs, "hostname"),
+		Timezone:    kwString(kwargs, "timezone"),
+		Locale:      kwString(kwargs, "locale"),
+	}
+
+	// Parse tasks
+	for _, kv := range kwargs {
+		if string(kv[0].(starlark.String)) == "tasks" {
+			if list, ok := kv[1].(*starlark.List); ok {
+				iter := list.Iterate()
+				defer iter.Done()
+				var v starlark.Value
+				for iter.Next(&v) {
+					s, ok := v.(*starlarkstruct.Struct)
+					if !ok {
+						continue
+					}
+					t := Task{
+						Name:      structString(s, "name"),
+						Container: structString(s, "container"),
+					}
+					// Parse steps: run (single string), fn (single callable),
+					// or steps (list of strings/callables)
+					if rv, err := s.Attr("run"); err == nil {
+						if cmd, ok := rv.(starlark.String); ok {
+							t.Steps = []Step{{Command: string(cmd)}}
+						}
+					}
+					if rv, err := s.Attr("fn"); err == nil {
+						if fn, ok := rv.(starlark.Callable); ok {
+							t.Steps = []Step{{Fn: fn}}
+						}
+					}
+					if rv, err := s.Attr("steps"); err == nil {
+						if list, ok := rv.(*starlark.List); ok {
+							si := list.Iterate()
+							var sv starlark.Value
+							for si.Next(&sv) {
+								switch val := sv.(type) {
+								case starlark.String:
+									t.Steps = append(t.Steps, Step{Command: string(val)})
+								case starlark.Callable:
+									t.Steps = append(t.Steps, Step{Fn: val})
+								}
+							}
+							si.Done()
+						}
+					}
+					r.Tasks = append(r.Tasks, t)
+				}
+			}
+		}
 	}
 
 	// Parse partitions if present
@@ -410,34 +456,33 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 }
 
 func (e *Engine) fnUnit(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	r, err := e.registerUnit("unit", kwargs)
-	if err != nil {
-		return nil, err
-	}
-	if len(r.Build) == 0 {
-		return nil, fmt.Errorf("unit(%q): build steps required", r.Name)
-	}
-	return starlark.None, nil
-}
-
-func (e *Engine) fnAutotools(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	_, err := e.registerUnit("autotools", kwargs)
-	return starlark.None, err
-}
-
-func (e *Engine) fnCMake(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	_, err := e.registerUnit("cmake", kwargs)
-	return starlark.None, err
-}
-
-func (e *Engine) fnGoBinary(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	_, err := e.registerUnit("go", kwargs)
+	_, err := e.registerUnit("unit", kwargs)
 	return starlark.None, err
 }
 
 func (e *Engine) fnImage(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	_, err := e.registerUnit("image", kwargs)
 	return starlark.None, err
+}
+
+// --- Task builtin ---
+
+func fnTask(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var name starlark.String
+	if err := starlark.UnpackPositionalArgs("task", args, nil, 1, &name); err != nil {
+		return nil, err
+	}
+
+	fields := starlark.StringDict{
+		"name": name,
+	}
+
+	for _, kv := range kwargs {
+		key := string(kv[0].(starlark.String))
+		fields[key] = kv[1]
+	}
+
+	return starlarkstruct.FromStringDict(starlark.String("task"), fields), nil
 }
 
 // --- Custom commands ---
