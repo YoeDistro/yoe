@@ -22,15 +22,10 @@ func Assemble(unit *yoestar.Unit, proj *yoestar.Project, projectDir, outputDir, 
 
 	// Step 1: Install packages into rootfs — resolve deps so libraries
 	// are included automatically (e.g., openssh pulls in openssl, zlib).
-	// Search across all repo scope dirs (noarch, arch, machine).
-	repoBase := repo.RepoBaseDir(proj, projectDir)
+	// The flat repo has scope in filenames (e.g., busybox-1.36.1-r0.arm64.apk).
+	repoDir := repo.RepoDir(proj, projectDir)
 	allPackages := resolvePackageDeps(unit.Artifacts, proj)
-	scopeDirs := []string{arch}
-	if machine != "" && machine != arch {
-		scopeDirs = append(scopeDirs, machine)
-	}
-	scopeDirs = append(scopeDirs, "noarch")
-	if err := installPackagesMultiRepo(rootfs, repoBase, allPackages, scopeDirs, w); err != nil {
+	if err := installPackages(rootfs, repoDir, allPackages, w); err != nil {
 		return fmt.Errorf("installing packages: %w", err)
 	}
 
@@ -90,9 +85,9 @@ func resolvePackageDeps(packages []string, proj *yoestar.Project) []string {
 	return result
 }
 
-// installPackagesMultiRepo installs packages searching across multiple repo
-// scope directories (e.g., arm64, raspberrypi4, noarch).
-func installPackagesMultiRepo(rootfs, repoBase string, packages []string, scopeDirs []string, w io.Writer) error {
+// installPackages installs packages from a flat repo directory into the rootfs.
+// Package filenames include scope (e.g., busybox-1.36.1-r0.arm64.apk).
+func installPackages(rootfs, repoDir string, packages []string, w io.Writer) error {
 	if len(packages) == 0 {
 		fmt.Fprintln(w, "  (no packages to install)")
 		return nil
@@ -100,19 +95,12 @@ func installPackagesMultiRepo(rootfs, repoBase string, packages []string, scopeD
 
 	fmt.Fprintf(w, "  Installing %d packages into rootfs...\n", len(packages))
 
-	absBase, _ := filepath.Abs(repoBase)
+	absRepo, _ := filepath.Abs(repoDir)
 
 	for _, pkg := range packages {
-		var apkFile string
-		for _, sd := range scopeDirs {
-			repoDir := filepath.Join(absBase, sd)
-			apkFile = findAPKInDir(repoDir, pkg)
-			if apkFile != "" {
-				break
-			}
-		}
+		apkFile := findAPK(absRepo, pkg)
 		if apkFile == "" {
-			return fmt.Errorf("package %q not found in repo (searched: %v)", pkg, scopeDirs)
+			return fmt.Errorf("package %q not found in %s", pkg, absRepo)
 		}
 
 		fmt.Fprintf(w, "    %s\n", filepath.Base(apkFile))
@@ -126,15 +114,16 @@ func installPackagesMultiRepo(rootfs, repoBase string, packages []string, scopeD
 	return nil
 }
 
-// findAPKInDir finds a .apk file for a package name in a single directory.
-func findAPKInDir(dir, pkgName string) string {
-	entries, err := os.ReadDir(dir)
+// findAPK finds the .apk file for a package in a flat repo directory.
+// Matches by package name prefix (e.g., "busybox" matches "busybox-1.36.1-r0.arm64.apk").
+func findAPK(repoDir, pkgName string) string {
+	entries, err := os.ReadDir(repoDir)
 	if err != nil {
 		return ""
 	}
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), pkgName+"-") && strings.HasSuffix(e.Name(), ".apk") {
-			return filepath.Join(dir, e.Name())
+			return filepath.Join(repoDir, e.Name())
 		}
 	}
 	return ""

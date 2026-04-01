@@ -255,6 +255,7 @@ func Arch() string {
 // UnitBuildDir returns the build directory for a unit.
 // The scopeDir is "noarch", an architecture name, or a machine name,
 // determined by the unit's scope field.
+// Layout: build/<name>.<scopeDir>/  (e.g., build/busybox.arm64/)
 func UnitBuildDir(projectDir, scopeDir, unitName string) string {
-	return filepath.Join(projectDir, "build", scopeDir, unitName)
+	return filepath.Join(projectDir, "build", unitName+"."+scopeDir)
 }

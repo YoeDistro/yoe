@@ -198,7 +198,7 @@ func TestBuildUnits_WithDeps(t *testing.T) {
 	}
 
 	// Create source directory with a file (simulating prepared source)
-	srcDir := filepath.Join(projectDir, "build", "x86_64", "hello", "src")
+	srcDir := filepath.Join(projectDir, "build", "hello.x86_64", "src")
 	os.MkdirAll(srcDir, 0755)
 	os.WriteFile(filepath.Join(srcDir, "Makefile"), []byte("all:\n\techo hello\n"), 0644)
 
@@ -235,7 +235,7 @@ func TestBuildUnits_WithDeps(t *testing.T) {
 	// Verify cache marker was written
 	if !IsBuildCached(projectDir, "x86_64", "hello", "") {
 		// The hash won't be "" — just verify the marker file exists
-		markerDir := filepath.Join(projectDir, "build", "x86_64", "hello")
+		markerDir := filepath.Join(projectDir, "build", "hello.x86_64")
 		entries, _ := os.ReadDir(markerDir)
 		found := false
 		for _, e := range entries {

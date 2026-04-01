@@ -18,7 +18,7 @@ import (
 
 // GenerateIndex scans repoDir for .apk files and produces an
 // APKINDEX.tar.gz that apk(8) can use for dependency resolution.
-func GenerateIndex(repoDir, arch string) error {
+func GenerateIndex(repoDir string) error {
 	entries, err := os.ReadDir(repoDir)
 	if err != nil {
 		return fmt.Errorf("reading repo dir: %w", err)
@@ -51,7 +51,7 @@ func GenerateIndex(repoDir, arch string) error {
 			return fmt.Errorf("hashing %s: %w", name, err)
 		}
 
-		pkgName, version := parseAPKFilename(name)
+		pkgName, version, scope := parseAPKFilename(name)
 		installedSize := extractInstalledSize(apkPath)
 		description := extractDescription(apkPath)
 
@@ -62,7 +62,7 @@ func GenerateIndex(repoDir, arch string) error {
 		fmt.Fprintf(&buf, "S:%d\n", info.Size())
 		fmt.Fprintf(&buf, "I:%d\n", installedSize)
 		fmt.Fprintf(&buf, "T:%s\n", description)
-		fmt.Fprintf(&buf, "A:%s\n", arch)
+		fmt.Fprintf(&buf, "A:%s\n", scope)
 		if i < len(apks)-1 {
 			buf.WriteString("\n")
 		}
@@ -102,16 +102,21 @@ func GenerateIndex(repoDir, arch string) error {
 // parseAPKFilename parses "name-version-rN.apk" into (name, version-rN).
 // It strips .apk, finds the last -rN suffix, then splits name from version
 // at the last dash before a digit.
-func parseAPKFilename(filename string) (name, version string) {
+func parseAPKFilename(filename string) (name, version, scope string) {
 	// Strip .apk extension
 	s := strings.TrimSuffix(filename, ".apk")
+
+	// Extract scope suffix (e.g., ".arm64", ".raspberrypi4", ".noarch")
+	if idx := strings.LastIndex(s, "."); idx > 0 {
+		scope = s[idx+1:]
+		s = s[:idx]
+	}
 
 	// Find the last "-rN" revision suffix by scanning backwards.
 	// The revision is always at the end: "-r" followed by digits.
 	revIdx := strings.LastIndex(s, "-r")
 	if revIdx < 0 {
-		// No revision suffix; treat the whole thing as name
-		return s, ""
+		return s, "", scope
 	}
 	// Verify everything after "-r" is digits
 	rev := s[revIdx+2:]
@@ -123,7 +128,7 @@ func parseAPKFilename(filename string) (name, version string) {
 		}
 	}
 	if !allDigits {
-		return s, ""
+		return s, "", scope
 	}
 
 	// Now we have e.g. "hello-1.0.0" with revision "r0"
@@ -143,13 +148,13 @@ func parseAPKFilename(filename string) (name, version string) {
 	}
 
 	if verIdx < 0 {
-		return nameVer, revision[1:] // strip leading dash from revision
+		return nameVer, revision[1:], scope
 	}
 
 	name = nameVer[:verIdx]
 	version = nameVer[verIdx+1:] + revision
 
-	return name, version
+	return name, version, scope
 }
 
 // sha1base64 returns the base64-encoded SHA1 of a file (what apk expects).

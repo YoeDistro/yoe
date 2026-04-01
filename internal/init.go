@@ -28,7 +28,7 @@ func RunInit(projectDir string, machine string) error {
     name = %q,
     version = "0.1.0",
     defaults = defaults(machine = %q, image = "base-image"),
-    repository = repository(path = "build/repo"),
+    repository = repository(path = "repo"),
     cache = cache(path = "build/cache"),
     sources = sources(go_proxy = "https://proxy.golang.org"),
     layers = [

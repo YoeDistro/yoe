@@ -288,8 +288,8 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		}
 		fmt.Fprintf(w, "  → %s\n", filepath.Base(apkPath))
 
-		repoDir := repo.RepoDir(nil, opts.ProjectDir, sd)
-		if err := repo.Publish(apkPath, repoDir, sd); err != nil {
+		repoDir := repo.RepoDir(nil, opts.ProjectDir)
+		if err := repo.Publish(apkPath, repoDir); err != nil {
 			return fmt.Errorf("publishing to repo: %w", err)
 		}
 

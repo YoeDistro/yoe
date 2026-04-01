@@ -26,12 +26,12 @@ import (
 //
 // For unsigned packages, we write only streams 2 and 3.
 // apk with --allow-untrusted accepts this format.
-func CreateAPK(unit *yoestar.Unit, destDir, outputDir, arch string) (string, error) {
+func CreateAPK(unit *yoestar.Unit, destDir, outputDir, scopeDir string) (string, error) {
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return "", fmt.Errorf("creating output dir: %w", err)
 	}
 
-	apkName := fmt.Sprintf("%s-%s-r0.apk", unit.Name, unit.Version)
+	apkName := fmt.Sprintf("%s-%s-r0.%s.apk", unit.Name, unit.Version, scopeDir)
 	apkPath := filepath.Join(outputDir, apkName)
 
 	// Write a single gzip stream containing .PKGINFO followed by all files.
@@ -43,7 +43,7 @@ func CreateAPK(unit *yoestar.Unit, destDir, outputDir, arch string) (string, err
 		return "", fmt.Errorf("creating %s: %w", apkPath, err)
 	}
 
-	pkginfo := generatePKGINFO(unit, destDir, "", arch)
+	pkginfo := generatePKGINFO(unit, destDir, "", scopeDir)
 
 	gw := gzip.NewWriter(f)
 	tw := tar.NewWriter(gw)
