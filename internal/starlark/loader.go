@@ -226,25 +226,44 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	}
 	eng.SetVar("PROVIDES", provides)
 
-	// Phase 2: Evaluate units and images (project + layers).
+	// Phase 2a: Evaluate all unit definitions (project + layers).
 	if err := evalDir(eng, root, "units"); err != nil {
 		return nil, err
 	}
 	if eng.layerRoots != nil {
 		for _, layerPath := range eng.layerRoots {
-			for _, subdir := range []string{"units", "images"} {
-				if err := evalDir(eng, layerPath, subdir); err != nil {
-					return nil, err
-				}
+			if err := evalDir(eng, layerPath, "units"); err != nil {
+				return nil, err
 			}
 		}
 	}
 
-	// After evaluating units/images, add unit provides to PROVIDES dict
+	// Now that all units are loaded, update predeclared variables before
+	// evaluating images (phase 2b).
+
+	// Add unit provides to PROVIDES dict
 	if prov, ok := eng.vars["PROVIDES"].(*starlark.Dict); ok {
 		for _, u := range eng.Units() {
 			if u.Provides != "" {
 				_ = prov.SetKey(starlark.String(u.Provides), starlark.String(u.Name))
+			}
+		}
+	}
+
+	// Set RUNTIME_DEPS: unit name → list of runtime dep names.
+	runtimeDeps := starlark.NewDict(len(eng.Units()))
+	for _, u := range eng.Units() {
+		if len(u.RuntimeDeps) > 0 {
+			_ = runtimeDeps.SetKey(starlark.String(u.Name), toStarlarkStringList(u.RuntimeDeps))
+		}
+	}
+	eng.SetVar("RUNTIME_DEPS", runtimeDeps)
+
+	// Phase 2b: Evaluate image definitions (project + layers).
+	if eng.layerRoots != nil {
+		for _, layerPath := range eng.layerRoots {
+			if err := evalDir(eng, layerPath, "images"); err != nil {
+				return nil, err
 			}
 		}
 	}

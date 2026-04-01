@@ -8,10 +8,10 @@ def image(name, artifacts=[], hostname="", timezone="", locale="",
     resolved = []
     for a in all_artifacts:
         r = PROVIDES.get(a, None)
-        if r != None:
-            resolved.append(r)
-        else:
-            resolved.append(a)
+        resolved.append(r if r != None else a)
+
+    # Resolve transitive runtime dependencies
+    resolved = _resolve_runtime_deps(resolved)
 
     # Use machine partitions if image doesn't specify its own
     all_partitions = partitions if partitions else list(MACHINE_CONFIG.partitions)
@@ -125,6 +125,59 @@ mkdir -p /mnt/extlinux
 mount -t ext4 $LOOP /mnt/extlinux
 extlinux --install /mnt/extlinux/boot/extlinux
 """ % (offset_bytes, size_bytes, img), privileged=True)
+
+def _resolve_runtime_deps(packages):
+    """Expand a package list to include all transitive runtime dependencies.
+    Starlark has no recursion or while loops, so we use iterative BFS
+    with a for loop over a generous upper bound.
+    """
+    # BFS: discover all transitive runtime deps
+    seen = {}
+    queue = list(packages)
+    for _i in range(1000):  # upper bound on iterations
+        if not queue:
+            break
+        name = queue[0]
+        queue = queue[1:]
+        if name in seen:
+            continue
+        seen[name] = True
+        deps = RUNTIME_DEPS.get(name, None)
+        if deps != None:
+            for dep in deps:
+                resolved = PROVIDES.get(dep, None)
+                d = resolved if resolved != None else dep
+                if d not in seen:
+                    queue = queue + [d]
+
+    # Topological sort: emit packages whose deps are all emitted
+    remaining = list(seen.keys())
+    ordered = []
+    emitted = {}
+    for _round in range(len(remaining) + 1):
+        next_remaining = []
+        for name in remaining:
+            deps = RUNTIME_DEPS.get(name, None)
+            ready = True
+            if deps != None:
+                for dep in deps:
+                    resolved = PROVIDES.get(dep, None)
+                    d = resolved if resolved != None else dep
+                    if d in seen and d not in emitted:
+                        ready = False
+                        break
+            if ready:
+                ordered.append(name)
+                emitted[name] = True
+            else:
+                next_remaining.append(name)
+        remaining = next_remaining
+        if not remaining:
+            break
+    # Append any remaining (circular deps)
+    for name in remaining:
+        ordered.append(name)
+    return ordered
 
 def _parse_size_mb(size_str):
     s = str(size_str)
