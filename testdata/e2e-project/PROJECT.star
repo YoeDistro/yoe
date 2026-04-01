@@ -8,5 +8,8 @@ project(
         layer("github.com/YoeDistro/yoe-ng",
               local = "../..",
               path = "layers/units-core"),
+        layer("github.com/YoeDistro/yoe-ng",
+              local = "../..",
+              path = "layers/units-rpi"),
     ],
 )
