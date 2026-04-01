@@ -1,8 +1,10 @@
 package build
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
@@ -25,11 +27,30 @@ type RealExecer struct{}
 
 func (RealExecer) Run(ctx context.Context, cfg *SandboxConfig, command string) (ExecResult, error) {
 	cfg.Ctx = ctx
-	err := RunInSandbox(cfg, command)
-	if err != nil {
-		return ExecResult{ExitCode: 1, Stderr: err.Error()}, err
+
+	// Capture stdout/stderr into buffers while still writing to the log.
+	var stdoutBuf, stderrBuf bytes.Buffer
+	origStdout, origStderr := cfg.Stdout, cfg.Stderr
+	if origStdout != nil {
+		cfg.Stdout = io.MultiWriter(origStdout, &stdoutBuf)
+	} else {
+		cfg.Stdout = &stdoutBuf
 	}
-	return ExecResult{ExitCode: 0}, nil
+	if origStderr != nil {
+		cfg.Stderr = io.MultiWriter(origStderr, &stderrBuf)
+	} else {
+		cfg.Stderr = &stderrBuf
+	}
+
+	err := RunInSandbox(cfg, command)
+
+	// Restore original writers
+	cfg.Stdout, cfg.Stderr = origStdout, origStderr
+
+	if err != nil {
+		return ExecResult{ExitCode: 1, Stdout: stdoutBuf.String(), Stderr: stderrBuf.String()}, err
+	}
+	return ExecResult{ExitCode: 0, Stdout: stdoutBuf.String(), Stderr: stderrBuf.String()}, nil
 }
 
 // Thread-local keys for build-time Starlark threads.
