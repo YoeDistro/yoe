@@ -1,0 +1,426 @@
+# Tasks, Starlark Build Functions, and Machine-Portable Images
+
+**Date:** 2026-04-01
+**Status:** Draft
+
+## Problem
+
+Three related limitations in the current build model:
+
+1. **Build steps are shell strings.** The `build = [...]` list generates
+   commands that Go executes later. When something fails, the user debugs
+   machine-generated shell, not the code they wrote. Complex build logic
+   (image assembly, conditional steps) is awkward as string concatenation.
+
+2. **Images aren't portable across machines.** `base-image` must hard-code
+   machine-specific packages (`syslinux` on x86, `rpi-firmware` on RPi) and
+   partition layouts. Every new machine needs a new image definition or ugly
+   conditionals.
+
+3. **All units share one container.** Different units need different toolchains
+   (Go SDK, Rust, protobuf). Currently everything runs in the Alpine build
+   container.
+
+## Solution
+
+Three new concepts that work together:
+
+### 1. Tasks Replace Build Step Lists
+
+The `build = [...]` string list is replaced by `tasks = [...]`. Each task is
+a named build step with either a shell command or a Starlark function:
+
+```python
+unit(
+    name = "my-app",
+    tasks = [
+        task("configure", run="./configure --prefix=$PREFIX"),
+        task("compile", run="make -j$NPROC"),
+        task("install", run="make DESTDIR=$DESTDIR install"),
+    ],
+)
+```
+
+**Backward compatibility:** `build = [...]` continues to work. Internally
+converted to unnamed tasks. Existing units need no changes.
+
+### 2. Starlark Build Functions
+
+A task's `fn` field accepts a Starlark callable instead of a shell string.
+The function can call `run()` to execute commands directly:
+
+```python
+def install_packages(packages):
+    run("mkdir -p $DESTDIR/rootfs")
+    for pkg in packages:
+        result = run("tar xzf $REPO/%s-*.apk -C $DESTDIR/rootfs" % pkg,
+                     check=False)
+        if result.exit_code != 0:
+            print("warning: package %s not found, skipping" % pkg)
+
+unit(
+    name = "my-image",
+    tasks = [
+        task("install", fn=lambda: install_packages(["busybox", "openssh"])),
+        task("configure", run="echo yoe > $DESTDIR/rootfs/etc/hostname"),
+    ],
+)
+```
+
+**`run()` builtin:**
+- Executes a shell command in the current build environment (container or bwrap)
+- Default: raises Starlark error on non-zero exit (like `set -e`)
+- `check=False`: returns a result struct with `exit_code` and `output`
+- Error traces show the `.star` file and line number, not generated shell
+
+**`run()` return value:**
+
+```python
+result = run("uname -m", check=False)
+result.exit_code    # int
+result.stdout       # string
+```
+
+**Mixed tasks:** A build can mix shell strings and functions:
+
+```python
+tasks = [
+    task("configure", run="./configure"),
+    task("patch-config", fn=patch_kernel_config),  # Starlark function
+    task("compile", run="make -j$NPROC"),
+]
+```
+
+### 3. Per-Task Containers
+
+Each task can specify a Docker container image. When set, that task runs in
+the specified container instead of the default Alpine build container:
+
+```python
+unit(
+    name = "my-go-app",
+    container = "golang:1.22-alpine",   # default for all tasks
+    tasks = [
+        task("codegen",
+             container="protoc:latest",  # overrides unit default
+             run="protoc --go_out=. api/*.proto"),
+        task("build",                    # inherits golang container
+             run="go build -o $DESTDIR/usr/bin/app"),
+    ],
+)
+```
+
+**Resolution order:** task container → unit container → default Alpine
+container with bwrap.
+
+## Machine-Portable Images
+
+### MACHINE_CONFIG
+
+A predeclared Starlark struct set after machine evaluation (phase 1), available
+during unit/image evaluation (phase 2):
+
+```python
+# Available as a predeclared variable:
+MACHINE_CONFIG.name         # "raspberrypi4"
+MACHINE_CONFIG.arch         # "arm64"
+MACHINE_CONFIG.packages     # ["rpi-firmware", "rpi4-config"]
+MACHINE_CONFIG.partitions   # [partition(...), partition(...)]
+MACHINE_CONFIG.kernel       # kernel config struct
+```
+
+Set from the machine definition:
+
+```python
+machine(
+    name = "raspberrypi4",
+    arch = "arm64",
+    kernel = kernel(
+        unit = "linux-rpi4",
+        provides = "linux",
+        defconfig = "bcm2711_defconfig",
+        cmdline = "console=ttyS0,115200 root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw",
+    ),
+    packages = ["rpi-firmware", "rpi4-config"],
+    partitions = [
+        partition(label="boot", type="vfat", size="64M", contents=["*"]),
+        partition(label="rootfs", type="ext4", size="256M", root=True),
+    ],
+)
+```
+
+### PROVIDES
+
+A predeclared dict mapping virtual package names to concrete units, built from
+`provides` fields on units and `kernel.provides` on machines:
+
+```python
+# Unit declares what it provides:
+unit(name = "linux-rpi4", provides = "linux", ...)
+
+# Machine's kernel also contributes:
+kernel(unit = "linux-rpi4", provides = "linux", ...)
+
+# Result: PROVIDES = {"linux": "linux-rpi4"}
+
+# Image uses the virtual name:
+image(name = "base-image", artifacts = ["busybox", "linux"], ...)
+# "linux" resolved to "linux-rpi4" via PROVIDES
+```
+
+### Portable Image Definition
+
+With these pieces, images become machine-portable:
+
+```python
+# classes/image.star
+def image(name, artifacts = [], hostname = "", partitions = [], **kwargs):
+    # Merge machine packages
+    all_artifacts = list(artifacts) + MACHINE_CONFIG.packages
+
+    # Resolve provides
+    resolved = [PROVIDES.get(a, a) for a in all_artifacts]
+
+    # Use machine partitions if image doesn't specify its own
+    all_partitions = partitions if partitions else MACHINE_CONFIG.partitions
+
+    unit(
+        name = name,
+        scope = "machine",
+        class = "image",
+        artifacts = resolved,
+        partitions = all_partitions,
+        tasks = [
+            task("rootfs", fn=lambda: assemble_rootfs(resolved, hostname)),
+            task("disk", fn=lambda: create_disk_image(name, all_partitions)),
+        ],
+        **kwargs,
+    )
+
+def assemble_rootfs(packages, hostname):
+    run("mkdir -p $DESTDIR/rootfs")
+    for pkg in packages:
+        run("tar xzf $REPO/%s-*.apk -C $DESTDIR/rootfs --exclude=.PKGINFO" % pkg)
+    if hostname:
+        run("mkdir -p $DESTDIR/rootfs/etc")
+        run("echo %s > $DESTDIR/rootfs/etc/hostname" % hostname)
+
+def create_disk_image(name, partitions):
+    # Calculate total size
+    total_mb = 1  # MBR overhead
+    for p in partitions:
+        total_mb += parse_size_mb(p.size)
+
+    img = "$DESTDIR/%s.img" % name
+    run("dd if=/dev/zero of=%s bs=1M count=0 seek=%d" % (img, total_mb))
+
+    # Partition with sfdisk
+    sfdisk_input = generate_sfdisk_script(partitions)
+    run("echo '%s' | sfdisk %s" % (sfdisk_input, img))
+
+    # Create and populate each partition
+    offset = 1
+    for p in partitions:
+        size = parse_size_mb(p.size)
+        part_img = img + "." + p.label + ".part"
+        run("dd if=/dev/zero of=%s bs=1M count=0 seek=%d" % (part_img, size))
+
+        if p.type == "vfat":
+            run("mkfs.vfat -n %s %s" % (p.label.upper(), part_img))
+            # Copy boot files
+            for pattern in p.contents:
+                run("mcopy -sQi %s $DESTDIR/rootfs/boot/%s ::/" % (part_img, pattern))
+        elif p.type == "ext4":
+            run("mkfs.ext4 -d $DESTDIR/rootfs -L %s %s" % (p.label, part_img))
+
+        run("dd if=%s of=%s bs=1M seek=%d conv=notrunc" % (part_img, img, offset))
+        run("rm %s" % part_img)
+        offset += size
+```
+
+Then `base-image.star` is simply:
+
+```python
+load("//classes/image.star", "image")
+
+image(
+    name = "base-image",
+    artifacts = ["base-files", "busybox", "linux"],
+    hostname = "yoe",
+)
+```
+
+Same image works for QEMU x86, RPi4, RPi5 — the machine provides the kernel,
+firmware, config, and partition layout.
+
+### Machine Definitions
+
+**QEMU x86_64:**
+
+```python
+machine(
+    name = "qemu-x86_64",
+    arch = "x86_64",
+    kernel = kernel(unit = "linux", provides = "linux", ...),
+    packages = ["syslinux"],
+    partitions = [
+        partition(label="rootfs", type="ext4", size="128M", root=True),
+    ],
+)
+```
+
+**Raspberry Pi 4:**
+
+```python
+machine(
+    name = "raspberrypi4",
+    arch = "arm64",
+    kernel = kernel(unit = "linux-rpi4", provides = "linux", ...),
+    packages = ["rpi-firmware", "rpi4-config"],
+    partitions = [
+        partition(label="boot", type="vfat", size="64M", contents=["*"]),
+        partition(label="rootfs", type="ext4", size="256M", root=True),
+    ],
+)
+```
+
+## Go Code Changes
+
+### 1. Starlark `run()` Builtin
+
+New builtin function available during build-time Starlark execution:
+
+```go
+func (e *Engine) fnRun(thread *starlark.Thread, _ *starlark.Builtin,
+    args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+    // Execute command via RunInSandbox or RunInContainer
+    // Return result struct with exit_code and stdout
+    // If check != False, raise error on non-zero exit
+}
+```
+
+`run()` is only available during build execution, not during project evaluation.
+Calling it during eval raises an error.
+
+### 2. Build Executor: Task Dispatch
+
+The executor iterates tasks instead of build step strings. For each task:
+
+- `run` field (string) → execute in container/bwrap (current behavior)
+- `fn` field (callable) → invoke Starlark function in a build-time thread
+  with `run()` available
+
+```go
+for _, task := range unit.Tasks {
+    if task.Fn != nil {
+        // Create build-time Starlark thread with run() available
+        thread := newBuildThread(sandbox)
+        _, err := starlark.Call(thread, task.Fn, nil, nil)
+    } else if task.Run != "" {
+        RunInSandbox(cfg, task.Run)
+    }
+}
+```
+
+### 3. Task and Unit Types
+
+```go
+type Task struct {
+    Name      string
+    Container string           // optional container image override
+    Run       string           // shell command (mutually exclusive with Fn)
+    Fn        starlark.Callable // Starlark function (mutually exclusive with Run)
+}
+
+type Unit struct {
+    // ... existing fields ...
+    Container string   // default container for all tasks
+    Tasks     []Task   // replaces Build for new-style units
+    Build     []string // legacy, converted to Tasks internally
+    Provides  string   // virtual package name (e.g., "linux")
+}
+```
+
+### 4. Machine Type Extensions
+
+```go
+type Machine struct {
+    // ... existing fields ...
+    Packages   []string    // packages added to every image for this machine
+    Partitions []Partition // default partition layout for images
+}
+
+type KernelConfig struct {
+    // ... existing fields ...
+    Provides string // virtual package name (e.g., "linux")
+}
+```
+
+### 5. MACHINE_CONFIG and PROVIDES
+
+Set as predeclared Starlark variables after phase 1 (machine loading):
+
+- `MACHINE_CONFIG` — struct built from the active machine definition
+- `PROVIDES` — dict built from all loaded units' `provides` fields and the
+  machine's `kernel.provides`
+
+### 6. Backward Compatibility
+
+- `build = [...]` internally converted to `tasks = [task("step-N", run=cmd)]`
+- `image()` as a Go-side class continues to work until migrated to Starlark
+- Per-task containers are optional — omitting falls through to default
+
+## Error Handling
+
+When a `run()` call fails inside a Starlark build function:
+
+```
+Error building base-image:
+  task "rootfs" failed:
+  layers/units-core/classes/image.star:24  in assemble_rootfs
+    run("tar xzf $REPO/busybox-*.apk ...") failed: exit code 1
+
+  stderr:
+    tar: busybox-*.apk: No such file or directory
+```
+
+The stack trace points to the `.star` file and line. No generated scripts.
+
+When `check=False` is used, the function handles the error:
+
+```python
+result = run("some-command", check=False)
+if result.exit_code != 0:
+    # handle gracefully
+```
+
+## What This Replaces
+
+- **`internal/image/rootfs.go`** — image assembly moves to
+  `layers/units-core/classes/image.star`
+- **`internal/image/disk.go`** — disk image creation moves to Starlark
+  `create_disk_image()` function using shell commands
+- **Per-image `MACHINE == ...` conditionals** — replaced by `MACHINE_CONFIG`
+  and `PROVIDES`
+- **`docs/superpowers/plans/per-recipe-containers.md`** — superseded by this
+  spec
+
+## Migration Path
+
+1. Implement tasks + `run()` builtin + per-task containers
+2. Add `MACHINE_CONFIG`, `PROVIDES`, machine `packages`/`partitions`
+3. Rewrite `image()` class in Starlark using `run()`
+4. Remove Go image assembly code (`internal/image/`)
+5. Migrate other classes (autotools, cmake) to use tasks if beneficial
+
+Steps 1-3 are the initial implementation. Steps 4-5 are cleanup after
+validation.
+
+## What Doesn't Change
+
+- Starlark evaluation for project/machine/unit resolution (phase 1-2)
+- DAG resolution and topological sort
+- Source fetching and caching
+- APK packaging (run after build tasks complete)
+- Content-addressed build caching
+- TUI and CLI interfaces
