@@ -238,7 +238,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		"LDFLAGS":         "-L/build/sysroot/usr/lib",
 		"LD_LIBRARY_PATH": "/build/sysroot/usr/lib",
 		"PYTHONPATH":      "/build/sysroot/usr/lib/python3.12/site-packages",
-		"REPO":            repo.RepoDir(nil, opts.ProjectDir),
+		"REPO":            filepath.Join("/project", repoRelPath(proj, opts.ProjectDir)),
 	}
 
 	// Execute tasks
@@ -437,4 +437,14 @@ func warnOldLayout(projectDir, arch string, w io.Writer) {
 			return
 		}
 	}
+}
+
+// repoRelPath returns the repo directory path relative to the project root.
+func repoRelPath(proj *yoestar.Project, projectDir string) string {
+	repoDir := repo.RepoDir(proj, projectDir)
+	rel, err := filepath.Rel(projectDir, repoDir)
+	if err != nil {
+		return "repo"
+	}
+	return rel
 }
