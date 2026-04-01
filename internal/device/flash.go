@@ -28,7 +28,7 @@ func Flash(proj *yoestar.Project, unitName, devicePath, projectDir string, dryRu
 	}
 
 	// Find the built image
-	imgPath := findImage(projectDir, machine.Arch, unitName)
+	imgPath := findImage(projectDir, machine.Name, unitName)
 	if imgPath == "" {
 		return fmt.Errorf("no built image found for %q — run yoe build %s first", unitName, unitName)
 	}
@@ -73,19 +73,20 @@ func Flash(proj *yoestar.Project, unitName, devicePath, projectDir string, dryRu
 	return nil
 }
 
-func findImage(projectDir, arch, unitName string) string {
-	outputDir := filepath.Join(projectDir, "build", arch, unitName, "output")
+func findImage(projectDir, scopeDir, unitName string) string {
+	// Search both destdir (Starlark image class) and output (legacy)
+	for _, subdir := range []string{"destdir", "output"} {
+		dir := filepath.Join(projectDir, "build", unitName+"."+scopeDir, subdir)
 
-	// Check for tar.gz first
-	tarPath := filepath.Join(outputDir, unitName+".img.tar.gz")
-	if _, err := os.Stat(tarPath); err == nil {
-		return tarPath
-	}
+		tarPath := filepath.Join(dir, unitName+".img.tar.gz")
+		if _, err := os.Stat(tarPath); err == nil {
+			return tarPath
+		}
 
-	// Check for raw image
-	imgPath := filepath.Join(outputDir, unitName+".img")
-	if _, err := os.Stat(imgPath); err == nil {
-		return imgPath
+		imgPath := filepath.Join(dir, unitName+".img")
+		if _, err := os.Stat(imgPath); err == nil {
+			return imgPath
+		}
 	}
 
 	return ""

@@ -41,7 +41,7 @@ func RunQEMU(proj *yoestar.Project, unitName, machineName, projectDir string, op
 	}
 
 	// Find the built image
-	imgPath := findImage(projectDir, machine.Arch, unitName)
+	imgPath := findImage(projectDir, machine.Name, unitName)
 	if imgPath == "" {
 		return fmt.Errorf("no built image for %q — run yoe build %s first", unitName, unitName)
 	}

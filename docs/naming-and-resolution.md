@@ -78,7 +78,7 @@ unit(name = "zstd", ...)  # silently overwrites the first!
 ```
 
 Currently, if two layers define a unit with the same name, the last one
-evaluated wins silently. The DAG, build cache (`build/<arch>/<unit>/`), and APK
+evaluated wins silently. The DAG, build cache (`build/<unit>.<scope>/`), and APK
 repo all key on the unit name, so a collision produces incorrect builds with no
 error.
 
@@ -192,7 +192,7 @@ silently overwrites the first. No error, no warning.
 
 **Current leaning:** Option (b) — namespace by layer, use `provides` for the
 short name. This makes provenance clear in the build dir
-(`build/x86_64/units-core/zstd/`) and in logs, and forces explicit resolution
+(`build/units-core/zstd.x86_64/`) and in logs, and forces explicit resolution
 when two layers provide the same capability.
 
 ### 2. PROVIDES collision detection
@@ -228,10 +228,10 @@ only requires intervention when there's an actual conflict.
 
 ### 4. Build directory layout with namespaced units
 
-**Current:** `build/<arch>/<unit>/` (e.g., `build/x86_64/zstd/`)
+**Current:** `build/<unit>.<scope>/` (e.g., `build/zstd.x86_64/`)
 
-**With namespacing:** `build/<arch>/<layer>/<unit>/` (e.g.,
-`build/x86_64/units-core/zstd/`)
+**With namespacing:** `build/<layer>/<unit>.<scope>/` (e.g.,
+`build/units-core/zstd.x86_64/`)
 
 This is a breaking change for existing build caches. Requires `yoe clean --all`.
 
