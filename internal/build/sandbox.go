@@ -23,6 +23,7 @@ type SandboxConfig struct {
 	Sysroot    string
 	Env        map[string]string
 	ProjectDir string
+	NoUser     bool      // run as root (for losetup/mount)
 	Stdout     io.Writer // build output (nil = os.Stdout)
 	Stderr     io.Writer // build errors (nil = os.Stderr)
 }
@@ -71,6 +72,7 @@ func RunSimple(cfg *SandboxConfig, command string) error {
 		Command:    fullCmd,
 		ProjectDir: cfg.ProjectDir,
 		Mounts:     mounts,
+		NoUser:     cfg.NoUser,
 		Stdout:     cfg.Stdout,
 		Stderr:     cfg.Stderr,
 	})

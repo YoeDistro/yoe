@@ -44,8 +44,11 @@ func (RealExecer) Run(ctx context.Context, cfg *SandboxConfig, command string, p
 
 	var err error
 	if privileged {
-		// Run directly in container without bwrap (for losetup, mount, etc.)
+		// Run directly in container without bwrap and as root
+		// (for losetup, mount, extlinux, etc.)
+		cfg.NoUser = true
 		err = RunSimple(cfg, command)
+		cfg.NoUser = false
 	} else {
 		err = RunInSandbox(cfg, command)
 	}
