@@ -8,6 +8,19 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Tasks replace build steps** — `build = [...]` replaced by `tasks = [...]`
+  with named build phases. Each task has `run` (shell string), `fn` (Starlark
+  function), or `steps` (mixed list). Classes (autotools, cmake, go) are now
+  pure Starlark.
+- **`run()` builtin** — Starlark functions can execute shell commands directly
+  during builds. Errors show `.star` file and line number, not generated shell.
+- **Machine-portable images** — images no longer hard-code machine-specific
+  packages or partitions. `MACHINE_CONFIG` and `PROVIDES` inject machine
+  hardware specifics automatically. `base-image` works across QEMU x86, QEMU
+  arm64, and Raspberry Pi without changes.
+- **Image assembly in Starlark** — disk image creation moved from Go to
+  `classes/image.star` using `run()`. Fully readable, customizable, forkable.
+
 ## [0.4.0] - 2026-03-31
 
 **ARM BUILDS ON X86 NOW WORK**

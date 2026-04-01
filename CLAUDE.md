@@ -140,6 +140,12 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
   something fails, the user should be looking at the code they wrote, not
   machine-generated output. Prefer direct execution over code generation.
 
+- **Tasks, not build step lists** — units define `tasks = [task(...)]` with
+  named phases. Steps are shell strings or Starlark callables. `run()` executes
+  commands during build with full error traces to `.star` source lines.
+- **Machine-portable images** — images list abstract requirements ("linux",
+  "base-files"). Machines provide concrete implementations via `provides` and
+  inject hardware-specific packages/partitions via `MACHINE_CONFIG`.
 - **No backward compatibility concerns.** The project is pre-1.0. Do not add
   compatibility shims, legacy conversion paths, or deprecated-but-still-working
   code. When a design changes, update everything to the new design and delete
