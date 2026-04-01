@@ -1,7 +1,6 @@
 # Raspberry Pi BSP Layer (units-rpi)
 
-**Date:** 2026-03-31
-**Status:** Draft
+**Date:** 2026-03-31 **Status:** Draft
 
 ## Problem
 
@@ -12,8 +11,8 @@ a BSP layer enables building bootable SD card images for real hardware.
 ## Solution
 
 A new `units-rpi` layer providing machine definitions, a Raspberry Pi kernel
-fork, GPU firmware, boot configuration, and a bootable image definition for
-RPi 4 and RPi 5.
+fork, GPU firmware, boot configuration, and a bootable image definition for RPi
+4 and RPi 5.
 
 ## Design Decisions
 
@@ -66,6 +65,7 @@ Raspberry Pi 4 kernel from the RPi foundation fork.
   `$DESTDIR/boot/`
 
 Build steps:
+
 ```sh
 make ARCH=arm64 bcm2711_defconfig
 make ARCH=arm64 -j$NPROC Image dtbs
@@ -88,6 +88,7 @@ Raspberry Pi 5 kernel from the RPi foundation fork.
   `$DESTDIR/boot/`
 
 Build steps:
+
 ```sh
 make ARCH=arm64 bcm2712_defconfig
 make ARCH=arm64 -j$NPROC Image dtbs
@@ -106,6 +107,7 @@ FAT32 boot partition before the ARM core starts.
 - **Install:** all firmware files to `$DESTDIR/boot/`
 
 Build steps (no compilation — just install prebuilt blobs):
+
 ```sh
 install -D boot/start4.elf $DESTDIR/boot/start4.elf
 install -D boot/start4x.elf $DESTDIR/boot/start4x.elf
@@ -122,6 +124,7 @@ No source — a shell script that writes the files based on board type. The
 config to generate.
 
 **config.txt** (RPi 4 example):
+
 ```
 # RPi 4 boot config
 arm_64bit=1
@@ -131,6 +134,7 @@ kernel=kernel8.img
 ```
 
 **config.txt** (RPi 5 example):
+
 ```
 # RPi 5 boot config
 arm_64bit=1
@@ -140,9 +144,11 @@ kernel=kernel_2712.img
 ```
 
 **cmdline.txt:**
+
 ```
 console=ttyS0,115200 root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw
 ```
+
 (RPi 5 uses `ttyAMA10` instead of `ttyS0`)
 
 Since `rpi-config` needs to know which board it targets, and both RPi 4 and 5
