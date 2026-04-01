@@ -62,10 +62,13 @@ def _create_disk_image(name, partitions):
     run("dd if=/dev/zero of=%s bs=1M count=0 seek=%d" % (img, total_mb))
 
     sfdisk_lines = "label: dos\\n"
-    for p in partitions:
+    for i, p in enumerate(partitions):
         size_mb = _parse_size_mb(p.size)
         ptype = "c" if p.type == "vfat" else "83"
-        sfdisk_lines += "- %dM %s\\n" % (size_mb, ptype)
+        # Only specify size for non-last partitions; last gets remaining space
+        size_spec = "size=%dMiB, " % size_mb if i < len(partitions) - 1 else ""
+        bootable = ", bootable" if p.root else ""
+        sfdisk_lines += "%stype=%s%s\\n" % (size_spec, ptype, bootable)
 
     run("printf '%s' | sfdisk %s" % (sfdisk_lines, img))
 
