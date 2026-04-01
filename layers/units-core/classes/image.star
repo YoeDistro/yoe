@@ -83,7 +83,8 @@ def _create_disk_image(name, partitions):
             # Copy boot files from rootfs
             run("mcopy -sQi %s $DESTDIR/rootfs/boot/* ::/ 2>/dev/null || true" % part_img)
         elif p.type == "ext4":
-            run("mkfs.ext4 -d $DESTDIR/rootfs -L %s %s %dM" % (p.label, part_img, size_mb))
+            # Disable ext4 features that syslinux 6.03 can't read
+            run("mkfs.ext4 -O ^64bit,^metadata_csum,^extent -d $DESTDIR/rootfs -L %s %s %dM" % (p.label, part_img, size_mb))
 
         run("dd if=%s of=%s bs=1M seek=%d conv=notrunc" % (part_img, img, offset))
         run("rm -f %s" % part_img)
