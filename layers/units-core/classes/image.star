@@ -86,6 +86,26 @@ def _create_disk_image(name, partitions):
         run("rm -f %s" % part_img)
         offset += size_mb
 
+    # Install bootloader (x86 syslinux)
+    if ARCH == "x86_64":
+        _install_syslinux(img)
+
+def _install_syslinux(img):
+    """Install syslinux MBR boot code and extlinux on an x86 disk image."""
+    # Write MBR boot code (first 440 bytes of mbr.bin)
+    run("dd if=$DESTDIR/rootfs/usr/share/syslinux/mbr.bin of=%s bs=440 count=1 conv=notrunc" % img)
+
+    # Run extlinux --install via losetup + mount
+    run("""
+set -e
+LOOP=$(losetup --show -fP %s)
+trap 'umount /mnt/extlinux 2>/dev/null; losetup -d $LOOP 2>/dev/null' EXIT
+mkdir -p /mnt/extlinux
+# Mount the first partition (offset 1MiB)
+mount -t ext4 ${LOOP}p1 /mnt/extlinux
+extlinux --install /mnt/extlinux/boot/extlinux
+""" % img)
+
 def _parse_size_mb(size_str):
     s = str(size_str)
     if s.endswith("M"):
