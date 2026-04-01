@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/YoeDistro/yoe-ng/internal/artifact"
-	"github.com/YoeDistro/yoe-ng/internal/image"
 	"github.com/YoeDistro/yoe-ng/internal/repo"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
 	"github.com/YoeDistro/yoe-ng/internal/source"
@@ -194,18 +193,6 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		logW = logFile
 	}
 
-	// Image units go through a different path — assemble rootfs
-	if unit.Class == "image" {
-		outputDir := filepath.Join(buildDir, "output")
-		if err := image.Assemble(unit, proj, opts.ProjectDir, outputDir, opts.Arch, opts.Machine, logW); err != nil {
-			if !opts.Verbose {
-				fmt.Fprintf(w, "  build log: %s\n", logPath)
-			}
-			return err
-		}
-		return nil
-	}
-
 	srcDir := filepath.Join(buildDir, "src")
 	destDir := filepath.Join(buildDir, "destdir")
 
@@ -251,6 +238,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		"LDFLAGS":         "-L/build/sysroot/usr/lib",
 		"LD_LIBRARY_PATH": "/build/sysroot/usr/lib",
 		"PYTHONPATH":      "/build/sysroot/usr/lib/python3.12/site-packages",
+		"REPO":            repo.RepoDir(nil, opts.ProjectDir),
 	}
 
 	// Execute tasks

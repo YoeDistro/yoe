@@ -28,6 +28,7 @@ func (e *Engine) builtins() starlark.StringDict {
 		"task":        starlark.NewBuiltin("task", fnTask),
 		"command":     starlark.NewBuiltin("command", e.fnCommand),
 		"arg":         starlark.NewBuiltin("arg", fnArg),
+		"run":         starlark.NewBuiltin("run", fnRunPlaceholder),
 		"True":        starlark.True,
 		"False":       starlark.False,
 	}
@@ -38,6 +39,25 @@ func (e *Engine) builtins() starlark.StringDict {
 	}
 
 	return d
+}
+
+// fnRunPlaceholder is registered as a global so that lambda closures can
+// capture the name "run" at evaluation time.  When called from a build
+// thread (with sandbox config in thread-local storage) it delegates to the
+// real implementation in the build package.  When called outside a build
+// thread it returns an error.
+func fnRunPlaceholder(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	// Check if we're in a build thread by looking for the sandbox key.
+	if thread.Local("yoe.sandbox") != nil {
+		// Delegate to the real run() registered via BuildPredeclared.
+		// The build package sets "yoe.run" on the thread.
+		if fn := thread.Local("yoe.run"); fn != nil {
+			if callable, ok := fn.(starlark.Callable); ok {
+				return starlark.Call(thread, callable, args, kwargs)
+			}
+		}
+	}
+	return nil, fmt.Errorf("run() can only be called at build time (inside a task function)")
 }
 
 // --- Helper: extract keyword args ---

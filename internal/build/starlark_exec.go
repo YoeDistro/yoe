@@ -44,6 +44,8 @@ func NewBuildThread(ctx context.Context, cfg *SandboxConfig, execer Execer) *sta
 	t.SetLocal(sandboxKey, cfg)
 	t.SetLocal(execerKey, execer)
 	t.SetLocal(contextKey, ctx)
+	// Store the real run() function so the global placeholder can delegate.
+	t.SetLocal("yoe.run", starlark.NewBuiltin("run", fnRun))
 	return t
 }
 
