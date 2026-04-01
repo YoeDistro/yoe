@@ -8,12 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/YoeDistro/yoe-ng/internal/image"
 	"github.com/YoeDistro/yoe-ng/internal/artifact"
+	"github.com/YoeDistro/yoe-ng/internal/image"
 	"github.com/YoeDistro/yoe-ng/internal/repo"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
 	"github.com/YoeDistro/yoe-ng/internal/source"
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
+	"go.starlark.net/starlark"
 )
 
 // Options controls build behavior.
@@ -279,6 +280,26 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 						fmt.Fprintf(w, "  build log: %s\n", logPath)
 					}
 					return err
+				}
+			} else if step.Fn != nil {
+				fmt.Fprintf(logW, "    [%d/%d] fn: %s\n", i+1, len(t.Steps), step.Fn.Name())
+				cfg := &SandboxConfig{
+					Ctx:        ctx,
+					Arch:       opts.Arch,
+					SrcDir:     srcDir,
+					DestDir:    destDir,
+					Sysroot:    sysroot,
+					Env:        env,
+					ProjectDir: opts.ProjectDir,
+					Stdout:     logW,
+					Stderr:     logW,
+				}
+				thread := NewBuildThread(ctx, cfg, RealExecer{})
+				if _, err := starlark.Call(thread, step.Fn, nil, nil); err != nil {
+					if !opts.Verbose {
+						fmt.Fprintf(w, "  build log: %s\n", logPath)
+					}
+					return fmt.Errorf("task %s: %w", t.Name, err)
 				}
 			}
 		}
