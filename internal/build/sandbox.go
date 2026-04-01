@@ -253,6 +253,8 @@ func Arch() string {
 }
 
 // UnitBuildDir returns the build directory for a unit.
-func UnitBuildDir(projectDir, arch, unitName string) string {
-	return filepath.Join(projectDir, "build", arch, unitName)
+// The scopeDir is "noarch", an architecture name, or a machine name,
+// determined by the unit's scope field.
+func UnitBuildDir(projectDir, scopeDir, unitName string) string {
+	return filepath.Join(projectDir, "build", scopeDir, unitName)
 }

@@ -124,7 +124,7 @@ func Run(proj *yoestar.Project, projectDir string) error {
 	if m, ok := proj.Machines[proj.Defaults.Machine]; ok {
 		arch = m.Arch
 	}
-	hashes, err := resolve.ComputeAllHashes(dag, arch)
+	hashes, err := resolve.ComputeAllHashes(dag, arch, proj.Defaults.Machine)
 	if err != nil {
 		return fmt.Errorf("computing hashes: %w", err)
 	}
@@ -133,11 +133,15 @@ func Run(proj *yoestar.Project, projectDir string) error {
 	statuses := make(map[string]unitStatus, len(units))
 	for _, name := range units {
 		hash := hashes[name]
-		if build.IsBuildCached(projectDir, arch, name, hash) {
+		sd := arch
+		if u, ok := proj.Units[name]; ok {
+			sd = build.ScopeDir(u, arch, proj.Defaults.Machine)
+		}
+		if build.IsBuildCached(projectDir, sd, name, hash) {
 			statuses[name] = statusCached
-		} else if build.IsBuildInProgress(projectDir, arch, name) {
+		} else if build.IsBuildInProgress(projectDir, sd, name) {
 			statuses[name] = statusBuilding
-		} else if build.HasBuildLog(projectDir, arch, name) {
+		} else if build.HasBuildLog(projectDir, sd, name) {
 			statuses[name] = statusFailed
 		}
 	}
@@ -1055,10 +1059,15 @@ func (m *model) startBuild(name string) tea.Cmd {
 	proj := m.proj
 	projectDir := m.projectDir
 	arch := m.arch
+	machine := m.proj.Defaults.Machine
 	unitName := name
 
 	// Write executor output to a log file so detail view can tail it
-	outputPath := filepath.Join(build.UnitBuildDir(projectDir, arch, unitName), ".output.log")
+	sd := arch
+	if u, ok := m.proj.Units[name]; ok {
+		sd = build.ScopeDir(u, arch, machine)
+	}
+	outputPath := filepath.Join(build.UnitBuildDir(projectDir, sd, unitName), ".output.log")
 	build.EnsureDir(filepath.Dir(outputPath))
 
 	return func() tea.Msg {
@@ -1082,6 +1091,7 @@ func (m *model) startBuild(name string) tea.Cmd {
 			Force:      true,
 			ProjectDir: projectDir,
 			Arch:       arch,
+			Machine:    machine,
 			OnEvent: func(ev build.BuildEvent) {
 				if tuiProgram != nil {
 					tuiProgram.Send(buildEventMsg{
@@ -1191,7 +1201,7 @@ func (m *model) adjustListOffset() {
 // recomputeStatuses recomputes hashes and cache statuses for the current arch.
 // Called when the machine (and thus arch) changes.
 func (m *model) recomputeStatuses() {
-	hashes, err := resolve.ComputeAllHashes(m.dag, m.arch)
+	hashes, err := resolve.ComputeAllHashes(m.dag, m.arch, m.proj.Defaults.Machine)
 	if err != nil {
 		return
 	}
@@ -1201,11 +1211,15 @@ func (m *model) recomputeStatuses() {
 			continue // don't override in-progress builds
 		}
 		hash := hashes[name]
-		if build.IsBuildCached(m.projectDir, m.arch, name, hash) {
+		sd := m.arch
+		if u, ok := m.proj.Units[name]; ok {
+			sd = build.ScopeDir(u, m.arch, m.proj.Defaults.Machine)
+		}
+		if build.IsBuildCached(m.projectDir, sd, name, hash) {
 			m.statuses[name] = statusCached
-		} else if build.IsBuildInProgress(m.projectDir, m.arch, name) {
+		} else if build.IsBuildInProgress(m.projectDir, sd, name) {
 			m.statuses[name] = statusBuilding
-		} else if build.HasBuildLog(m.projectDir, m.arch, name) {
+		} else if build.HasBuildLog(m.projectDir, sd, name) {
 			m.statuses[name] = statusFailed
 		} else {
 			m.statuses[name] = statusNone

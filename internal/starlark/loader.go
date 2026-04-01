@@ -162,6 +162,14 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	}
 	eng.SetVar("ARCH", starlark.String(arch))
 
+	// Set MACHINE variable so image definitions can conditionally include
+	// board-specific units (e.g., different kernels per RPi board).
+	machine := ""
+	if proj := eng.Project(); proj != nil {
+		machine = proj.Defaults.Machine
+	}
+	eng.SetVar("MACHINE", starlark.String(machine))
+
 	// Phase 2: Evaluate units and images (project + layers).
 	if err := evalDir(eng, root, "units"); err != nil {
 		return nil, err

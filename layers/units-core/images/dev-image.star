@@ -12,6 +12,7 @@ base_files(
 image(
     name = "dev-image",
     version = "1.0.0",
+    scope = "machine",
     description = "Development image with networking, SSH, and debug tools",
     artifacts = [
         # Base

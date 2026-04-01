@@ -98,6 +98,7 @@ type Unit struct {
 	Name        string
 	Version     string
 	Class       string // "unit", "autotools", "cmake", "go", "image", etc.
+	Scope       string // "arch" (default), "machine", or "noarch"
 	Description string
 	License     string
 

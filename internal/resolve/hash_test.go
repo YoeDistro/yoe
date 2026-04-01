@@ -73,7 +73,7 @@ func TestComputeAllHashes(t *testing.T) {
 		t.Fatalf("BuildDAG: %v", err)
 	}
 
-	hashes, err := ComputeAllHashes(dag, "arm64")
+	hashes, err := ComputeAllHashes(dag, "arm64", "")
 	if err != nil {
 		t.Fatalf("ComputeAllHashes: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestComputeAllHashes(t *testing.T) {
 	// Changing zlib should cascade
 	proj.Units["zlib"].Version = "1.4"
 	dag2, _ := BuildDAG(proj)
-	hashes2, _ := ComputeAllHashes(dag2, "arm64")
+	hashes2, _ := ComputeAllHashes(dag2, "arm64", "")
 
 	if hashes["zlib"] == hashes2["zlib"] {
 		t.Error("zlib hash should change after version bump")

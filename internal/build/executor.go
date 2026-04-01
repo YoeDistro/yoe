@@ -32,7 +32,21 @@ type Options struct {
 	Verbose    bool   // show build output in console (default: log only)
 	ProjectDir string // project root
 	Arch       string // target architecture
+	Machine    string // target machine name
 	OnEvent    func(BuildEvent) // optional callback for build progress
+}
+
+// ScopeDir returns the build subdirectory for a unit based on its scope.
+// "machine" → machine name, "noarch" → "noarch", default → arch.
+func ScopeDir(unit *yoestar.Unit, arch, machine string) string {
+	switch unit.Scope {
+	case "machine":
+		return machine
+	case "noarch":
+		return "noarch"
+	default:
+		return arch
+	}
 }
 
 // BuildUnits builds the specified units (or all if names is empty).
@@ -52,7 +66,7 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 	}
 
 	// Compute hashes for cache
-	hashes, err := resolve.ComputeAllHashes(dag, opts.Arch)
+	hashes, err := resolve.ComputeAllHashes(dag, opts.Arch, opts.Machine)
 	if err != nil {
 		return err
 	}
@@ -83,8 +97,9 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 	// can show the full build queue before any work starts.
 	for _, name := range order {
 		hash := hashes[name]
+		sd := ScopeDir(proj.Units[name], opts.Arch, opts.Machine)
 		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
-		if !forceThis && !opts.NoCache && IsBuildCached(opts.ProjectDir, opts.Arch, name, hash) {
+		if !forceThis && !opts.NoCache && IsBuildCached(opts.ProjectDir, sd, name, hash) {
 			notify(name, "cached")
 		} else {
 			notify(name, "waiting")
@@ -104,13 +119,14 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 
 		unit := proj.Units[name]
 		hash := hashes[name]
+		sd := ScopeDir(unit, opts.Arch, opts.Machine)
 
 		// --force/--clean only apply to explicitly requested units;
 		// dependencies still use the cache.
 		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
 
 		if !forceThis && !opts.NoCache {
-			if IsBuildCached(opts.ProjectDir, opts.Arch, name, hash) {
+			if IsBuildCached(opts.ProjectDir, sd, name, hash) {
 				fmt.Fprintf(w, "%-20s [cached] %s\n", name, hash[:12])
 				continue
 			}
@@ -133,7 +149,7 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		}
 
 		// Write cache marker
-		writeCacheMarker(opts.ProjectDir, opts.Arch, name, hash)
+		writeCacheMarker(opts.ProjectDir, sd, name, hash)
 		fmt.Fprintf(w, "%-20s [done] %s\n", name, hash[:12])
 		notify(name, "done")
 	}
@@ -142,21 +158,22 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 }
 
 func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit *yoestar.Unit, hash string, opts Options, w io.Writer) error {
-	buildDir := UnitBuildDir(opts.ProjectDir, opts.Arch, unit.Name)
+	sd := ScopeDir(unit, opts.Arch, opts.Machine)
+	buildDir := UnitBuildDir(opts.ProjectDir, sd, unit.Name)
 	EnsureDir(buildDir)
 
 	// Skip if another process is already building this unit.
-	if IsBuildInProgress(opts.ProjectDir, opts.Arch, unit.Name) {
+	if IsBuildInProgress(opts.ProjectDir, sd, unit.Name) {
 		fmt.Fprintf(w, "  %s: build already in progress, skipping\n", unit.Name)
 		return nil
 	}
 
 	// Remove the cache marker before starting so a cancelled or failed
 	// build does not leave a stale marker that makes it appear cached.
-	os.Remove(CacheMarkerPath(opts.ProjectDir, opts.Arch, unit.Name, hash))
+	os.Remove(CacheMarkerPath(opts.ProjectDir, sd, unit.Name, hash))
 
 	// Write a lock file so other yoe instances can detect an in-progress build.
-	lockPath := BuildingLockPath(opts.ProjectDir, opts.Arch, unit.Name)
+	lockPath := BuildingLockPath(opts.ProjectDir, sd, unit.Name)
 	os.WriteFile(lockPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0644)
 	defer os.Remove(lockPath)
 
@@ -179,7 +196,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	// Image units go through a different path — assemble rootfs
 	if unit.Class == "image" {
 		outputDir := filepath.Join(buildDir, "output")
-		if err := image.Assemble(unit, proj, opts.ProjectDir, outputDir, opts.Arch, logW); err != nil {
+		if err := image.Assemble(unit, proj, opts.ProjectDir, outputDir, opts.Arch, opts.Machine, logW); err != nil {
 			if !opts.Verbose {
 				fmt.Fprintf(w, "  build log: %s\n", logPath)
 			}
@@ -265,14 +282,14 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 
 	// Package the output into an .apk and publish to the local repo
 	if unit.Class != "image" {
-		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), opts.Arch)
+		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), sd)
 		if err != nil {
 			return fmt.Errorf("creating apk: %w", err)
 		}
 		fmt.Fprintf(w, "  → %s\n", filepath.Base(apkPath))
 
-		repoDir := repo.RepoDir(nil, opts.ProjectDir, opts.Arch)
-		if err := repo.Publish(apkPath, repoDir, opts.Arch); err != nil {
+		repoDir := repo.RepoDir(nil, opts.ProjectDir, sd)
+		if err := repo.Publish(apkPath, repoDir, sd); err != nil {
 			return fmt.Errorf("publishing to repo: %w", err)
 		}
 
@@ -385,9 +402,10 @@ func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[strin
 	fmt.Fprintln(w, "Dry run — would build in this order:")
 	for _, name := range order {
 		unit := proj.Units[name]
+		sd := ScopeDir(unit, opts.Arch, opts.Machine)
 		cached := ""
 		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
-		if !forceThis && IsBuildCached(opts.ProjectDir, opts.Arch, name, hashes[name]) {
+		if !forceThis && IsBuildCached(opts.ProjectDir, sd, name, hashes[name]) {
 			cached = " [cached, skip]"
 		}
 		fmt.Fprintf(w, "  %-20s [%s] %s%s\n", name, unit.Class, hashes[name][:12], cached)

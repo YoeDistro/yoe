@@ -1,6 +1,7 @@
 image(
     name = "base-image",
     version = "1.0.0",
+    scope = "machine",
     description = "Minimal bootable Yoe-NG system",
     artifacts = [
         "base-files",

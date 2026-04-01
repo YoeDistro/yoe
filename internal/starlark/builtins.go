@@ -353,6 +353,7 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 		Name:          name,
 		Version:       kwString(kwargs, "version"),
 		Class:         class,
+		Scope:         kwString(kwargs, "scope"),
 		Description:   kwString(kwargs, "description"),
 		License:       kwString(kwargs, "license"),
 		Source:        kwString(kwargs, "source"),

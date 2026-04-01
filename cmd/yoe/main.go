@@ -211,6 +211,10 @@ func cmdBuild(args []string) {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+	resolvedMachine := machineName
+	if resolvedMachine == "" {
+		resolvedMachine = proj.Defaults.Machine
+	}
 	opts := build.Options{
 		Ctx:        ctx,
 		Force:      force,
@@ -220,6 +224,7 @@ func cmdBuild(args []string) {
 		Verbose:    verbose,
 		ProjectDir: projectDir(),
 		Arch:       targetArch,
+		Machine:    resolvedMachine,
 	}
 
 	if err := build.BuildUnits(proj, units, opts, os.Stdout); err != nil {

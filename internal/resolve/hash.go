@@ -64,7 +64,7 @@ func UnitHash(unit *yoestar.Unit, arch string, depHashes map[string]string) stri
 
 // ComputeAllHashes computes hashes for all units in build order.
 // Returns a map of unit name -> hash.
-func ComputeAllHashes(dag *DAG, arch string) (map[string]string, error) {
+func ComputeAllHashes(dag *DAG, arch, machine string) (map[string]string, error) {
 	order, err := dag.TopologicalSort()
 	if err != nil {
 		return nil, err
@@ -73,7 +73,13 @@ func ComputeAllHashes(dag *DAG, arch string) (map[string]string, error) {
 	hashes := make(map[string]string, len(order))
 	for _, name := range order {
 		node := dag.Nodes[name]
-		hashes[name] = UnitHash(node.Unit, arch, hashes)
+		unitArch := arch
+		// Machine-scoped units include the machine name in the hash
+		// so the same unit built for different machines caches separately.
+		if node.Unit.Scope == "machine" {
+			unitArch = arch + ":" + machine
+		}
+		hashes[name] = UnitHash(node.Unit, unitArch, hashes)
 	}
 
 	return hashes, nil
