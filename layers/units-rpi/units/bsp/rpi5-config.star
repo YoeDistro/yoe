@@ -4,8 +4,9 @@ unit(
     scope = "machine",
     license = "MIT",
     description = "Raspberry Pi 5 boot configuration (config.txt, cmdline.txt)",
-    build = [
-        """
+    tasks = [
+        task("build", steps=[
+            """
 mkdir -p $DESTDIR/boot
 cat > $DESTDIR/boot/config.txt << 'EOF'
 # Raspberry Pi 5 boot configuration
@@ -17,10 +18,11 @@ dtoverlay=vc4-kms-v3d-pi5
 disable_splash=1
 EOF
 """,
-        """
+            """
 cat > $DESTDIR/boot/cmdline.txt << 'EOF'
 console=ttyAMA10,115200 root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw
 EOF
 """,
+        ]),
     ],
 )

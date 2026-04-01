@@ -5,10 +5,11 @@ unit(
     tag = "v6.6.87",
     license = "GPL-2.0",
     description = "Linux kernel",
-    build = [
-        # Use arch-appropriate defconfig and kernel image target.
-        # ARCH is set by the build system (x86_64, arm64, riscv64).
-        """
+    tasks = [
+        task("build", steps=[
+            # Use arch-appropriate defconfig and kernel image target.
+            # ARCH is set by the build system (x86_64, arm64, riscv64).
+            """
 case $ARCH in
     x86_64)  KARCH=x86_64; DEFCONFIG=x86_64_defconfig; TARGET=bzImage; IMAGE=arch/x86/boot/bzImage ;;
     arm64)   KARCH=arm64;   DEFCONFIG=defconfig;         TARGET=Image;   IMAGE=arch/arm64/boot/Image ;;
@@ -17,7 +18,7 @@ case $ARCH in
 esac
 make ARCH=$KARCH $DEFCONFIG
 """,
-        """
+            """
 case $ARCH in
     x86_64)  KARCH=x86_64; TARGET=bzImage; IMAGE=arch/x86/boot/bzImage ;;
     arm64)   KARCH=arm64;   TARGET=Image;   IMAGE=arch/arm64/boot/Image ;;
@@ -25,7 +26,7 @@ case $ARCH in
 esac
 make ARCH=$KARCH -j$NPROC $TARGET
 """,
-        """
+            """
 case $ARCH in
     x86_64)  IMAGE=arch/x86/boot/bzImage ;;
     arm64)   IMAGE=arch/arm64/boot/Image ;;
@@ -33,5 +34,6 @@ case $ARCH in
 esac
 install -D $IMAGE $DESTDIR/boot/vmlinuz
 """,
+        ]),
     ],
 )

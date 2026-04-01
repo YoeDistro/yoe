@@ -13,43 +13,45 @@ autotools(
     description = "essential system utilities for mounting, partitioning, and device management",
     deps = ["ncurses", "zlib"],
     runtime_deps = ["ncurses", "zlib"],
-    build = [
-        "test -f configure || autoreconf -fi",
-        "CONFIG_SHELL=bash bash ./configure --prefix=$PREFIX " +
-        "--disable-all-programs " +
-        "--enable-mount " +
-        "--enable-losetup " +
-        "--enable-fsck " +
-        "--enable-lsblk " +
-        "--enable-sfdisk " +
-        "--enable-findmnt " +
-        "--enable-wipefs " +
-        "--enable-flock " +
-        "--enable-dmesg " +
-        "--enable-agetty " +
-        "--enable-switch_root " +
-        "--enable-hwclock " +
-        "--disable-hwclock-gplv3 " +
-        "--enable-nsenter " +
-        "--enable-unshare " +
-        "--enable-logger " +
-        "--enable-libblkid " +
-        "--enable-libfdisk " +
-        "--enable-libmount " +
-        "--enable-libsmartcols " +
-        "--enable-libuuid " +
-        "--disable-nls " +
-        "--disable-asciidoc " +
-        "--disable-poman " +
-        "--disable-makeinstall-chown " +
-        "--without-python " +
-        "--without-systemd " +
-        "--without-udev " +
-        "--without-selinux " +
-        "--without-audit " +
-        "--without-readline " +
-        "--without-econf",
-        "make -j$NPROC",
-        "make DESTDIR=$DESTDIR install",
+    tasks = [
+        task("build", steps=[
+            "test -f configure || autoreconf -fi",
+            "CONFIG_SHELL=bash bash ./configure --prefix=$PREFIX " +
+            "--disable-all-programs " +
+            "--enable-mount " +
+            "--enable-losetup " +
+            "--enable-fsck " +
+            "--enable-lsblk " +
+            "--enable-sfdisk " +
+            "--enable-findmnt " +
+            "--enable-wipefs " +
+            "--enable-flock " +
+            "--enable-dmesg " +
+            "--enable-agetty " +
+            "--enable-switch_root " +
+            "--enable-hwclock " +
+            "--disable-hwclock-gplv3 " +
+            "--enable-nsenter " +
+            "--enable-unshare " +
+            "--enable-logger " +
+            "--enable-libblkid " +
+            "--enable-libfdisk " +
+            "--enable-libmount " +
+            "--enable-libsmartcols " +
+            "--enable-libuuid " +
+            "--disable-nls " +
+            "--disable-asciidoc " +
+            "--disable-poman " +
+            "--disable-makeinstall-chown " +
+            "--without-python " +
+            "--without-systemd " +
+            "--without-udev " +
+            "--without-selinux " +
+            "--without-audit " +
+            "--without-readline " +
+            "--without-econf",
+            "make -j$NPROC",
+            "make DESTDIR=$DESTDIR install",
+        ]),
     ],
 )

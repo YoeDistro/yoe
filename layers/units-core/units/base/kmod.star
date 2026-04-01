@@ -7,9 +7,11 @@ unit(
     description = "tools for managing Linux kernel modules",
     deps = ["meson", "zlib", "openssl", "xz"],
     runtime_deps = ["zlib", "openssl", "xz"],
-    build = [
-        "meson setup build --prefix=$PREFIX -Dzstd=disabled -Dmanpages=false -Ddocs=false -Dbashcompletiondir=no -Dfishcompletiondir=no -Dzshcompletiondir=no",
-        "ninja -C build -j$NPROC",
-        "DESTDIR=$DESTDIR ninja -C build install",
+    tasks = [
+        task("build", steps=[
+            "meson setup build --prefix=$PREFIX -Dzstd=disabled -Dmanpages=false -Ddocs=false -Dbashcompletiondir=no -Dfishcompletiondir=no -Dzshcompletiondir=no",
+            "ninja -C build -j$NPROC",
+            "DESTDIR=$DESTDIR ninja -C build install",
+        ]),
     ],
 )

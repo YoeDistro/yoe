@@ -5,9 +5,11 @@ unit(
     tag = "1.2",
     license = "ISC AND Apache-2.0 AND MIT",
     description = "ninja-compatible build tool written in C",
-    build = [
-        "make -j$NPROC PREFIX=$PREFIX",
-        "make PREFIX=$PREFIX DESTDIR=$DESTDIR install",
-        "ln -s samu $DESTDIR$PREFIX/bin/ninja",
+    tasks = [
+        task("build", steps=[
+            "make -j$NPROC PREFIX=$PREFIX",
+            "make PREFIX=$PREFIX DESTDIR=$DESTDIR install",
+            "ln -s samu $DESTDIR$PREFIX/bin/ninja",
+        ]),
     ],
 )

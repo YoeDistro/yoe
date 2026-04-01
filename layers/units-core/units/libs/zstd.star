@@ -5,9 +5,11 @@ unit(
     tag = "v1.5.7",
     license = "BSD-3-Clause",
     description = "Zstandard fast real-time compression algorithm",
-    build = [
-        "cmake -B build -S build/cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -DZSTD_BUILD_PROGRAMS=OFF -DZSTD_BUILD_TESTS=OFF",
-        "cmake --build build -j$NPROC",
-        "DESTDIR=$DESTDIR cmake --install build",
+    tasks = [
+        task("build", steps=[
+            "cmake -B build -S build/cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -DZSTD_BUILD_PROGRAMS=OFF -DZSTD_BUILD_TESTS=OFF",
+            "cmake --build build -j$NPROC",
+            "DESTDIR=$DESTDIR cmake --install build",
+        ]),
     ],
 )

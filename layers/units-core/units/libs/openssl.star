@@ -7,9 +7,11 @@ unit(
     description = "TLS/SSL and crypto library",
     deps = ["zlib"],
     runtime_deps = ["zlib"],
-    build = [
-        "./Configure --prefix=$PREFIX --libdir=lib --openssldir=/etc/ssl shared zlib",
-        "make -j$NPROC",
-        "make DESTDIR=$DESTDIR install_sw install_ssldirs",
+    tasks = [
+        task("build", steps=[
+            "./Configure --prefix=$PREFIX --libdir=lib --openssldir=/etc/ssl shared zlib",
+            "make -j$NPROC",
+            "make DESTDIR=$DESTDIR install_sw install_ssldirs",
+        ]),
     ],
 )

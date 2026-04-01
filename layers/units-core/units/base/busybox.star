@@ -5,11 +5,13 @@ unit(
     tag = "1_36_1",
     license = "GPL-2.0",
     description = "Swiss army knife of embedded Linux",
-    build = [
-        "make defconfig",
-        # Build as static binary so it runs without shared libraries
-        "sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/' .config",
-        "make -j$NPROC",
-        "make CONFIG_PREFIX=$DESTDIR install",
+    tasks = [
+        task("build", steps=[
+            "make defconfig",
+            # Build as static binary so it runs without shared libraries
+            "sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/' .config",
+            "make -j$NPROC",
+            "make CONFIG_PREFIX=$DESTDIR install",
+        ]),
     ],
 )
