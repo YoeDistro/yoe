@@ -88,24 +88,39 @@ def _create_disk_image(name, partitions):
 
     # Install bootloader (x86 syslinux)
     if ARCH == "x86_64":
-        _install_syslinux(img)
+        _install_syslinux(img, partitions)
 
-def _install_syslinux(img):
+def _install_syslinux(img, partitions):
     """Install syslinux MBR boot code and extlinux on an x86 disk image."""
     # Write MBR boot code (first 440 bytes of mbr.bin)
     run("dd if=$DESTDIR/rootfs/usr/share/syslinux/mbr.bin of=%s bs=440 count=1 conv=notrunc" % img)
 
-    # Run extlinux --install via losetup + mount.
-    # Needs privileged=True because losetup/mount require capabilities
-    # that bwrap's user namespace doesn't provide.
+    # Find the root partition offset and size
+    offset_mb = 1  # MBR overhead
+    root_size_mb = 0
+    for p in partitions:
+        size = _parse_size_mb(p.size)
+        if p.root:
+            root_size_mb = size
+            break
+        offset_mb += size
+
+    if root_size_mb == 0:
+        return
+
+    offset_bytes = offset_mb * 1024 * 1024
+    size_bytes = root_size_mb * 1024 * 1024
+
+    # Run extlinux --install via losetup with explicit offset (not -P which
+    # requires partition device nodes). Needs privileged=True for losetup/mount.
     run("""
 set -e
-LOOP=$(losetup --show -fP %s)
+LOOP=$(losetup --find --show --offset %d --sizelimit %d %s)
 trap 'umount /mnt/extlinux 2>/dev/null; losetup -d $LOOP 2>/dev/null' EXIT
 mkdir -p /mnt/extlinux
-mount -t ext4 ${LOOP}p1 /mnt/extlinux
+mount -t ext4 $LOOP /mnt/extlinux
 extlinux --install /mnt/extlinux/boot/extlinux
-""" % img, privileged=True)
+""" % (offset_bytes, size_bytes, img), privileged=True)
 
 def _parse_size_mb(size_str):
     s = str(size_str)
