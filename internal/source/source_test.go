@@ -173,7 +173,7 @@ func TestPrepare_WithPatches(t *testing.T) {
 
 func TestPrepare_DevMode(t *testing.T) {
 	projectDir := t.TempDir()
-	srcDir := filepath.Join(projectDir, "build", "x86_64", "test-pkg", "src")
+	srcDir := filepath.Join(projectDir, "build", "test-pkg.x86_64", "src")
 	os.MkdirAll(srcDir, 0755)
 
 	// Set up a git repo with local commits

@@ -21,8 +21,8 @@ import (
 //
 // If the source directory already exists with local commits beyond upstream,
 // it is left untouched (yoe dev workflow).
-func Prepare(projectDir, arch string, unit *yoestar.Unit, w io.Writer) (string, error) {
-	srcDir := filepath.Join(projectDir, "build", arch, unit.Name, "src")
+func Prepare(projectDir, scopeDir string, unit *yoestar.Unit, w io.Writer) (string, error) {
+	srcDir := filepath.Join(projectDir, "build", unit.Name+"."+scopeDir, "src")
 
 	// If source dir exists and has local commits, don't touch it (dev mode)
 	if hasLocalCommits(srcDir) {
