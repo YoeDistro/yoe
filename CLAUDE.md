@@ -135,6 +135,11 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
   the bootloader. QEMU is a development convenience; the real target is always
   physical boards.
 
+- **No intermediate code generation.** Avoid generating shell scripts, config
+  files, or other intermediate artifacts that are then executed or parsed. When
+  something fails, the user should be looking at the code they wrote, not
+  machine-generated output. Prefer direct execution over code generation.
+
 ## Working on This Codebase
 
 - **No shortcuts.** Build systems are fragile. Always implement the correct fix,
