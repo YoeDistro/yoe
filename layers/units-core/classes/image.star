@@ -19,6 +19,7 @@ def image(name, artifacts=[], hostname="", timezone="", locale="",
     unit(
         name = name,
         scope = scope,
+        unit_class = "image",
         artifacts = resolved,
         partitions = all_partitions,
         tasks = [

@@ -396,10 +396,16 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 		return nil, fmt.Errorf("%s() requires name", class)
 	}
 
+	// Allow Starlark to override class (e.g., image() class calls unit() with unit_class="image")
+	cls := kwString(kwargs, "unit_class")
+	if cls == "" {
+		cls = class
+	}
+
 	r := &Unit{
 		Name:        name,
 		Version:     kwString(kwargs, "version"),
-		Class:       class,
+		Class:       cls,
 		Scope:       kwString(kwargs, "scope"),
 		Description: kwString(kwargs, "description"),
 		License:     kwString(kwargs, "license"),

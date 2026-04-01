@@ -28,12 +28,13 @@ project(
 **Layer name** is derived from the `path` field's last component if set,
 otherwise the URL's repository name. Examples:
 
-| URL | path | Derived name |
-| --- | ---- | ------------ |
+| URL                               | path                | Derived name |
+| --------------------------------- | ------------------- | ------------ |
 | `github.com/YoeDistro/yoe-ng.git` | `layers/units-core` | `units-core` |
-| `github.com/vendor/bsp-imx8.git` | (none) | `bsp-imx8` |
+| `github.com/vendor/bsp-imx8.git`  | (none)              | `bsp-imx8`   |
 
-Layer names are used in `load()` statements: `load("@units-core//classes/autotools.star", "autotools")`.
+Layer names are used in `load()` statements:
+`load("@units-core//classes/autotools.star", "autotools")`.
 
 ### Layer directory structure
 
@@ -48,7 +49,8 @@ Layer names are used in `load()` statements: `load("@units-core//classes/autotoo
 
 ### Evaluation order
 
-1. **Phase 1** — `PROJECT.star` is evaluated. Layers are synced (cloned/fetched).
+1. **Phase 1** — `PROJECT.star` is evaluated. Layers are synced
+   (cloned/fetched).
 2. **Phase 1b** — Machine definitions from all layers are evaluated.
 3. **Phase 2** — Units and images from all layers are evaluated. `ARCH`,
    `MACHINE`, `MACHINE_CONFIG`, and `PROVIDES` are available as predeclared
@@ -75,9 +77,10 @@ unit(name = "zstd", ...)
 unit(name = "zstd", ...)  # silently overwrites the first!
 ```
 
-Currently, if two layers define a unit with the same name, the last one evaluated
-wins silently. The DAG, build cache (`build/<arch>/<unit>/`), and APK repo all
-key on the unit name, so a collision produces incorrect builds with no error.
+Currently, if two layers define a unit with the same name, the last one
+evaluated wins silently. The DAG, build cache (`build/<arch>/<unit>/`), and APK
+repo all key on the unit name, so a collision produces incorrect builds with no
+error.
 
 ## Dependencies
 
@@ -109,11 +112,11 @@ Runtime deps are resolved transitively by `apk` at install time.
 
 Starlark `load()` statements use three forms:
 
-| Form | Resolves to | Example |
-| ---- | ----------- | ------- |
-| `@layer//path` | Named layer root | `load("@units-core//classes/autotools.star", "autotools")` |
-| `//path` | Current layer root (context-aware) | `load("//classes/cmake.star", "cmake")` |
-| `relative/path` | Relative to current file | `load("../utils.star", "helper")` |
+| Form            | Resolves to                        | Example                                                    |
+| --------------- | ---------------------------------- | ---------------------------------------------------------- |
+| `@layer//path`  | Named layer root                   | `load("@units-core//classes/autotools.star", "autotools")` |
+| `//path`        | Current layer root (context-aware) | `load("//classes/cmake.star", "cmake")`                    |
+| `relative/path` | Relative to current file           | `load("../utils.star", "helper")`                          |
 
 The `//` form is context-aware: if the file is inside a layer, `//` resolves to
 that layer's root. Otherwise it resolves to the project root. This means a unit
@@ -123,7 +126,8 @@ within `units-core`, not the project root.
 ## Virtual packages (PROVIDES)
 
 The `PROVIDES` predeclared variable maps virtual names to concrete unit names.
-This allows images to reference abstract capabilities rather than specific units:
+This allows images to reference abstract capabilities rather than specific
+units:
 
 ```python
 # Machine definition contributes:
@@ -172,8 +176,8 @@ modifications. See [metadata-format.md](metadata-format.md) for details.
 
 ### 1. Unit name collisions across layers
 
-**Problem:** Two layers can define a unit with the same name. The second silently
-overwrites the first. No error, no warning.
+**Problem:** Two layers can define a unit with the same name. The second
+silently overwrites the first. No error, no warning.
 
 **Options:**
 
@@ -182,8 +186,9 @@ overwrites the first. No error, no warning.
 - **(b) Namespace units by layer.** Unit names become `layer/unit` (e.g.,
   `units-core/zstd`). Requires `provides` to map virtual names for deps and
   image artifacts. More explicit but changes every reference.
-- **(c) Allow intentional overrides.** A layer can explicitly replace a unit from
-  another layer (like Yocto's `.bbappend`). Unintentional duplicates still error.
+- **(c) Allow intentional overrides.** A layer can explicitly replace a unit
+  from another layer (like Yocto's `.bbappend`). Unintentional duplicates still
+  error.
 
 **Current leaning:** Option (b) — namespace by layer, use `provides` for the
 short name. This makes provenance clear in the build dir
@@ -194,10 +199,10 @@ when two layers provide the same capability.
 
 **Problem:** If two units both `provides = "linux"`, the last one wins silently.
 
-**Proposed fix:** Error when two units provide the same virtual name. The machine
-definition's `kernel.provides` takes precedence (since it's the machine owner's
-choice), but two units claiming the same provides without a machine override
-should be an error.
+**Proposed fix:** Error when two units provide the same virtual name. The
+machine definition's `kernel.provides` takes precedence (since it's the machine
+owner's choice), but two units claiming the same provides without a machine
+override should be an error.
 
 ### 3. Dependency references with namespaced units
 
@@ -243,5 +248,6 @@ image(artifacts = ["busybox", "linux", "openssh"])
 image(artifacts = ["units-core/busybox", "units-core/linux", "vendor-bsp/openssh"])
 ```
 
-**Current leaning:** Virtual names in images, full names only when disambiguation
-is needed. Images describe _what_ should be installed, not _where_ it comes from.
+**Current leaning:** Virtual names in images, full names only when
+disambiguation is needed. Images describe _what_ should be installed, not
+_where_ it comes from.
