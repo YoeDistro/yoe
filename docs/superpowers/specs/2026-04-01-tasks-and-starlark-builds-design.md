@@ -27,15 +27,46 @@ Three new concepts that work together:
 ### 1. Tasks Replace Build Step Lists
 
 The `build = [...]` string list is replaced by `tasks = [...]`. Each task is a
-named build step with either a shell command or a Starlark function:
+named build phase that accepts one of three forms:
+
+- **`run`** — single shell command string
+- **`fn`** — single Starlark callable
+- **`steps`** — list of shell strings and/or Starlark callables
 
 ```python
+# Single command per task
 unit(
     name = "my-app",
     tasks = [
         task("configure", run="./configure --prefix=$PREFIX"),
         task("compile", run="make -j$NPROC"),
         task("install", run="make DESTDIR=$DESTDIR install"),
+    ],
+)
+
+# Multiple steps in one task (natural migration from build = [...])
+unit(
+    name = "busybox",
+    tasks = [
+        task("build", steps=[
+            "make defconfig",
+            "sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/' .config",
+            "make -j$NPROC",
+            "make CONFIG_PREFIX=$DESTDIR install",
+        ]),
+    ],
+)
+
+# Mixed steps — strings and Starlark functions
+unit(
+    name = "linux-rpi4",
+    tasks = [
+        task("build", steps=[
+            "make ARCH=arm64 bcm2711_defconfig",
+            patch_kernel_config,  # Starlark function called with run() available
+            "make ARCH=arm64 -j$NPROC Image dtbs",
+        ]),
+        task("install", fn=install_kernel_files),
     ],
 )
 ```
@@ -304,20 +335,25 @@ Calling it during eval raises an error.
 
 ### 2. Build Executor: Task Dispatch
 
-The executor iterates tasks instead of build step strings. For each task:
+The executor iterates tasks. For each task, it iterates the task's steps:
 
-- `run` field (string) → execute in container/bwrap (current behavior)
-- `fn` field (callable) → invoke Starlark function in a build-time thread with
+- String step → execute in container/bwrap
+- Callable step → invoke Starlark function in a build-time thread with
   `run()` available
+
+A task with `run` is shorthand for a single-step task. A task with `fn` is
+shorthand for a single callable step.
 
 ```go
 for _, task := range unit.Tasks {
-    if task.Fn != nil {
-        // Create build-time Starlark thread with run() available
-        thread := newBuildThread(sandbox)
-        _, err := starlark.Call(thread, task.Fn, nil, nil)
-    } else if task.Run != "" {
-        RunInSandbox(cfg, task.Run)
+    for _, step := range task.Steps {
+        switch s := step.(type) {
+        case string:
+            RunInSandbox(cfg, s)
+        case starlark.Callable:
+            thread := newBuildThread(sandbox)
+            _, err := starlark.Call(thread, s, nil, nil)
+        }
     }
 }
 ```
@@ -325,17 +361,22 @@ for _, task := range unit.Tasks {
 ### 3. Task and Unit Types
 
 ```go
+// Step is either a shell command string or a Starlark callable.
+type Step struct {
+    Command  string            // shell command (set if step is a string)
+    Fn       starlark.Callable // Starlark function (set if step is callable)
+}
+
 type Task struct {
     Name      string
-    Container string           // optional container image override
-    Run       string           // shell command (mutually exclusive with Fn)
-    Fn        starlark.Callable // Starlark function (mutually exclusive with Run)
+    Container string // optional container image override
+    Steps     []Step // ordered list of shell commands and/or Starlark functions
 }
 
 type Unit struct {
     // ... existing fields ...
     Container string   // default container for all tasks
-    Tasks     []Task   // named build steps
+    Tasks     []Task   // named build phases
     Provides  string   // virtual package name (e.g., "linux")
 }
 ```
