@@ -71,8 +71,8 @@ unit(
 )
 ```
 
-All existing units must be migrated from `build = [...]` to `tasks = [...]`.
-The `build` field is removed.
+All existing units must be migrated from `build = [...]` to `tasks = [...]`. The
+`build` field is removed.
 
 ### 2. Starlark Build Functions
 
@@ -101,11 +101,13 @@ unit(
 
 - Executes a shell command in the current build environment (container or bwrap)
 - Default: raises Starlark error on non-zero exit (like `set -e`)
-- `check=False`: returns a result struct with `exit_code`, `stdout`, and `stderr`
+- `check=False`: returns a result struct with `exit_code`, `stdout`, and
+  `stderr`
 - Error traces show the `.star` file and line number, not generated shell
-- Commands run with CWD set to the source directory (same as today's `build = [...]`)
-- Respects context cancellation — if the user cancels a build in the TUI, in-flight
-  `run()` calls are terminated via the context
+- Commands run with CWD set to the source directory (same as today's
+  `build = [...]`)
+- Respects context cancellation — if the user cancels a build in the TUI,
+  in-flight `run()` calls are terminated via the context
 
 **`run()` return value:**
 
@@ -379,8 +381,8 @@ commands and returns canned results.
 The executor iterates tasks. For each task, it iterates the task's steps:
 
 - String step → execute in container/bwrap
-- Callable step → invoke Starlark function in a build-time thread with
-  `run()` available
+- Callable step → invoke Starlark function in a build-time thread with `run()`
+  available
 
 A task with `run` is shorthand for a single-step task. A task with `fn` is
 shorthand for a single callable step.

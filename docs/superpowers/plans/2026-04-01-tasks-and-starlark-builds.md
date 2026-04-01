@@ -27,8 +27,8 @@ to `tasks`.
 
 ### Task 1: Add Task/Step Types and `task()` Builtin
 
-Add the Go types for Task and Step, add the `task()` Starlark builtin, and
-parse `tasks` in `registerUnit()`. Remove the `build` field from Unit.
+Add the Go types for Task and Step, add the `task()` Starlark builtin, and parse
+`tasks` in `registerUnit()`. Remove the `build` field from Unit.
 
 **Files:**
 
@@ -166,8 +166,8 @@ r := &Unit{
 ```
 
 Parse `tasks` kwarg as a list of task structs. Each task struct has fields
-`name`, `run`, `fn`, `steps`, `container`. Convert `run`/`fn`/`steps` into
-a `[]Step` slice:
+`name`, `run`, `fn`, `steps`, `container`. Convert `run`/`fn`/`steps` into a
+`[]Step` slice:
 
 ```go
 // Parse tasks
@@ -220,12 +220,13 @@ for _, kv := range kwargs {
 }
 ```
 
-- [ ] **Step 4: Remove fnUnit build validation, remove fnAutotools/fnCMake/fnGoBinary**
+- [ ] **Step 4: Remove fnUnit build validation, remove
+      fnAutotools/fnCMake/fnGoBinary**
 
-The `fnUnit` function currently requires `len(r.Build) == 0`. Remove this
-check — units with tasks don't need the old build field. Also remove
-`fnAutotools`, `fnCMake`, `fnGoBinary` from builtins.go — these will be
-pure Starlark classes that call `unit()` with `tasks`.
+The `fnUnit` function currently requires `len(r.Build) == 0`. Remove this check
+— units with tasks don't need the old build field. Also remove `fnAutotools`,
+`fnCMake`, `fnGoBinary` from builtins.go — these will be pure Starlark classes
+that call `unit()` with `tasks`.
 
 Keep `fnImage` for now (it will be migrated to Starlark in Task 5).
 
@@ -267,9 +268,8 @@ tasks in Starlark, not in Go.
 
 - [ ] **Step 7: Build and test**
 
-Run: `go build ./...`
-Run: `go test ./internal/starlark/ -v`
-Run: `go test ./internal/resolve/ -v`
+Run: `go build ./...` Run: `go test ./internal/starlark/ -v` Run:
+`go test ./internal/resolve/ -v`
 
 Fix any compilation errors.
 
@@ -399,6 +399,7 @@ unit(
 ```
 
 Do this for every unit that uses `build = [...]`:
+
 - `busybox.star`, `linux.star`, `musl.star`, `base-files.star`
 - `syslinux.star`, `network-config.star`
 - `linux-rpi4.star`, `linux-rpi5.star`, `rpi-firmware.star`
@@ -409,8 +410,7 @@ generates tasks internally.
 
 - [ ] **Step 5: Build and test**
 
-Run: `go build ./...`
-Run: `go test ./...`
+Run: `go build ./...` Run: `go test ./...`
 
 - [ ] **Step 6: Commit**
 
@@ -544,8 +544,7 @@ func fnRun(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kw
 Replace the command iteration loop in `buildOne()` with task dispatch. The key
 change is in the section after source preparation and sysroot assembly.
 
-Replace the current command loop (the `for i, cmd := range commands` loop)
-with:
+Replace the current command loop (the `for i, cmd := range commands` loop) with:
 
 ```go
 // Execute tasks
@@ -611,8 +610,7 @@ keep it but also allow images with tasks to use the task path.
 
 - [ ] **Step 3: Build and test**
 
-Run: `go build ./...`
-Run: `go test ./internal/build/ -v`
+Run: `go build ./...` Run: `go test ./internal/build/ -v`
 
 - [ ] **Step 4: Commit**
 
@@ -635,10 +633,12 @@ Add machine-level `packages` and `partitions` fields, expose them as
 **Files:**
 
 - Modify: `internal/starlark/types.go` (Machine, KernelConfig)
-- Modify: `internal/starlark/builtins.go` (parse machine packages/partitions, kernel provides)
+- Modify: `internal/starlark/builtins.go` (parse machine packages/partitions,
+  kernel provides)
 - Modify: `internal/starlark/loader.go` (set MACHINE_CONFIG and PROVIDES)
 
-- [ ] **Step 1: Add Packages, Partitions to Machine and Provides to KernelConfig**
+- [ ] **Step 1: Add Packages, Partitions to Machine and Provides to
+      KernelConfig**
 
 In `internal/starlark/types.go`:
 
@@ -726,11 +726,11 @@ if proj := eng.Project(); proj != nil {
 eng.SetVar("PROVIDES", provides)
 ```
 
-Add helper functions `toStarlarkList` and `toStarlarkPartitionList` that
-convert Go slices to Starlark values.
+Add helper functions `toStarlarkList` and `toStarlarkPartitionList` that convert
+Go slices to Starlark values.
 
-After phase 2 (unit loading), scan all units for `provides` fields and add
-them to the PROVIDES dict. This requires a post-phase-2 step:
+After phase 2 (unit loading), scan all units for `provides` fields and add them
+to the PROVIDES dict. This requires a post-phase-2 step:
 
 ```go
 // After phase 2, add unit provides
@@ -779,8 +779,7 @@ Similarly update `qemu-arm64.star`, `raspberrypi4.star`, `raspberrypi5.star`.
 
 - [ ] **Step 5: Build and test**
 
-Run: `go build ./...`
-Run: `go test ./internal/starlark/ -v`
+Run: `go build ./...` Run: `go test ./internal/starlark/ -v`
 
 - [ ] **Step 6: Commit**
 
@@ -997,8 +996,7 @@ env["REPO"] = repo.RepoDir(nil, opts.ProjectDir)
 
 - [ ] **Step 7: Build and test**
 
-Run: `go build ./...`
-Run: `go test ./...`
+Run: `go build ./...` Run: `go test ./...`
 
 Verify that building base-image still works end-to-end.
 
