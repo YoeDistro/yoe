@@ -11,7 +11,7 @@ description: >
 
 Generate a complete Starlark `.star` unit from an upstream source URL or a
 natural language description. The output is a ready-to-build unit that follows
-existing conventions in the project's layers.
+existing conventions in the project's modules.
 
 ## Workflow
 
@@ -32,7 +32,7 @@ patches, and known pitfalls:
   closest to Yoe's packaging model (apk, musl/glibc, minimal). Pay attention to
   `makedepends`, `depends`, and `configure` flags.
 - **Yocto/OpenEmbedded (bitbake units)** — search
-  `https://layers.openembedded.org` or the OE-Core layer. Yocto units often have
+  `https://layers.openembedded.org` or the OE-Core module. Yocto units often have
   well-tested configure flags and patch sets for embedded use.
 - **Buildroot** — search
   `https://github.com/buildroot/buildroot/tree/master/package` for the package.
@@ -58,7 +58,7 @@ Fetch and inspect the upstream source to determine:
 
 3. **Dependencies** — scan `configure.ac`, `CMakeLists.txt`, `go.mod`,
    `pkg-config` requires, or `#include` directives to identify build and runtime
-   dependencies. Cross-reference against existing units in the project's layers
+   dependencies. Cross-reference against existing units in the project's modules
    and the findings from Step 2.
 
 4. **License** — check `LICENSE`, `COPYING`, or source headers. Use SPDX
@@ -66,10 +66,10 @@ Fetch and inspect the upstream source to determine:
 
 ### Step 4: Check for Existing Units
 
-Before creating a new unit, search all layers for an existing unit:
+Before creating a new unit, search all modules for an existing unit:
 
 ```
-Glob: layers/**/units/**/<name>.star
+Glob: modules/**/units/**/<name>.star
 ```
 
 If one exists, inform the user and suggest `/update-unit` instead.
@@ -152,8 +152,8 @@ unit(
 
 ### Step 6: Choose the File Location
 
-Place the unit in the appropriate category directory within the project's layer
-or the units-core layer:
+Place the unit in the appropriate category directory within the project's module
+or the units-core module:
 
 | Category    | Directory            | Examples               |
 | ----------- | -------------------- | ---------------------- |
@@ -213,7 +213,7 @@ and build tool the unit needs must exist as a unit:
 - Do not hardcode absolute paths in build commands — use `$PREFIX`, `$DESTDIR`,
   `$NPROC` environment variables.
 - Do not add a unit to `units-core` unless it's truly a core system component.
-  Project-specific units go in the project's own layer.
+  Project-specific units go in the project's own module.
 - Do not skip the test build step.
 - Do not install missing tools or libraries in the Dockerfile — create units for
   them instead.

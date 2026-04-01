@@ -1248,33 +1248,33 @@ func (m model) listViewportHeight() int {
 
 func findUnitFile(projectDir, name string) string {
 	// Collect directories to search for .star files.
-	// For the project and parent dirs, search under layers/.
-	// For cached layers, search the layer root directly (units/, images/, etc.).
+	// For the project and parent dirs, search under modules/.
+	// For cached modules, search the module root directly (units/, images/, etc.).
 	var searchDirs []string
 
 	for _, root := range []string{projectDir} {
-		d := filepath.Join(root, "layers")
+		d := filepath.Join(root, "modules")
 		if _, err := os.Stat(d); err == nil {
 			searchDirs = append(searchDirs, d)
 		}
 	}
 	for _, rel := range []string{"..", filepath.Join("..", "..")} {
-		d := filepath.Join(projectDir, rel, "layers")
+		d := filepath.Join(projectDir, rel, "modules")
 		if _, err := os.Stat(d); err == nil {
 			searchDirs = append(searchDirs, d)
 		}
 	}
 
-	// Add cached layer directories
+	// Add cached module directories
 	cacheDir := os.Getenv("YOE_CACHE")
 	if cacheDir == "" {
 		cacheDir = "cache"
 	}
-	cachedLayers := filepath.Join(cacheDir, "layers")
-	if entries, err := os.ReadDir(cachedLayers); err == nil {
+	cachedModules := filepath.Join(cacheDir, "modules")
+	if entries, err := os.ReadDir(cachedModules); err == nil {
 		for _, e := range entries {
 			if e.IsDir() {
-				searchDirs = append(searchDirs, filepath.Join(cachedLayers, e.Name()))
+				searchDirs = append(searchDirs, filepath.Join(cachedModules, e.Name()))
 			}
 		}
 	}

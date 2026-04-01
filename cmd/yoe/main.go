@@ -14,7 +14,7 @@ import (
 	"github.com/YoeDistro/yoe-ng/internal/bootstrap"
 	"github.com/YoeDistro/yoe-ng/internal/build"
 	"github.com/YoeDistro/yoe-ng/internal/device"
-	"github.com/YoeDistro/yoe-ng/internal/layer"
+	"github.com/YoeDistro/yoe-ng/internal/module"
 	"github.com/YoeDistro/yoe-ng/internal/repo"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
 	"github.com/YoeDistro/yoe-ng/internal/source"
@@ -42,8 +42,8 @@ func main() {
 		cmdInit(args)
 	case "container":
 		cmdContainer(args)
-	case "layer":
-		cmdLayer(args)
+	case "module":
+		cmdModule(args)
 	case "build":
 		cmdBuild(args)
 	case "bootstrap":
@@ -92,7 +92,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  dev                     Manage source modifications (extract, diff, status)\n")
 	fmt.Fprintf(os.Stderr, "  flash <device>          Write an image to a device/SD card\n")
 	fmt.Fprintf(os.Stderr, "  run                     Run an image in QEMU\n")
-	fmt.Fprintf(os.Stderr, "  layer                   Manage external layers (fetch, sync, list)\n")
+	fmt.Fprintf(os.Stderr, "  module                  Manage external modules (fetch, sync, list)\n")
 	fmt.Fprintf(os.Stderr, "  repo                    Manage the local apk package repository\n")
 	fmt.Fprintf(os.Stderr, "  cache                   Manage the build cache (local and remote)\n")
 	fmt.Fprintf(os.Stderr, "  source                  Download and manage source archives/repos\n")
@@ -118,9 +118,9 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "\n")
 }
 
-func cmdLayer(args []string) {
+func cmdModule(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s layer <sync|list|info> [...]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s module <sync|list|info> [...]\n", os.Args[0])
 		os.Exit(1)
 	}
 
@@ -132,23 +132,23 @@ func cmdLayer(args []string) {
 	switch args[0] {
 	case "sync":
 		proj := loadProject()
-		if _, err := layer.Sync(proj, os.Stdout); err != nil {
+		if _, err := module.Sync(proj, os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 	case "list":
-		if err := yoe.ListLayers(dir, os.Stdout); err != nil {
+		if err := yoe.ListModules(dir, os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 	case "info":
-		fmt.Fprintf(os.Stderr, "layer info: not yet implemented\n")
+		fmt.Fprintf(os.Stderr, "module info: not yet implemented\n")
 		os.Exit(1)
 	case "check-updates":
-		fmt.Fprintf(os.Stderr, "layer check-updates: not yet implemented\n")
+		fmt.Fprintf(os.Stderr, "module check-updates: not yet implemented\n")
 		os.Exit(1)
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown layer subcommand: %s\n", args[0])
+		fmt.Fprintf(os.Stderr, "Unknown module subcommand: %s\n", args[0])
 		os.Exit(1)
 	}
 }
@@ -444,7 +444,7 @@ func loadProjectWithMachine(machineName string) *yoestar.Project {
 		dir = "."
 	}
 	opts := []yoestar.LoadOption{
-		yoestar.WithLayerSync(layer.SyncIfNeeded),
+		yoestar.WithModuleSync(module.SyncIfNeeded),
 	}
 	if machineName != "" {
 		opts = append(opts, yoestar.WithMachine(machineName))

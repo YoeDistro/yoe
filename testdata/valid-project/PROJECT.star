@@ -12,7 +12,7 @@ project(
         ],
     ),
     sources = sources(go_proxy = "https://proxy.golang.org"),
-    layers = [
-        layer("github.com/yoe/units-core", ref = "v1.0.0"),
+    modules = [
+        module("github.com/yoe/units-core", ref = "v1.0.0"),
     ],
 )

@@ -1,46 +1,46 @@
 # Naming and Resolution
 
-How layers, units, and dependencies are named, referenced, and resolved in
+How modules, units, and dependencies are named, referenced, and resolved in
 Yoe-NG. This document covers the current model and open design questions.
 
-See [metadata-format.md](metadata-format.md) for the full unit/class/layer
+See [metadata-format.md](metadata-format.md) for the full unit/class/module
 Starlark API. See [build-environment.md](build-environment.md) for how build
 isolation and caching work.
 
-## Layers
+## Modules
 
-A **layer** is a Git repository (or subdirectory of one) that provides units,
-classes, machine definitions, and images. Layers are declared in `PROJECT.star`:
+A **module** is a Git repository (or subdirectory of one) that provides units,
+classes, machine definitions, and images. Modules are declared in `PROJECT.star`:
 
 ```python
 project(
     name = "my-product",
-    layers = [
-        layer("https://github.com/YoeDistro/yoe-ng.git",
+    modules = [
+        module("https://github.com/YoeDistro/yoe-ng.git",
               ref = "main",
-              path = "layers/units-core"),
-        layer("https://github.com/vendor/bsp-imx8.git",
+              path = "modules/units-core"),
+        module("https://github.com/vendor/bsp-imx8.git",
               ref = "v2.1.0"),
     ],
 )
 ```
 
-**Layer name** is derived from the `path` field's last component if set,
+**Module name** is derived from the `path` field's last component if set,
 otherwise the URL's repository name. Examples:
 
-| URL                               | path                | Derived name |
-| --------------------------------- | ------------------- | ------------ |
-| `github.com/YoeDistro/yoe-ng.git` | `layers/units-core` | `units-core` |
-| `github.com/vendor/bsp-imx8.git`  | (none)              | `bsp-imx8`   |
+| URL                               | path                 | Derived name |
+| --------------------------------- | -------------------- | ------------ |
+| `github.com/YoeDistro/yoe-ng.git` | `modules/units-core` | `units-core` |
+| `github.com/vendor/bsp-imx8.git`  | (none)               | `bsp-imx8`   |
 
-Layer names are used in `load()` statements:
+Module names are used in `load()` statements:
 `load("@units-core//classes/autotools.star", "autotools")`.
 
-### Layer directory structure
+### Module directory structure
 
 ```
-<layer-root>/
-  LAYER.star          # layer metadata and dependencies
+<module-root>/
+  MODULE.star         # module metadata and dependencies
   classes/            # build pattern functions (autotools, cmake, etc.)
   units/              # unit definitions (.star files)
   machines/           # machine definitions (.star files)
@@ -49,14 +49,14 @@ Layer names are used in `load()` statements:
 
 ### Evaluation order
 
-1. **Phase 1** — `PROJECT.star` is evaluated. Layers are synced
+1. **Phase 1** — `PROJECT.star` is evaluated. Modules are synced
    (cloned/fetched).
-2. **Phase 1b** — Machine definitions from all layers are evaluated.
-3. **Phase 2** — Units and images from all layers are evaluated. `ARCH`,
+2. **Phase 1b** — Machine definitions from all modules are evaluated.
+3. **Phase 2** — Units and images from all modules are evaluated. `ARCH`,
    `MACHINE`, `MACHINE_CONFIG`, and `PROVIDES` are available as predeclared
    variables.
 
-Within each phase, layers are evaluated in declaration order. Within a layer,
+Within each phase, modules are evaluated in declaration order. Within a module,
 `.star` files are evaluated in filesystem walk order.
 
 ## Units
@@ -67,19 +67,19 @@ class function like `autotools()` or `cmake()`. Each unit produces one or more
 
 ### Current naming model
 
-Unit names are **flat strings** with no layer namespace:
+Unit names are **flat strings** with no module namespace:
 
 ```python
-# In units-core layer:
+# In units-core module:
 unit(name = "zstd", ...)
 
-# In another layer:
+# In another module:
 unit(name = "zstd", ...)  # ERROR: duplicate unit name
 ```
 
-If two layers define a unit with the same name, the build errors at evaluation
+If two modules define a unit with the same name, the build errors at evaluation
 time. To extend an upstream unit, use the
-[layer composition](#layer-composition) pattern.
+[module composition](#module-composition) pattern.
 
 ## Dependencies
 
@@ -111,14 +111,14 @@ Runtime deps are resolved transitively by `apk` at install time.
 
 Starlark `load()` statements use three forms:
 
-| Form            | Resolves to                        | Example                                                    |
-| --------------- | ---------------------------------- | ---------------------------------------------------------- |
-| `@layer//path`  | Named layer root                   | `load("@units-core//classes/autotools.star", "autotools")` |
-| `//path`        | Current layer root (context-aware) | `load("//classes/cmake.star", "cmake")`                    |
-| `relative/path` | Relative to current file           | `load("../utils.star", "helper")`                          |
+| Form             | Resolves to                         | Example                                                    |
+| ---------------- | ----------------------------------- | ---------------------------------------------------------- |
+| `@module//path`  | Named module root                   | `load("@units-core//classes/autotools.star", "autotools")` |
+| `//path`         | Current module root (context-aware) | `load("//classes/cmake.star", "cmake")`                    |
+| `relative/path`  | Relative to current file            | `load("../utils.star", "helper")`                          |
 
-The `//` form is context-aware: if the file is inside a layer, `//` resolves to
-that layer's root. Otherwise it resolves to the project root. This means a unit
+The `//` form is context-aware: if the file is inside a module, `//` resolves to
+that module's root. Otherwise it resolves to the project root. This means a unit
 in `units-core` can `load("//classes/autotools.star", ...)` and it resolves
 within `units-core`, not the project root.
 
@@ -145,30 +145,30 @@ image(name = "base-image", artifacts = ["busybox", "linux", "init"], ...)
 ```
 
 This pattern extends to any swappable core component. For example, the init
-system can be abstracted behind a virtual name, with thin configuration layers
+system can be abstracted behind a virtual name, with thin configuration modules
 providing the concrete implementation:
 
 ```python
-# layers/config-systemd/units/init.star
+# modules/config-systemd/units/init.star
 unit(name = "systemd", ..., provides = "init")
 
-# layers/config-busybox-init/units/init.star
+# modules/config-busybox-init/units/init.star
 unit(name = "busybox-init", ..., provides = "init")
 ```
 
-The project selects which init system to use by including the appropriate layer:
+The project selects which init system to use by including the appropriate module:
 
 ```python
 # projects/product-a.star
-project(name = "product-a", layers = [
-    layer("...", path = "layers/units-core"),
-    layer("...", path = "layers/config-systemd"),
+project(name = "product-a", modules = [
+    module("...", path = "modules/units-core"),
+    module("...", path = "modules/config-systemd"),
 ])
 
 # projects/product-b.star
-project(name = "product-b", layers = [
-    layer("...", path = "layers/units-core"),
-    layer("...", path = "layers/config-busybox-init"),
+project(name = "product-b", modules = [
+    module("...", path = "modules/units-core"),
+    module("...", path = "modules/config-busybox-init"),
 ])
 ```
 
@@ -183,9 +183,9 @@ product uses systemd or busybox init.
 If two active units provide the same virtual name, the build errors. See
 [Collision Detection](#collision-detection) for scoping rules.
 
-## Layer composition
+## Module composition
 
-Layers extend upstream units without modifying them by importing the unit as a
+Modules extend upstream units without modifying them by importing the unit as a
 callable function:
 
 ```python
@@ -212,9 +212,9 @@ traceable — `grep` for the function call to find all extensions. See
 
 ### Unit name duplicates
 
-Unit names are flat strings. If two layers define a unit with the same name, the
-build errors at evaluation time. Layers must coordinate names or use the
-[layer composition](#layer-composition) pattern to explicitly extend an upstream
+Unit names are flat strings. If two modules define a unit with the same name, the
+build errors at evaluation time. Modules must coordinate names or use the
+[module composition](#module-composition) pattern to explicitly extend an upstream
 unit.
 
 ### PROVIDES duplicates
@@ -246,7 +246,7 @@ declares _what_ should be installed; resolution handles _where_ it comes from.
 
 ### Unit replacement via provides
 
-A downstream layer may want to replace an upstream unit transparently — e.g.,
+A downstream module may want to replace an upstream unit transparently — e.g.,
 `openssh-vendor` replaces `openssh` in all images without changing image
 definitions. The natural mechanism is `provides = "openssh"` on the downstream
 unit:
@@ -257,13 +257,13 @@ load("@units-core//units/openssh.star", "openssh")
 openssh(name = "openssh-vendor", extra_deps = ["vendor-crypto"], provides = "openssh")
 ```
 
-The problem: the upstream layer already registered a real unit named `openssh`
+The problem: the upstream module already registered a real unit named `openssh`
 (via the top-level `openssh()` call). Now both `openssh` (the unit) and
 `openssh-vendor` (via provides) map to the name `openssh`. The DAG needs a rule
 for which one wins.
 
 This becomes more important with multi-level override chains. A common embedded
-pattern is base → SOC → SOM, where each layer extends the previous:
+pattern is base → SOC → SOM, where each module extends the previous:
 
 ```python
 # @units-core//units/base-files.star
@@ -272,7 +272,7 @@ def base_files(name="base-files", extra_deps=[], **overrides):
 
 base_files()
 
-# @soc-layer//units/base-files-soc.star
+# @soc-module//units/base-files-soc.star
 load("@units-core//units/base-files.star", "base_files")
 
 def base_files_soc(name="base-files-soc", extra_deps=[], **overrides):
@@ -280,14 +280,14 @@ def base_files_soc(name="base-files-soc", extra_deps=[], **overrides):
 
 base_files_soc()
 
-# @som-layer//units/base-files-som.star
-load("@soc-layer//units/base-files-soc.star", "base_files_soc")
+# @som-module//units/base-files-som.star
+load("@soc-module//units/base-files-soc.star", "base_files_soc")
 
 base_files_soc(name = "base-files-som", extra_deps = ["som-wifi-config"],
                provides = "base-files")
 ```
 
-The build chain works — each layer extends the previous and produces a distinct
+The build chain works — each module extends the previous and produces a distinct
 unit name. But images want to reference `base-files`, not `base-files-som`. The
 final unit declares `provides = "base-files"`, yet `units-core` already
 registered a real unit with that name. All three units (`base-files`,
@@ -300,57 +300,57 @@ dependencies should reference the overridden unit by its actual name (e.g.,
 see exactly which unit is being used.
 
 **When a core package must be overridden transparently**, `provides` combined
-with layer priority resolves the ambiguity. Layers in the project's layer list
-are ordered from lowest to highest priority (last layer wins). When a unit in a
-later layer declares `provides = "base-files"`, it takes precedence over the
-real unit named `base-files` from an earlier layer:
+with module priority resolves the ambiguity. Modules in the project's module list
+are ordered from lowest to highest priority (last module wins). When a unit in a
+later module declares `provides = "base-files"`, it takes precedence over the
+real unit named `base-files` from an earlier module:
 
 ```python
-project(name = "product", layers = [
-    layer("...", path = "layers/units-core"),    # lowest priority
-    layer("...", path = "layers/soc-layer"),      # overrides units-core
-    layer("...", path = "layers/som-layer"),      # highest priority
+project(name = "product", modules = [
+    module("...", path = "modules/units-core"),    # lowest priority
+    module("...", path = "modules/soc-module"),     # overrides units-core
+    module("...", path = "modules/som-module"),     # highest priority
 ])
 ```
 
-With this ordering, `som-layer`'s `base-files-som` (which declares
+With this ordering, `som-module`'s `base-files-som` (which declares
 `provides = "base-files"`) wins over `units-core`'s real `base-files` unit. The
 earlier unit becomes unreachable — it is still registered but never pulled into
-the DAG because provides from a higher-priority layer takes precedence.
+the DAG because provides from a higher-priority module takes precedence.
 
-### Projects as layer scoping
+### Projects as module scoping
 
-A project defines which layers are active for a build. Only units from included
-layers participate in the DAG. This is the primary mechanism for controlling
-which units can override or conflict with each other — if a layer isn't in the
-project's layer list, its units don't exist for that build.
+A project defines which modules are active for a build. Only units from included
+modules participate in the DAG. This is the primary mechanism for controlling
+which units can override or conflict with each other — if a module isn't in the
+project's module list, its units don't exist for that build.
 
 This reduces the collision problem: instead of needing `replaces` or shadow
-semantics, a project simply includes only the layers it needs. A vendor layer
+semantics, a project simply includes only the modules it needs. A vendor module
 that provides its own `openssh-vendor` with `provides = "openssh"` works cleanly
-when the project doesn't include a second layer that also provides `openssh`.
+when the project doesn't include a second module that also provides `openssh`.
 
 A single repository may define multiple projects (similar to KAS YAML files in
-yoe-distro), each selecting a different subset of layers for different products
+yoe-distro), each selecting a different subset of modules for different products
 or build configurations:
 
 ```python
 # projects/dev.star
 project(
     name = "dev",
-    layers = [
-        layer("...", path = "layers/units-core"),
-        layer("...", path = "layers/dev-tools"),
+    modules = [
+        module("...", path = "modules/units-core"),
+        module("...", path = "modules/dev-tools"),
     ],
 )
 
 # projects/customer-a.star
 project(
     name = "customer-a",
-    layers = [
-        layer("...", path = "layers/units-core"),
-        layer("...", path = "layers/vendor-bsp"),
-        layer("...", path = "layers/customer-a"),
+    modules = [
+        module("...", path = "modules/units-core"),
+        module("...", path = "modules/vendor-bsp"),
+        module("...", path = "modules/customer-a"),
     ],
 )
 ```
@@ -368,26 +368,26 @@ registers the project):
 load("projects/customer-a.star")
 ```
 
-**Extend a project with additional layers** — load the exported layer list and
+**Extend a project with additional modules** — load the exported module list and
 build on it:
 
 ```python
 # projects/customer-a.star
-LAYERS = [
-    layer("...", path = "layers/units-core"),
-    layer("...", path = "layers/vendor-bsp"),
-    layer("...", path = "layers/customer-a"),
+MODULES = [
+    module("...", path = "modules/units-core"),
+    module("...", path = "modules/vendor-bsp"),
+    module("...", path = "modules/customer-a"),
 ]
 
-project(name = "customer-a", layers = LAYERS)
+project(name = "customer-a", modules = MODULES)
 
 # PROJECT.star
-load("projects/customer-a.star", "LAYERS")
+load("projects/customer-a.star", "MODULES")
 
 project(
     name = "default",
-    layers = LAYERS + [
-        layer("...", path = "layers/dev-tools"),
+    modules = MODULES + [
+        module("...", path = "modules/dev-tools"),
     ],
 )
 ```
@@ -409,7 +409,7 @@ Build output is scoped as:
 repo/<project>/APKINDEX.tar.gz
 ```
 
-Each project gets a clean repo containing only packages from its resolved layer
+Each project gets a clean repo containing only packages from its resolved module
 and unit set. Individual unit builds are still cached by content hash — if two
 projects build the same unit with the same inputs, the build runs once and the
 resulting apk is placed into both project repos.

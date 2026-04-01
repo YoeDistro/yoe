@@ -294,11 +294,11 @@ steps. Migrate all unit .star files.
 
 **Files:**
 
-- Modify: `layers/units-core/classes/autotools.star`
-- Modify: `layers/units-core/classes/cmake.star`
-- Modify: `layers/units-core/classes/go.star`
-- Modify: all `layers/units-core/units/**/*.star`
-- Modify: all `layers/units-rpi/units/**/*.star`
+- Modify: `modules/units-core/classes/autotools.star`
+- Modify: `modules/units-core/classes/cmake.star`
+- Modify: `modules/units-core/classes/go.star`
+- Modify: all `modules/units-core/units/**/*.star`
+- Modify: all `modules/units-rpi/units/**/*.star`
 
 - [ ] **Step 1: Rewrite autotools.star**
 
@@ -415,7 +415,7 @@ Run: `go build ./...` Run: `go test ./...`
 - [ ] **Step 6: Commit**
 
 ```bash
-git add layers/ internal/
+git add modules/ internal/
 git commit -m "migrate all classes and units to tasks
 
 autotools, cmake, go classes generate tasks instead of build steps.
@@ -784,7 +784,7 @@ Run: `go build ./...` Run: `go test ./internal/starlark/ -v`
 - [ ] **Step 6: Commit**
 
 ```bash
-git add internal/starlark/ layers/
+git add internal/starlark/ modules/
 git commit -m "add MACHINE_CONFIG, PROVIDES, machine packages/partitions
 
 Machines define packages and partitions that get merged into images.
@@ -801,17 +801,17 @@ Move image assembly from Go (`internal/image/`) to a Starlark class that uses
 
 **Files:**
 
-- Rewrite: `layers/units-core/classes/image.star`
-- Modify: `layers/units-core/images/base-image.star`
-- Modify: `layers/units-core/images/dev-image.star`
-- Delete: `layers/units-rpi/images/rpi-image.star` (no longer needed)
+- Rewrite: `modules/units-core/classes/image.star`
+- Modify: `modules/units-core/images/base-image.star`
+- Modify: `modules/units-core/images/dev-image.star`
+- Delete: `modules/units-rpi/images/rpi-image.star` (no longer needed)
 - Modify: `internal/build/executor.go` (remove image special case)
 - Delete: `internal/image/rootfs.go` (moved to Starlark)
 - Delete: `internal/image/disk.go` (moved to Starlark)
 
 - [ ] **Step 1: Write the Starlark image class**
 
-`layers/units-core/classes/image.star`:
+`modules/units-core/classes/image.star`:
 
 ```python
 def image(name, artifacts=[], hostname="", timezone="", locale="",
@@ -969,12 +969,12 @@ image(
 
 - [ ] **Step 4: Delete rpi-image.star**
 
-`layers/units-rpi/images/rpi-image.star` is no longer needed — `base-image`
+`modules/units-rpi/images/rpi-image.star` is no longer needed — `base-image`
 works for RPi because MACHINE_CONFIG provides the kernel, firmware, and
 partition layout.
 
 ```bash
-rm layers/units-rpi/images/rpi-image.star
+rm modules/units-rpi/images/rpi-image.star
 ```
 
 - [ ] **Step 5: Remove Go image special case from executor.go**
@@ -1012,7 +1012,7 @@ it. Otherwise delete the entire directory.
 - [ ] **Step 9: Commit**
 
 ```bash
-git add layers/ internal/
+git add modules/ internal/
 git commit -m "rewrite image assembly in Starlark, delete Go image code
 
 image() is now a Starlark class that uses run() for disk operations.

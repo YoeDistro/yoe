@@ -1,4 +1,4 @@
-# Raspberry Pi BSP Layer (units-rpi)
+# Raspberry Pi BSP Module (units-rpi)
 
 **Date:** 2026-03-31 **Status:** Draft
 
@@ -6,11 +6,11 @@
 
 Yoe-NG has no support for physical hardware — only QEMU virtual machines.
 Raspberry Pi 4 and 5 are the most common ARM64 boards for edge products. Adding
-a BSP layer enables building bootable SD card images for real hardware.
+a BSP module enables building bootable SD card images for real hardware.
 
 ## Solution
 
-A new `units-rpi` layer providing machine definitions, a Raspberry Pi kernel
+A new `units-rpi` module providing machine definitions, a Raspberry Pi kernel
 fork, GPU firmware, boot configuration, and a bootable image definition for RPi
 4 and RPi 5.
 
@@ -30,11 +30,11 @@ fork, GPU firmware, boot configuration, and a bootable image definition for RPi
   than one kernel with runtime selection. Different defconfigs
   (`bcm2711_defconfig` vs `bcm2712_defconfig`) and different device trees.
 
-## Layer Structure
+## Module Structure
 
 ```
-layers/units-rpi/
-├── LAYER.star
+modules/units-rpi/
+├── MODULE.star
 ├── machines/
 │   ├── raspberrypi4.star
 │   └── raspberrypi5.star
@@ -234,7 +234,7 @@ should be copied to that partition. For the FAT32 boot partition:
    `build/<arch>/<unit>/destdir/boot/` into the FAT32 partition
 3. This populates the boot partition with firmware, kernel, DTBs, and config
 
-This is the main Go code change required beyond the Starlark layer files.
+This is the main Go code change required beyond the Starlark module files.
 
 ## Go Code Changes Required
 
@@ -258,14 +258,14 @@ board-specific units.
 The `Partition` struct already has a `Type` field and `Contents` field. Verify
 `Contents` is wired through to the image assembly code. If not, add it.
 
-## Layer Reference
+## Module Reference
 
-Projects reference the layer in `PROJECT.star`:
+Projects reference the module in `PROJECT.star`:
 
 ```python
-layer("https://github.com/YoeDistro/yoe-ng.git",
+module("https://github.com/YoeDistro/yoe-ng.git",
       ref = "main",
-      path = "layers/units-rpi")
+      path = "modules/units-rpi")
 ```
 
 ## What's Not Included (Future Work)

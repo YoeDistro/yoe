@@ -1,7 +1,7 @@
 # Units Roadmap
 
 Units needed for a complete base Linux system. Existing units can be found via
-`yoe list` or by browsing `layers/units-core/units/`.
+`yoe list` or by browsing `modules/units-core/units/`.
 
 ## Needed Units
 

@@ -127,7 +127,7 @@ resumes with its full state intact.
 | `a` | `claude /new-unit`               |
 
 For `e`, the TUI locates the unit's `.star` file by searching
-`layers/**/units/**/<name>.star`.
+`modules/**/units/**/<name>.star`.
 
 ## Architecture
 

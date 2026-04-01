@@ -15,15 +15,15 @@ import (
 type LoadOption func(*loadConfig)
 
 type loadConfig struct {
-	layerSync func([]LayerRef, io.Writer) error
+	moduleSync func([]ModuleRef, io.Writer) error
 	machine   string // override default machine before evaluating units/images
 }
 
-// WithLayerSync provides a callback that is invoked after PROJECT.star is
-// evaluated to ensure all declared layers are available (e.g. cloned).
-// The callback receives the layer list and a writer for progress output.
-func WithLayerSync(fn func([]LayerRef, io.Writer) error) LoadOption {
-	return func(c *loadConfig) { c.layerSync = fn }
+// WithModuleSync provides a callback that is invoked after PROJECT.star is
+// evaluated to ensure all declared modules are available (e.g. cloned).
+// The callback receives the module list and a writer for progress output.
+func WithModuleSync(fn func([]ModuleRef, io.Writer) error) LoadOption {
+	return func(c *loadConfig) { c.moduleSync = fn }
 }
 
 // WithMachine overrides the project's default machine before units and
@@ -85,61 +85,61 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		return nil, fmt.Errorf("evaluating PROJECT.star: %w", err)
 	}
 
-	// Sync layers if a sync callback was provided (auto-clone missing layers).
-	if cfg.layerSync != nil {
-		if proj := eng.Project(); proj != nil && len(proj.Layers) > 0 {
-			if err := cfg.layerSync(proj.Layers, os.Stderr); err != nil {
-				return nil, fmt.Errorf("syncing layers: %w", err)
+	// Sync modules if a sync callback was provided (auto-clone missing modules).
+	if cfg.moduleSync != nil {
+		if proj := eng.Project(); proj != nil && len(proj.Modules) > 0 {
+			if err := cfg.moduleSync(proj.Modules, os.Stderr); err != nil {
+				return nil, fmt.Errorf("syncing modules: %w", err)
 			}
 		}
 	}
 
-	// Register layer roots so load("@layer//...") works.
-	// Check local overrides first, then the layer cache.
+	// Register module roots so load("@module//...") works.
+	// Check local overrides first, then the module cache.
 	if proj := eng.Project(); proj != nil {
-		for _, l := range proj.Layers {
-			// Derive layer name: use Path's last component if set, otherwise URL's
-			name := filepath.Base(strings.TrimSuffix(l.URL, ".git"))
-			if l.Path != "" {
-				name = filepath.Base(l.Path)
+		for _, m := range proj.Modules {
+			// Derive module name: use Path's last component if set, otherwise URL's
+			name := filepath.Base(strings.TrimSuffix(m.URL, ".git"))
+			if m.Path != "" {
+				name = filepath.Base(m.Path)
 			}
 
-			if l.Local != "" {
-				layerPath := l.Local
-				if !filepath.IsAbs(layerPath) {
-					layerPath = filepath.Join(root, layerPath)
+			if m.Local != "" {
+				modulePath := m.Local
+				if !filepath.IsAbs(modulePath) {
+					modulePath = filepath.Join(root, modulePath)
 				}
-				if l.Path != "" {
-					layerPath = filepath.Join(layerPath, l.Path)
+				if m.Path != "" {
+					modulePath = filepath.Join(modulePath, m.Path)
 				}
-				eng.SetLayerRoot(name, layerPath)
+				eng.SetModuleRoot(name, modulePath)
 				continue
 			}
 
-			// Check layer cache
+			// Check module cache
 			cacheDir := os.Getenv("YOE_CACHE")
 			if cacheDir == "" {
 				cacheDir = "cache"
 			}
-			layerDir := filepath.Join(cacheDir, "layers", name)
-			if l.Path != "" {
-				layerDir = filepath.Join(layerDir, l.Path)
+			moduleDir := filepath.Join(cacheDir, "modules", name)
+			if m.Path != "" {
+				moduleDir = filepath.Join(moduleDir, m.Path)
 			}
-			if _, err := os.Stat(layerDir); err == nil {
-				eng.SetLayerRoot(name, layerDir)
+			if _, err := os.Stat(moduleDir); err == nil {
+				eng.SetModuleRoot(name, moduleDir)
 			}
 		}
 	}
 
-	// Phase 1: Evaluate all machine definitions (project + layers).
+	// Phase 1: Evaluate all machine definitions (project + modules).
 	// Machines must be loaded before units/images so that target_arch()
 	// returns the correct value during Starlark evaluation.
 	if err := evalDir(eng, root, "machines"); err != nil {
 		return nil, err
 	}
-	if eng.layerRoots != nil {
-		for _, layerPath := range eng.layerRoots {
-			if err := evalDir(eng, layerPath, "machines"); err != nil {
+	if eng.moduleRoots != nil {
+		for _, modulePath := range eng.moduleRoots {
+			if err := evalDir(eng, modulePath, "machines"); err != nil {
 				return nil, err
 			}
 		}
@@ -226,13 +226,13 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	}
 	eng.SetVar("PROVIDES", provides)
 
-	// Phase 2a: Evaluate all unit definitions (project + layers).
+	// Phase 2a: Evaluate all unit definitions (project + modules).
 	if err := evalDir(eng, root, "units"); err != nil {
 		return nil, err
 	}
-	if eng.layerRoots != nil {
-		for _, layerPath := range eng.layerRoots {
-			if err := evalDir(eng, layerPath, "units"); err != nil {
+	if eng.moduleRoots != nil {
+		for _, modulePath := range eng.moduleRoots {
+			if err := evalDir(eng, modulePath, "units"); err != nil {
 				return nil, err
 			}
 		}
@@ -259,10 +259,10 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	}
 	eng.SetVar("RUNTIME_DEPS", runtimeDeps)
 
-	// Phase 2b: Evaluate image definitions (project + layers).
-	if eng.layerRoots != nil {
-		for _, layerPath := range eng.layerRoots {
-			if err := evalDir(eng, layerPath, "images"); err != nil {
+	// Phase 2b: Evaluate image definitions (project + modules).
+	if eng.moduleRoots != nil {
+		for _, modulePath := range eng.moduleRoots {
+			if err := evalDir(eng, modulePath, "images"); err != nil {
 				return nil, err
 			}
 		}

@@ -20,7 +20,7 @@ and verifies with a test build.
 Find and read the unit's `.star` file:
 
 ```
-Glob: layers/**/units/**/<name>.star
+Glob: modules/**/units/**/<name>.star
 ```
 
 Note the current version, source URL, tag format, and any patches.

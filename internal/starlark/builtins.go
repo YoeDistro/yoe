@@ -16,8 +16,8 @@ func (e *Engine) builtins() starlark.StringDict {
 		"cache":       starlark.NewBuiltin("cache", fnCache),
 		"s3_cache":    starlark.NewBuiltin("s3_cache", fnS3Cache),
 		"sources":     starlark.NewBuiltin("sources", fnSources),
-		"layer":       starlark.NewBuiltin("layer", fnLayer),
-		"layer_info":  starlark.NewBuiltin("layer_info", e.fnLayerInfo),
+		"module":      starlark.NewBuiltin("module", fnModule),
+		"module_info": starlark.NewBuiltin("module_info", e.fnModuleInfo),
 		"machine":     starlark.NewBuiltin("machine", e.fnMachine),
 		"kernel":      starlark.NewBuiltin("kernel", fnKernel),
 		"uboot":       starlark.NewBuiltin("uboot", fnUboot),
@@ -171,19 +171,19 @@ func fnSources(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs
 	return makeStruct("sources", kwargs), nil
 }
 
-func fnLayer(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func fnModule(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if len(args) < 1 {
-		return nil, fmt.Errorf("layer() requires a URL argument")
+		return nil, fmt.Errorf("module() requires a URL argument")
 	}
 	url, ok := args[0].(starlark.String)
 	if !ok {
-		return nil, fmt.Errorf("layer() URL must be a string")
+		return nil, fmt.Errorf("module() URL must be a string")
 	}
 	d := starlark.StringDict{"url": url}
 	for _, kv := range kwargs {
 		d[string(kv[0].(starlark.String))] = kv[1]
 	}
-	return starlarkstruct.FromStringDict(starlark.String("layer"), d), nil
+	return starlarkstruct.FromStringDict(starlark.String("module"), d), nil
 }
 
 func fnKernel(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
@@ -202,23 +202,23 @@ func fnPartition(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwar
 	return makeStruct("partition", kwargs), nil
 }
 
-// --- Built-in functions that register layer info ---
+// --- Built-in functions that register module info ---
 
-func (e *Engine) fnLayerInfo(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (e *Engine) fnModuleInfo(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	name := kwString(kwargs, "name")
 	if name == "" {
-		return nil, fmt.Errorf("layer_info() requires name")
+		return nil, fmt.Errorf("module_info() requires name")
 	}
 
-	info := &LayerInfo{
+	info := &ModuleInfo{
 		Name:        name,
 		Description: kwString(kwargs, "description"),
 	}
 
-	// Parse deps list of layer() structs
+	// Parse deps list of module() structs
 	for _, kv := range kwargs {
 		if string(kv[0].(starlark.String)) == "deps" {
 			if list, ok := kv[1].(*starlark.List); ok {
@@ -227,7 +227,7 @@ func (e *Engine) fnLayerInfo(_ *starlark.Thread, _ *starlark.Builtin, _ starlark
 				var v starlark.Value
 				for iter.Next(&v) {
 					if s, ok := v.(*starlarkstruct.Struct); ok {
-						info.Deps = append(info.Deps, LayerRef{
+						info.Deps = append(info.Deps, ModuleRef{
 							URL: structString(s, "url"),
 							Ref: structString(s, "ref"),
 						})
@@ -237,7 +237,7 @@ func (e *Engine) fnLayerInfo(_ *starlark.Thread, _ *starlark.Builtin, _ starlark
 		}
 	}
 
-	e.layerInfo = info
+	e.moduleInfo = info
 	return starlark.None, nil
 }
 
@@ -270,16 +270,16 @@ func (e *Engine) fnProject(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 		},
 	}
 
-	// Parse layers list
+	// Parse modules list
 	for _, kv := range kwargs {
-		if string(kv[0].(starlark.String)) == "layers" {
+		if string(kv[0].(starlark.String)) == "modules" {
 			if list, ok := kv[1].(*starlark.List); ok {
 				iter := list.Iterate()
 				defer iter.Done()
 				var v starlark.Value
 				for iter.Next(&v) {
 					if s, ok := v.(*starlarkstruct.Struct); ok {
-						p.Layers = append(p.Layers, LayerRef{
+						p.Modules = append(p.Modules, ModuleRef{
 							URL:   structString(s, "url"),
 							Ref:   structString(s, "ref"),
 							Path:  structString(s, "path"),

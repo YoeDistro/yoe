@@ -13,8 +13,8 @@
 to a bootable image fast. Self-built packages replace Alpine's incrementally via
 the bootstrap process later.
 
-The critical path is: APKINDEX generation → load() for layer imports →
-units-core layer with real units → disk image generation → boot in QEMU.
+The critical path is: APKINDEX generation → load() for module imports →
+units-core module with real units → disk image generation → boot in QEMU.
 
 **Tech Stack:** Go, go.starlark.net, apk-tools, bubblewrap, QEMU, syslinux/
 extlinux (bootloader), mkfs.ext4, mkfs.vfat
@@ -26,7 +26,7 @@ extlinux (bootloader), mkfs.ext4, mkfs.vfat
 | Step | Name                           | Deliverable                                         |
 | ---- | ------------------------------ | --------------------------------------------------- |
 | 1    | APKINDEX generation            | `apk` can resolve deps from our local repo          |
-| 2    | Starlark load() implementation | Units can import classes from layers                |
+| 2    | Starlark load() implementation | Units can import classes from modules               |
 | 3    | Recursive unit discovery       | `units/**/*.star` works for categorized layouts     |
 | 4    | units-core: classes            | Starlark autotools/cmake/go/image class files       |
 | 5    | units-core: base units         | Real zlib, busybox, linux kernel units              |
@@ -548,14 +548,14 @@ Expected: All pass, including new load() tests.
 
 ```bash
 git add internal/starlark/load.go internal/starlark/load_test.go internal/starlark/engine.go internal/starlark/loader.go
-git commit -m "feat: implement Starlark load() for class imports and layer references"
+git commit -m "feat: implement Starlark load() for class imports and module references"
 ```
 
 ---
 
 ## Task 3: Recursive Unit Discovery
 
-The units-core layer organizes units in subdirectories (`units/toolchain/`,
+The units-core module organizes units in subdirectories (`units/toolchain/`,
 `units/base/`, etc.). The loader needs to glob `units/**/*.star` instead of just
 `units/*.star`.
 
@@ -630,25 +630,25 @@ git commit -m "feat: recursive unit discovery (units/**/*.star)"
 
 ---
 
-## Task 4: units-core Layer — Starlark Classes
+## Task 4: units-core Module — Starlark Classes
 
 Create the class files as pure Starlark functions that call the `unit()`
 primitive.
 
 **Files:**
 
-- Create: `layers/units-core/LAYER.star`
-- Create: `layers/units-core/classes/autotools.star`
-- Create: `layers/units-core/classes/cmake.star`
-- Create: `layers/units-core/classes/go.star`
-- Create: `layers/units-core/classes/image.star`
+- Create: `modules/units-core/MODULE.star`
+- Create: `modules/units-core/classes/autotools.star`
+- Create: `modules/units-core/classes/cmake.star`
+- Create: `modules/units-core/classes/go.star`
+- Create: `modules/units-core/classes/image.star`
 
-- [ ] **Step 1: Create LAYER.star**
+- [ ] **Step 1: Create MODULE.star**
 
 ```python
-layer_info(
+module_info(
     name = "units-core",
-    description = "Yoe-NG base layer: toolchain, base system, essential libraries",
+    description = "Yoe-NG base module: toolchain, base system, essential libraries",
 )
 ```
 
@@ -728,8 +728,8 @@ def yoe_image(name, version, description="", packages=[], hostname="yoe",
 - [ ] **Step 6: Commit**
 
 ```bash
-git add layers/units-core/
-git commit -m "feat: add units-core layer with Starlark classes"
+git add modules/units-core/
+git commit -m "feat: add units-core module with Starlark classes"
 ```
 
 ---
@@ -741,13 +741,13 @@ pass, these use simple build steps. The sources must be real URLs.
 
 **Files:**
 
-- Create: `layers/units-core/units/libs/zlib.star`
-- Create: `layers/units-core/units/base/busybox.star`
-- Create: `layers/units-core/units/base/linux.star`
+- Create: `modules/units-core/units/libs/zlib.star`
+- Create: `modules/units-core/units/base/busybox.star`
+- Create: `modules/units-core/units/base/linux.star`
 
 - [ ] **Step 1: Create zlib unit**
 
-`layers/units-core/units/libs/zlib.star`:
+`modules/units-core/units/libs/zlib.star`:
 
 ```python
 load("//classes/autotools.star", "autotools")
@@ -764,7 +764,7 @@ autotools(
 
 - [ ] **Step 2: Create busybox unit**
 
-`layers/units-core/units/base/busybox.star`:
+`modules/units-core/units/base/busybox.star`:
 
 ```python
 unit(
@@ -784,7 +784,7 @@ unit(
 
 - [ ] **Step 3: Create linux kernel unit**
 
-`layers/units-core/units/base/linux.star`:
+`modules/units-core/units/base/linux.star`:
 
 ```python
 unit(
@@ -806,7 +806,7 @@ unit(
 - [ ] **Step 4: Commit**
 
 ```bash
-git add layers/units-core/units/
+git add modules/units-core/units/
 git commit -m "feat: add base units (zlib, busybox, linux kernel)"
 ```
 
@@ -816,12 +816,12 @@ git commit -m "feat: add base units (zlib, busybox, linux kernel)"
 
 **Files:**
 
-- Create: `layers/units-core/machines/qemu-x86_64.star`
-- Create: `layers/units-core/images/base-image.star`
+- Create: `modules/units-core/machines/qemu-x86_64.star`
+- Create: `modules/units-core/images/base-image.star`
 
 - [ ] **Step 1: Create QEMU x86_64 machine**
 
-`layers/units-core/machines/qemu-x86_64.star`:
+`modules/units-core/machines/qemu-x86_64.star`:
 
 ```python
 machine(
@@ -845,7 +845,7 @@ machine(
 
 - [ ] **Step 2: Create base image**
 
-`layers/units-core/images/base-image.star`:
+`modules/units-core/images/base-image.star`:
 
 ```python
 image(
@@ -869,7 +869,7 @@ image(
 - [ ] **Step 3: Commit**
 
 ```bash
-git add layers/units-core/machines/ layers/units-core/images/
+git add modules/units-core/machines/ modules/units-core/images/
 git commit -m "feat: add qemu-x86_64 machine and base-image definitions"
 ```
 
@@ -1112,7 +1112,7 @@ git commit -m "feat: install extlinux boot config for QEMU serial console"
 
 ## Task 9: End-to-End Integration Test
 
-Wire everything together with a test project that uses the units-core layer and
+Wire everything together with a test project that uses the units-core module and
 builds a complete image.
 
 **Files:**
@@ -1211,7 +1211,7 @@ func TestE2E_DryRun(t *testing.T) {
 go test ./internal/build/ -run TestE2E -v
 ```
 
-This test verifies: project loading → layer resolution → unit evaluation → DAG
+This test verifies: project loading → module resolution → unit evaluation → DAG
 construction → dry run output. It doesn't actually build or boot — that requires
 the container and real tools.
 
@@ -1239,7 +1239,7 @@ git commit -m "feat: add end-to-end integration test for QEMU x86_64 image"
 After completing all 9 tasks:
 
 1. `apk` can resolve dependencies from our repo (APKINDEX)
-2. Units can `load()` classes from layers
+2. Units can `load()` classes from modules
 3. Subdirectory unit layout works
 4. units-core provides real Starlark classes
 5. Real units exist for zlib, busybox, linux kernel

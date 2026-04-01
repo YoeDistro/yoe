@@ -30,16 +30,16 @@ func (e *Engine) SetProjectRoot(root string) {
 	e.projectRoot = root
 }
 
-// SetLayerRoot registers a named layer path for "@name//" module references.
-func (e *Engine) SetLayerRoot(name, root string) {
-	if e.layerRoots == nil {
-		e.layerRoots = make(map[string]string)
+// SetModuleRoot registers a named module path for "@name//" load references.
+func (e *Engine) SetModuleRoot(name, root string) {
+	if e.moduleRoots == nil {
+		e.moduleRoots = make(map[string]string)
 	}
-	e.layerRoots[name] = root
+	e.moduleRoots[name] = root
 }
 
 // makeLoadFunc returns a Starlark Load handler that resolves modules relative
-// to fromFile and supports "//path", "@layer//path", and relative paths.
+// to fromFile and supports "//path", "@module//path", and relative paths.
 func (e *Engine) makeLoadFunc(fromFile string) func(thread *starlark.Thread, module string) (starlark.StringDict, error) {
 	if e.loadCache == nil {
 		e.loadCache = newLoadCache()
@@ -81,14 +81,14 @@ func (e *Engine) makeLoadFunc(fromFile string) func(thread *starlark.Thread, mod
 }
 
 // rootForFile returns the appropriate root directory for a file — if the file
-// is inside a layer directory, returns that layer root; otherwise returns the
+// is inside a module directory, returns that module root; otherwise returns the
 // project root.
 func (e *Engine) rootForFile(file string) string {
 	absFile, _ := filepath.Abs(file)
-	for _, layerRoot := range e.layerRoots {
-		absLayer, _ := filepath.Abs(layerRoot)
-		if strings.HasPrefix(absFile, absLayer+string(filepath.Separator)) {
-			return absLayer
+	for _, moduleRoot := range e.moduleRoots {
+		absModule, _ := filepath.Abs(moduleRoot)
+		if strings.HasPrefix(absFile, absModule+string(filepath.Separator)) {
+			return absModule
 		}
 	}
 	return e.projectRoot
@@ -98,27 +98,27 @@ func (e *Engine) rootForFile(file string) string {
 //
 // Supported forms:
 //   - "//path"         -> projectRoot/path
-//   - "@layer//path"   -> layerRoots[layer]/path
+//   - "@module//path"  -> moduleRoots[module]/path
 //   - "relative/path"  -> dir(fromFile)/relative/path
 func (e *Engine) resolveLoadPath(fromFile, module string) (string, error) {
 	switch {
 	case strings.HasPrefix(module, "@"):
-		// @layer//path
+		// @module//path
 		idx := strings.Index(module, "//")
 		if idx < 0 {
-			return "", fmt.Errorf("invalid layer reference %q: expected @name//path", module)
+			return "", fmt.Errorf("invalid module reference %q: expected @name//path", module)
 		}
-		layerName := module[1:idx]
+		moduleName := module[1:idx]
 		relPath := module[idx+2:]
-		root, ok := e.layerRoots[layerName]
+		root, ok := e.moduleRoots[moduleName]
 		if !ok {
-			return "", fmt.Errorf("unknown layer %q in load(%q)", layerName, module)
+			return "", fmt.Errorf("unknown module %q in load(%q)", moduleName, module)
 		}
 		return filepath.Join(root, relPath), nil
 
 	case strings.HasPrefix(module, "//"):
-		// Root-relative — resolve to the layer root if fromFile is inside a
-		// layer, otherwise to the project root.
+		// Root-relative — resolve to the module root if fromFile is inside a
+		// module, otherwise to the project root.
 		root := e.rootForFile(fromFile)
 		if root == "" {
 			return "", fmt.Errorf("cannot resolve %q: no root for %s", module, fromFile)

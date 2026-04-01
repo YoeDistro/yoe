@@ -43,7 +43,7 @@ func Stage0(proj *yoestar.Project, projectDir string, w io.Writer) error {
 		}
 	}
 	if len(missing) > 0 {
-		return fmt.Errorf("bootstrap units not found: %s\nAdd them to your project or include a layer that provides them",
+		return fmt.Errorf("bootstrap units not found: %s\nAdd them to your project or include a module that provides them",
 			strings.Join(missing, ", "))
 	}
 

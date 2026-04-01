@@ -63,7 +63,7 @@ There are also CLI variants of the above commands (`build`, `run`, etc.).
 1. `yoe init` created a project with a `PROJECT.star` config and a default
    x86_64 QEMU machine.
 2. On first build, `yoe` automatically built a Docker container with the
-   toolchain (gcc, make, etc.) and fetched the `units-core` layer from GitHub.
+   toolchain (gcc, make, etc.) and fetched the `units-core` module from GitHub.
 3. It built ~10 packages from source (busybox, linux kernel, openssl, etc.)
    inside the container, each isolated in its own bubblewrap sandbox.
 4. It assembled a bootable disk image from those packages.
@@ -124,7 +124,7 @@ managers, structured Starlark metadata, and AI as a first-class interface.
 
 Embedded Linux is hard not because the concepts are complex, but because there
 are _many_ concepts that interact in non-obvious ways: toolchain flags,
-dependency ordering, kernel configuration, package splitting, layer composition,
+dependency ordering, kernel configuration, package splitting, module composition,
 image assembly, device trees, bootloaders. Traditional build systems manage this
 complexity through complexity.
 
@@ -179,8 +179,8 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
 - **64-bit only** — x86, ARM, RISC-V
 - **Granular packaging** (like Yocto/Debian) — one unit can produce multiple
   sub-packages (`-dev`, `-doc`, `-dbg`, custom splits)
-- **Composable layers** — pull in units/packages using GitHub URLs; vendor BSP,
-  product, and core layers compose through Starlark `load()` function calls
+- **Composable modules** — pull in units/packages using GitHub URLs; vendor BSP,
+  product, and core modules compose through Starlark `load()` function calls
 - **Image-based device management** — full image updates, OSTree, BDiff
 - **Good SDK story** — binary SDKs, pre-built packages like Chromium
 - **Parallel** — no global lock or global resource, support running concurrent
@@ -211,7 +211,7 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
 Yoe-NG draws selectively from five existing systems, taking the best ideas from
 each while avoiding their respective pain points:
 
-- **Yocto** — machine abstraction, image composition, layer architecture, OTA
+- **Yocto** — machine abstraction, image composition, module architecture, OTA
   integration. Leave behind BitBake, sstate, cross-compilation complexity.
 - **Buildroot** — the principle that simpler is better. Leave behind monolithic
   images and full-rebuild-on-config-change.

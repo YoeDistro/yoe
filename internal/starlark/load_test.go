@@ -53,11 +53,11 @@ my_builder(name = "hello", version = "1.0")
 	}
 }
 
-func TestLoadFunction_LayerRef(t *testing.T) {
+func TestLoadFunction_ModuleRef(t *testing.T) {
 	tmp := t.TempDir()
 
-	// Create a layer directory with a helper class
-	layerDir := filepath.Join(tmp, "layers", "mylib")
+	// Create a module directory with a helper class
+	layerDir := filepath.Join(tmp, "modules", "mylib")
 	classesDir := filepath.Join(layerDir, "classes")
 	if err := os.MkdirAll(classesDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -69,7 +69,7 @@ def helper(name, version):
 		t.Fatal(err)
 	}
 
-	// Create a unit that loads from the layer
+	// Create a unit that loads from the module
 	unitsDir := filepath.Join(tmp, "units")
 	if err := os.MkdirAll(unitsDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -83,7 +83,7 @@ helper(name = "widget", version = "2.0")
 
 	eng := NewEngine()
 	eng.SetProjectRoot(tmp)
-	eng.SetLayerRoot("mylib", layerDir)
+	eng.SetModuleRoot("mylib", layerDir)
 
 	if err := eng.ExecFile(filepath.Join(unitsDir, "widget.star")); err != nil {
 		t.Fatalf("ExecFile: %v", err)

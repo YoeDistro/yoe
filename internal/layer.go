@@ -7,28 +7,28 @@ import (
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
-func ListLayers(dir string, w io.Writer) error {
+func ListModules(dir string, w io.Writer) error {
 	proj, err := yoestar.LoadProject(dir)
 	if err != nil {
 		return err
 	}
 
-	if len(proj.Layers) == 0 {
-		fmt.Fprintln(w, "No layers declared in PROJECT.star")
+	if len(proj.Modules) == 0 {
+		fmt.Fprintln(w, "No modules declared in PROJECT.star")
 		return nil
 	}
 
-	fmt.Fprintf(w, "%-40s %-12s %s\n", "Layer", "Ref", "Status")
-	for _, l := range proj.Layers {
+	fmt.Fprintf(w, "%-40s %-12s %s\n", "Module", "Ref", "Status")
+	for _, m := range proj.Modules {
 		status := "not synced"
-		if l.Local != "" {
-			status = fmt.Sprintf("(local: %s)", l.Local)
+		if m.Local != "" {
+			status = fmt.Sprintf("(local: %s)", m.Local)
 		}
-		ref := l.Ref
+		ref := m.Ref
 		if ref == "" {
 			ref = "(none)"
 		}
-		fmt.Fprintf(w, "%-40s %-12s %s\n", l.URL, ref, status)
+		fmt.Fprintf(w, "%-40s %-12s %s\n", m.URL, ref, status)
 	}
 
 	return nil

@@ -13,7 +13,7 @@ simpler alternative to Yocto.
 dispatch like brun), go.starlark.net for unit/config evaluation, bubblewrap for
 build isolation, and apk-tools for package management. Two-phase
 resolve-then-build model inspired by Bazel/GN. Content-addressed caching at
-every layer.
+every level.
 
 **Tech Stack:** Go 1.22+, Go stdlib (CLI — no Cobra), go.starlark.net (Starlark
 evaluation), Bubble Tea (TUI), bubblewrap (sandboxing), apk-tools (package
@@ -29,12 +29,12 @@ on any dev machine). Phases 4+ require Linux with bubblewrap and apk-tools.
 
 | Phase | Name                          | Depends On | Key Deliverable                                                                        |
 | ----- | ----------------------------- | ---------- | -------------------------------------------------------------------------------------- |
-| 1     | CLI Foundation                | —          | **DONE** — `yoe init/config/clean/layer`, Starlark engine, all builtins                |
+| 1     | CLI Foundation                | —          | **DONE** — `yoe init/config/clean/module`, Starlark engine, all builtins               |
 | 2     | Dependency Resolution         | 1          | **DONE** — DAG, topo sort, hashing, `desc/refs/graph`, `dev`, custom commands, patches |
-| 2.5   | Layer Management & Engine     | 1          | `yoe layer sync`, load() resolution, remove class builtins, recursive discovery        |
-| 2.6   | units-core Layer (Phase 1)    | 2.5        | Layer skeleton, Starlark classes, toolchain units                                      |
-| 2.7   | units-core Layer (Phase 2)    | 2.6, 6     | Base system units, QEMU machines, base/dev images                                      |
-| 2.8   | units-core Layer (Phase 3)    | 2.7        | Essential libs, crypto/TLS, networking, debug tools                                    |
+| 2.5   | Module Management & Engine    | 1          | `yoe module sync`, load() resolution, remove class builtins, recursive discovery       |
+| 2.6   | units-core Module (Phase 1)   | 2.5        | Module skeleton, Starlark classes, toolchain units                                     |
+| 2.7   | units-core Module (Phase 2)   | 2.6, 6     | Base system units, QEMU machines, base/dev images                                      |
+| 2.8   | units-core Module (Phase 3)   | 2.7        | Essential libs, crypto/TLS, networking, debug tools                                    |
 | 3     | Source Management             | 1          | `yoe source fetch/list/verify/clean`, content-addressed cache                          |
 | 4     | Build Execution               | 2, 3       | `yoe build` with bubblewrap isolation, build step execution                            |
 | 5     | Package Creation & Repository | 4          | APK package creation, `yoe repo` commands, local repository                            |
@@ -1773,44 +1773,44 @@ git commit -m "fix: integration test fixes for phase 1"
 
 ---
 
-## Phase 2.5: Layer Management & Engine Changes (detailed plan TBD)
+## Phase 2.5: Module Management & Engine Changes (detailed plan TBD)
 
-**Goal:** Fetch, cache, and resolve external layers declared in `PROJECT.star`
-and their transitive dependencies from `LAYER.star` files. Also make the engine
-changes required to support Starlark-based classes in layers.
+**Goal:** Fetch, cache, and resolve external modules declared in `PROJECT.star`
+and their transitive dependencies from `MODULE.star` files. Also make the engine
+changes required to support Starlark-based classes in modules.
 
-See [units-core Layer Design](../specs/2026-03-26-units-core-layer-design.md)
-for the full specification of what the base layer contains and the engine
+See [units-core Module Design](../specs/2026-03-26-recipes-core-layer-design.md)
+for the full specification of what the base module contains and the engine
 changes needed.
 
 **Key components:**
 
-- `internal/layer/fetch.go` — Git clone/fetch layers into `$YOE_CACHE/layers/`
-- `internal/layer/resolve.go` — resolve transitive deps from LAYER.star, version
+- `internal/module/fetch.go` — Git clone/fetch modules into `$YOE_CACHE/modules/`
+- `internal/module/resolve.go` — resolve transitive deps from MODULE.star, version
   conflict resolution (PROJECT.star wins, then highest semver)
-- `internal/layer/cache.go` — bare Git repo caching with worktree checkouts at
+- `internal/module/cache.go` — bare Git repo caching with worktree checkouts at
   pinned refs
-- `internal/layer/local.go` — local override support (skip fetch, use local dir)
-- `cmd/yoe/main.go` — `yoe layer sync`, `yoe layer list --tree`,
-  `yoe layer info`, `yoe layer check-updates`
-- Update `internal/starlark/loader.go` — resolve `@layer-name//...` load()
-  references to cached layer paths
+- `internal/module/local.go` — local override support (skip fetch, use local dir)
+- `cmd/yoe/main.go` — `yoe module sync`, `yoe module list --tree`,
+  `yoe module info`, `yoe module check-updates`
+- Update `internal/starlark/loader.go` — resolve `@module-name//...` load()
+  references to cached module paths
 
 **Engine changes for class support:**
 
 - Remove Go builtins for classes (`autotools()`, `cmake()`, `go_binary()`) —
-  these become Starlark functions in layer `.star` files loaded via `load()`
-- Implement `load()` resolution: `//path` relative to current file's layer root,
-  `@layer-name//path` relative to named layer's root
+  these become Starlark functions in module `.star` files loaded via `load()`
+- Implement `load()` resolution: `//path` relative to current file's module root,
+  `@module-name//path` relative to named module's root
 - Add `package_extend()` primitive for modifier classes like `systemd_service()`
 - Add `bootstrap` flag to `unit()` for stage 0/1 toolchain units
 - Change unit discovery from `units/*.star` to `units/**/*.star` for categorized
   subdirectories
 
-**Depends on:** Phase 1 (LayerRef/LayerInfo types, Starlark engine, project
+**Depends on:** Phase 1 (ModuleRef/ModuleInfo types, Starlark engine, project
 loader)
 
-**v1 behavior:** `yoe layer sync` reads LAYER.star from each layer and errors if
+**v1 behavior:** `yoe module sync` reads MODULE.star from each module and errors if
 transitive deps are missing from PROJECT.star. This is explicit and debuggable.
 
 **v2 behavior (future):** Transitive deps are fetched automatically when not
@@ -1961,18 +1961,18 @@ user namespaces (bubblewrap), mkfs.ext4, mkfs.vfat, systemd-repart
 
 ---
 
-## Phase 2.6: units-core Layer Phase 1 — Skeleton + Classes + Toolchain (detailed plan TBD)
+## Phase 2.6: units-core Module Phase 1 — Skeleton + Classes + Toolchain (detailed plan TBD)
 
-**Goal:** Create the `layers/units-core/` directory with the layer manifest, all
+**Goal:** Create the `modules/units-core/` directory with the module manifest, all
 Starlark class files, and the toolchain/build-tool units. This is the foundation
 that all other units build on.
 
-See [units-core Layer Design](../specs/2026-03-26-units-core-layer-design.md)
+See [units-core Module Design](../specs/2026-03-26-recipes-core-layer-design.md)
 for the full specification.
 
 **Key deliverables:**
 
-- `layers/units-core/LAYER.star` — layer manifest
+- `modules/units-core/MODULE.star` — module manifest
 - 10 class files: `autotools`, `cmake`, `meson`, `go`, `rust`, `python`, `node`,
   `image`, `sdk`, `systemd`
 - Toolchain units: `gcc`, `binutils`, `glibc`, `linux-headers`
@@ -1987,7 +1987,7 @@ root.
 
 ---
 
-## Phase 2.7: units-core Layer Phase 2 — Base System + QEMU Machines (detailed plan TBD)
+## Phase 2.7: units-core Module Phase 2 — Base System + QEMU Machines (detailed plan TBD)
 
 **Goal:** Add the base system packages, kernel, bootloaders, QEMU machine
 definitions, and image units needed to produce a bootable system.
@@ -2008,7 +2008,7 @@ bootable image.
 
 ---
 
-## Phase 2.8: units-core Layer Phase 3 — Essential Libs + Networking (detailed plan TBD)
+## Phase 2.8: units-core Module Phase 3 — Essential Libs + Networking (detailed plan TBD)
 
 **Goal:** Add the libraries and networking packages that most embedded projects
 need.
@@ -2038,7 +2038,7 @@ an existing toolchain, then rebuild with own toolchain.
 - `internal/bootstrap/stage0.go` — cross-pollination from Alpine
 - `internal/bootstrap/stage1.go` — self-hosting rebuild
 - `cmd/yoe/main.go` — add `bootstrap` command to switch statement
-- Bootstrap unit set from `layers/units-core/units/toolchain/` — units with
+- Bootstrap unit set from `modules/units-core/units/toolchain/` — units with
   `bootstrap = True` (glibc, binutils, gcc, linux-headers) plus base units
   (busybox, apk-tools, bubblewrap)
 

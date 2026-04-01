@@ -31,10 +31,10 @@ func RunInit(projectDir string, machine string) error {
     repository = repository(path = "repo"),
     cache = cache(path = "build/cache"),
     sources = sources(go_proxy = "https://proxy.golang.org"),
-    layers = [
-        layer("https://github.com/YoeDistro/yoe-ng.git",
-              ref = "main",
-              path = "layers/units-core"),
+    modules = [
+        module("https://github.com/YoeDistro/yoe-ng.git",
+               ref = "main",
+               path = "modules/units-core"),
     ],
 )
 `, name, defaultMachine)

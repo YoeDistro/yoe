@@ -122,7 +122,7 @@ proven pattern.
 - **Go-native** — the `go.starlark.net` library embeds directly in the `yoe`
   binary.
 - **Composable** — functions, `load()`, and `**kwargs` provide natural
-  composition for layers and overrides.
+  composition for modules and overrides.
 - **Battle-tested** — used by Bazel (Google), Buck2 (Meta), and Pants.
 
 ## Unit Types
@@ -321,7 +321,7 @@ unit(
 Patch file paths are relative to the project root. Patch contents are included
 in the unit's cache hash — changing a patch triggers a rebuild.
 
-**Layer overrides for patches** work through the standard function composition
+**Module overrides for patches** work through the standard function composition
 pattern:
 
 ```python
@@ -338,7 +338,7 @@ def busybox(extra_patches=[], **overrides):
         **overrides,
     )
 
-# vendor layer: adds a patch without modifying upstream
+# vendor module: adds a patch without modifying upstream
 load("@units-core//busybox.star", "busybox")
 busybox(extra_patches=["patches/vendor-busybox-audit.patch"])
 ```
@@ -483,13 +483,13 @@ project(
     sources = sources(
         go_proxy = "https://proxy.golang.org",
     ),
-    layers = [
-        # Layer in a subdirectory of a repo — path specifies where LAYER.star is
-        layer("https://github.com/YoeDistro/yoe-ng.git",
+    modules = [
+        # Module in a subdirectory of a repo — path specifies where MODULE.star is
+        module("https://github.com/YoeDistro/yoe-ng.git",
               ref = "main",
-              path = "layers/units-core"),
-        # Layer at the root of its own repo
-        layer("git@github.com:vendor/bsp-units.git", ref = "main"),
+              path = "modules/units-core"),
+        # Module at the root of its own repo
+        module("git@github.com:vendor/bsp-units.git", ref = "main"),
     ],
 )
 ```
@@ -622,7 +622,7 @@ def my_service(name, version, **kwargs):
 
 **The architecture mirrors Bazel:** Go provides the **primitives** (package
 creation, image assembly, sandbox execution, cache management), Starlark
-provides the **composition layer** (classes, conditionals, layer overrides,
+provides the **composition layer** (classes, conditionals, module overrides,
 shared variables). Starlark code cannot perform arbitrary I/O — it can only call
 the Go functions that `yoe` explicitly exposes, maintaining the sandboxed,
 deterministic evaluation model.
@@ -673,77 +673,77 @@ my-project/
                         ──▶ disk image (.img / .wic)
 ```
 
-## Layers
+## Modules
 
-Layers are external Git repositories that provide units, classes, and machine
+Modules are external Git repositories that provide units, classes, and machine
 definitions. They are the primary mechanism for reusing and sharing build
-definitions across projects — BSP vendors ship layers, and product teams compose
+definitions across projects — BSP vendors ship modules, and product teams compose
 them.
 
-### Declaring Layers in PROJECT.star
+### Declaring Modules in PROJECT.star
 
 ```python
 project(
     name = "my-product",
     version = "1.0.0",
-    layers = [
-        # Layer in a subdirectory of a repo
-        layer("https://github.com/YoeDistro/yoe-ng.git",
+    modules = [
+        # Module in a subdirectory of a repo
+        module("https://github.com/YoeDistro/yoe-ng.git",
               ref = "main",
-              path = "layers/units-core"),
-        # Layer at the root of its own repo
-        layer("git@github.com:vendor/bsp-imx8.git", ref = "v2.1.0"),
+              path = "modules/units-core"),
+        # Module at the root of its own repo
+        module("git@github.com:vendor/bsp-imx8.git", ref = "v2.1.0"),
     ],
 )
 ```
 
-Each `layer()` call declares a Git repository URL and a ref (tag, branch, or
+Each `module()` call declares a Git repository URL and a ref (tag, branch, or
 commit SHA). The optional `path` field specifies a subdirectory within the repo
-where `LAYER.star` lives — this allows a single repo to contain multiple layers
-or a layer to be part of a larger project. The `yoe` tool fetches and caches
-these repositories, making them available as `@layer-name` in `load()`
-statements. The layer name is derived from the last component of `path` (if set)
+where `MODULE.star` lives — this allows a single repo to contain multiple modules
+or a module to be part of a larger project. The `yoe` tool fetches and caches
+these repositories, making them available as `@module-name` in `load()`
+statements. The module name is derived from the last component of `path` (if set)
 or the URL.
 
-### Layer Manifests (LAYER.star)
+### Module Manifests (MODULE.star)
 
-Layers can declare their own dependencies via a `LAYER.star` file in the
-repository root. This enables BSP vendors to ship self-contained layers without
+Modules can declare their own dependencies via a `MODULE.star` file in the
+repository root. This enables BSP vendors to ship self-contained modules without
 requiring users to manually discover transitive dependencies.
 
 ```python
-# In github.com/vendor/bsp-imx8/LAYER.star
-layer_info(
+# In github.com/vendor/bsp-imx8/MODULE.star
+module_info(
     name = "vendor-bsp-imx8",
     description = "i.MX8 BSP units and machine definitions",
     deps = [
-        layer("github.com/vendor/hal-common", ref = "v1.3.0"),
-        layer("github.com/vendor/firmware-imx", ref = "v5.4"),
+        module("github.com/vendor/hal-common", ref = "v1.3.0"),
+        module("github.com/vendor/firmware-imx", ref = "v5.4"),
     ],
 )
 ```
 
 ### Dependency Resolution Rules
 
-Layer dependencies follow the **Go modules model** — the root project has final
+Module dependencies follow the **Go modules model** — the root project has final
 authority over versions:
 
-1. **PROJECT.star always wins.** If PROJECT.star and a LAYER.star both reference
+1. **PROJECT.star always wins.** If PROJECT.star and a MODULE.star both reference
    the same repository, the version in PROJECT.star takes precedence. This gives
    the project owner full control over the dependency tree.
 
 2. **Transitive deps are checked, not silently fetched (v1).** In the initial
-   implementation, `yoe` reads each layer's `LAYER.star` and **errors** if a
+   implementation, `yoe` reads each module's `MODULE.star` and **errors** if a
    required dependency is missing from PROJECT.star, rather than silently
    fetching it. The error message tells the user exactly what to add. This is
    explicit and debuggable.
 
 3. **Automatic transitive resolution (v2).** In a future version, transitive
-   dependencies declared in `LAYER.star` are fetched automatically when not
-   overridden by PROJECT.star. `yoe layer list` shows the full resolved tree so
+   dependencies declared in `MODULE.star` are fetched automatically when not
+   overridden by PROJECT.star. `yoe module list` shows the full resolved tree so
    nothing is hidden.
 
-4. **Diamond dependencies resolve to the highest version.** If two layers depend
+4. **Diamond dependencies resolve to the highest version.** If two modules depend
    on different versions of the same repository, `yoe` selects the higher
    version (semver comparison) unless PROJECT.star pins a specific version.
 
@@ -751,38 +751,38 @@ authority over versions:
 
 ```
 $ yoe build --all
-Error: layer "vendor-bsp-imx8" requires "github.com/vendor/hal-common" (ref v1.3.0)
+Error: module "vendor-bsp-imx8" requires "github.com/vendor/hal-common" (ref v1.3.0)
        but it is not declared in PROJECT.star.
 
-Add this to your PROJECT.star layers list:
-    layer("github.com/vendor/hal-common", ref = "v1.3.0"),
+Add this to your PROJECT.star modules list:
+    module("github.com/vendor/hal-common", ref = "v1.3.0"),
 ```
 
 **Example — PROJECT.star overriding a transitive version:**
 
 ```python
 # PROJECT.star
-layers = [
-    layer("github.com/yoe/units-core", ref = "v1.0.0"),
-    layer("github.com/vendor/bsp-imx8", ref = "v2.1.0"),
+modules = [
+    module("github.com/yoe/units-core", ref = "v1.0.0"),
+    module("github.com/vendor/bsp-imx8", ref = "v2.1.0"),
     # Override the version that bsp-imx8 requests (v1.3.0 → v1.4.0)
-    layer("github.com/vendor/hal-common", ref = "v1.4.0"),
+    module("github.com/vendor/hal-common", ref = "v1.4.0"),
 ]
 ```
 
-### Local Layer Overrides
+### Local Module Overrides
 
-During development, you often want to work on a layer locally instead of
+During development, you often want to work on a module locally instead of
 fetching from Git. The `local` parameter overrides the remote URL:
 
 ```python
-layers = [
+modules = [
     # Local override — point at a checkout on disk instead of fetching
-    layer("https://github.com/YoeDistro/yoe-ng.git",
+    module("https://github.com/YoeDistro/yoe-ng.git",
           local = "../yoe-ng",
-          path = "layers/units-core"),
-    # Local override for a standalone layer
-    layer("git@github.com:vendor/bsp-imx8.git", local = "../bsp-imx8"),
+          path = "modules/units-core"),
+    # Local override for a standalone module
+    module("git@github.com:vendor/bsp-imx8.git", local = "../bsp-imx8"),
 ]
 ```
 
@@ -800,22 +800,22 @@ label scheme for referencing units and classes across repositories:
 load("//classes/autotools.star", "autotools")   # from project root
 load("//units/openssh.star", "openssh_config") # load shared config
 
-# External references (from layers)
+# External references (from modules)
 load("@units-core//openssh.star", "openssh")
 load("@vendor-bsp//kernel.star", "vendor_kernel")
 ```
 
-Layer names (`@units-core`, `@vendor-bsp`) map to the layers declared in
+Module names (`@units-core`, `@vendor-bsp`) map to the modules declared in
 `PROJECT.star`. When `yoe` evaluates units, it fetches and caches external
-layers, then resolves all `load()` references to concrete files.
+modules, then resolves all `load()` references to concrete files.
 
-## Layer Composition
+## Module Composition
 
-Layers enable the vendor BSP / product overlay pattern without modifying
+Modules enable the vendor BSP / product overlay pattern without modifying
 upstream units:
 
 ```python
-# Layer 1: @units-core/openssh.star — base unit as a function
+# Module 1: @units-core/openssh.star — base unit as a function
 def openssh(extra_deps=[], extra_configure_args=[], **overrides):
     autotools(
         name = "openssh",
@@ -825,16 +825,16 @@ def openssh(extra_deps=[], extra_configure_args=[], **overrides):
         **overrides,
     )
 
-# Layer 2: @vendor-bsp/openssh.star — vendor extends it
+# Module 2: @vendor-bsp/openssh.star — vendor extends it
 load("@units-core//openssh.star", "openssh")
 openssh(extra_deps=["vendor-crypto"])
 
-# Layer 3: product unit — further customization
+# Module 3: product unit — further customization
 load("@vendor-bsp//openssh.star", "openssh")
 openssh(extra_configure_args=["--with-pam"])
 ```
 
-Each layer is explicit about what it modifies and where the base comes from.
+Each module is explicit about what it modifies and where the base comes from.
 This is more traceable than Yocto's bbappend system — you can grep for the
 function call to find all modifications.
 

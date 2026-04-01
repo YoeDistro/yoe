@@ -14,7 +14,7 @@ type Engine struct {
 	machines  map[string]*Machine
 	units     map[string]*Unit
 	commands  map[string]*Command
-	layerInfo *LayerInfo
+	moduleInfo *ModuleInfo
 
 	// globals stores the top-level bindings from the last ExecFile/ExecString,
 	// used to retrieve the run() function for custom commands.
@@ -25,7 +25,7 @@ type Engine struct {
 
 	// load() support
 	projectRoot string
-	layerRoots  map[string]string
+	moduleRoots map[string]string
 	loadCache   *loadCache
 }
 
@@ -48,7 +48,7 @@ func (e *Engine) Project() *Project              { return e.project }
 func (e *Engine) Machines() map[string]*Machine   { return e.machines }
 func (e *Engine) Units() map[string]*Unit     { return e.units }
 func (e *Engine) Commands() map[string]*Command   { return e.commands }
-func (e *Engine) LayerInfo() *LayerInfo           { return e.layerInfo }
+func (e *Engine) ModuleInfo() *ModuleInfo         { return e.moduleInfo }
 func (e *Engine) Globals() starlark.StringDict    { return e.globals }
 
 // ExecString evaluates Starlark source code with built-in functions available.

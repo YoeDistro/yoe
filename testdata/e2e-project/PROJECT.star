@@ -4,12 +4,12 @@ project(
     defaults = defaults(machine = "qemu-x86_64", image = "base-image"),
     repository = repository(path = "repo"),
     cache = cache(path = "build/cache"),
-    layers = [
-        layer("github.com/YoeDistro/yoe-ng",
+    modules = [
+        module("github.com/YoeDistro/yoe-ng",
               local = "../..",
-              path = "layers/units-core"),
-        layer("github.com/YoeDistro/yoe-ng",
+              path = "modules/units-core"),
+        module("github.com/YoeDistro/yoe-ng",
               local = "../..",
-              path = "layers/units-rpi"),
+              path = "modules/units-rpi"),
     ],
 )

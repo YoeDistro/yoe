@@ -8,7 +8,7 @@ code in this repository.
 Yoe-NG is a next-generation embedded Linux distribution builder — a simpler
 alternative to Yocto. The project has a working Go CLI (`yoe`) that builds
 artifacts from Starlark units inside a Docker container, creates bootable disk
-images, and runs them in QEMU. A `units-core` layer provides Starlark classes
+images, and runs them in QEMU. A `units-core` module provides Starlark classes
 and units for a minimal Linux system (busybox, kernel, openssl, openssh, etc.).
 
 Core design: Go CLI (`yoe`) + Starlark units/config + apk artifacts + bubblewrap
@@ -35,28 +35,28 @@ needed.**
 
 - `cmd/yoe/main.go` — CLI entry point with command dispatch
 - `internal/` — core Go packages (starlark, build, resolve, source, image,
-  artifact, repo, device, tui, bootstrap, layer, config)
+  artifact, repo, device, tui, bootstrap, module, config)
 - `containers/Dockerfile.build` — the build container (Tier 0), embedded in the
   binary via `containers/embed.go`
-- `layers/units-core/` — base layer with classes, units, machines, images
+- `modules/units-core/` — base module with classes, units, machines, images
 - `testdata/` — test fixtures including e2e-project
 - `envsetup.sh` — shell functions (source it, don't execute)
 - `docs/` — design documents (README.md, yoe-tool.md, metadata-format.md,
   build-environment.md, build-languages.md, sdk.md, comparisons.md)
 
-### Layer structure
+### Module structure
 
-The `units-core` layer lives at `layers/units-core/` in this repo. Projects
-reference it with `path = "layers/units-core"`:
+The `units-core` module lives at `modules/units-core/` in this repo. Projects
+reference it with `path = "modules/units-core"`:
 
 ```python
-layer("https://github.com/YoeDistro/yoe-ng.git",
+module("https://github.com/YoeDistro/yoe-ng.git",
       ref = "main",
-      path = "layers/units-core")
+      path = "modules/units-core")
 ```
 
-The `path` field tells yoe the layer's `LAYER.star` is in a subdirectory of the
-cloned repo, not at the root.
+The `path` field tells yoe the module's `MODULE.star` is in a subdirectory of
+the cloned repo, not at the root.
 
 ## Commands
 
@@ -113,21 +113,21 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
   `build/sysroot/` so subsequent units can find deps' headers/libraries
 - **Starlark** for all units and config (Python-like, deterministic, sandboxed)
 - **Classes as functions** — build patterns (autotools, cmake, go) are Starlark
-  functions in the layer, not Go builtins. Autotools class auto-runs
+  functions in the module, not Go builtins. Autotools class auto-runs
   `autoreconf` for git sources missing `./configure`.
 - **Prefer git sources over tarballs** — shallow clone with tag pinning. Enables
   `yoe dev` workflow (edit, commit, extract patches).
 - **apk** package manager (same as Alpine, but with glibc)
 - **bubblewrap** for per-unit build isolation inside the container
-- **Layer path** — layers can live in a subdirectory of a repo via the `path`
-  field on `layer()`. Layer name is derived from the path's last component.
+- **Module path** — modules can live in a subdirectory of a repo via the `path`
+  field on `module()`. Module name is derived from the path's last component.
 - **Image deps in DAG** — image units' `artifacts` list is treated as
   dependencies so `yoe build dev-image` automatically builds all required
   artifacts first
 - **Native builds only** — no cross-compilation
 - **Label-based references** —
   `load("@units-core//classes/autotools.star", "autotools")`, `//` relative to
-  layer root when inside a layer
+  module root when inside a module
 - **Two-phase build** — resolve DAG then execute (inspired by GN)
 - **Content-addressed caching** — input hash determines output
 - **Hardware-bootable images** — images must boot on real hardware, not just

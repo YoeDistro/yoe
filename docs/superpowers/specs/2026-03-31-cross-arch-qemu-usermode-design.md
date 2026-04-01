@@ -184,7 +184,7 @@ No changes needed to machine templates or Starlark definitions.
 - **Build scripts** — `./configure && make` works the same under emulation
 - **Cache hashing** — arch already part of the hash, x86_64 and arm64 cache
   separately
-- **Layer sync** — architecture-independent
+- **Module sync** — architecture-independent
 
 ## Performance Expectations
 

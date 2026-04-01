@@ -10,7 +10,7 @@ type Project struct {
 	Repository RepositoryConfig
 	Cache      CacheConfig
 	Sources    SourcesConfig
-	Layers     []LayerRef
+	Modules    []ModuleRef
 	Machines   map[string]*Machine
 	Units      map[string]*Unit
 }
@@ -46,18 +46,18 @@ type SourcesConfig struct {
 	PypiMirror    string
 }
 
-type LayerRef struct {
+type ModuleRef struct {
 	URL   string
 	Ref   string
-	Path  string // subdirectory within the repo containing LAYER.star
+	Path  string // subdirectory within the repo containing MODULE.star
 	Local string // local path override (like Go's replace directive)
 }
 
-// LayerInfo represents an evaluated LAYER.star from an external layer.
-type LayerInfo struct {
+// ModuleInfo represents an evaluated MODULE.star from an external module.
+type ModuleInfo struct {
 	Name        string
 	Description string
-	Deps        []LayerRef
+	Deps        []ModuleRef
 }
 
 // Machine represents an evaluated machine() call.

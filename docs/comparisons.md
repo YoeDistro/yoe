@@ -15,7 +15,7 @@ capable but carries significant complexity.
   configuration (kernel defconfig, device tree, bootloader, partition layout).
 - **Image units** — composable definitions of what goes into a root filesystem
   image and how it's laid out on disk.
-- **Layer architecture** — the ability to overlay vendor BSP customizations on
+- **Module architecture** — the ability to overlay vendor BSP customizations on
   top of a common base without forking.
 - **OTA integration** — first-class support for update frameworks (RAUC,
   SWUpdate).
@@ -46,7 +46,7 @@ explicitly:
 | ---------------------------------- | -------------------------------------------------------- |
 | `DEPENDS:append:raspberrypi4`      | `if MACHINE == "raspberrypi4": extra_deps = [...]`       |
 | `SRC_URI:append:aarch64`           | `if ARCH == "aarch64": ...` in the unit                  |
-| `PACKAGECONFIG:remove:musl`        | Layer scoping — musl project doesn't include that layer  |
+| `PACKAGECONFIG:remove:musl`        | Module scoping — musl project doesn't include that module |
 | `FILESEXTRAPATHS:prepend` + append | `load()` the upstream function, call with different args |
 
 Starlark has `if` with predeclared variables (`MACHINE`, `ARCH`), and the
