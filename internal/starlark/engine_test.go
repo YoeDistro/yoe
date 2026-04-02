@@ -1,6 +1,7 @@
 package starlark
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -326,5 +327,20 @@ project(name = "second", version = "2.0.0")
 	err := eng.ExecString("PROJECT.star", src)
 	if err == nil {
 		t.Fatal("expected error for duplicate project(), got nil")
+	}
+}
+
+func TestEvalUnitDuplicate(t *testing.T) {
+	src := `
+unit(name = "foo", version = "1.0.0")
+unit(name = "foo", version = "2.0.0")
+`
+	eng := NewEngine()
+	err := eng.ExecString("units/foo.star", src)
+	if err == nil {
+		t.Fatal("expected error for duplicate unit name, got nil")
+	}
+	if !strings.Contains(err.Error(), "already defined") {
+		t.Errorf("error = %q, want it to contain 'already defined'", err)
 	}
 }

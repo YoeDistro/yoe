@@ -503,7 +503,18 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 		}
 	}
 
+	r.Module = e.currentModule
+	r.ModuleIndex = e.currentModuleIndex
+
 	e.mu.Lock()
+	if existing, ok := e.units[name]; ok {
+		e.mu.Unlock()
+		src := "project root"
+		if existing.Module != "" {
+			src = fmt.Sprintf("module %q", existing.Module)
+		}
+		return nil, fmt.Errorf("unit %q already defined (first defined in %s)", name, src)
+	}
 	e.units[name] = r
 	e.mu.Unlock()
 
