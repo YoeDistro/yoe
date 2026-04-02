@@ -8,6 +8,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Unit name collision detection** — duplicate unit names now error at
+  evaluation time with a clear message showing which module first defined the
+  unit.
+- **PROVIDES collision detection** — two units providing the same virtual name
+  in the same module now error. Units from higher-priority modules (later in the
+  module list) override lower-priority ones with a notice.
+- **`--project` flag** — `yoe --project projects/customer-a.star build` selects
+  an alternate project file. Available on all subcommands.
+- **Per-project APK repo** — package repositories are now scoped per project
+  name (`repo/<project>/`) to prevent stale packages across project switches.
+
 ## [0.5.1] - 2026-04-02
 
 - Remove version from release binary name to fix stable download URL.
