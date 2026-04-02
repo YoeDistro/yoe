@@ -242,7 +242,8 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	}
 
 	// Execute tasks
-	for _, t := range unit.Tasks {
+	for ti, t := range unit.Tasks {
+		fmt.Fprintf(w, "  [%d/%d] task: %s\n", ti+1, len(unit.Tasks), t.Name)
 		fmt.Fprintf(logW, "  task: %s (%d steps)\n", t.Name, len(t.Steps))
 
 		for i, step := range t.Steps {
