@@ -16,6 +16,11 @@ type Engine struct {
 	commands  map[string]*Command
 	moduleInfo *ModuleInfo
 
+	// Current module context — set by the loader before evaluating each
+	// module's directories so registerUnit can tag units.
+	currentModule      string
+	currentModuleIndex int
+
 	// globals stores the top-level bindings from the last ExecFile/ExecString,
 	// used to retrieve the run() function for custom commands.
 	globals starlark.StringDict
@@ -50,6 +55,12 @@ func (e *Engine) Units() map[string]*Unit     { return e.units }
 func (e *Engine) Commands() map[string]*Command   { return e.commands }
 func (e *Engine) ModuleInfo() *ModuleInfo         { return e.moduleInfo }
 func (e *Engine) Globals() starlark.StringDict    { return e.globals }
+
+// SetCurrentModule sets the module context for subsequent unit registrations.
+func (e *Engine) SetCurrentModule(name string, index int) {
+	e.currentModule = name
+	e.currentModuleIndex = index
+}
 
 // ExecString evaluates Starlark source code with built-in functions available.
 func (e *Engine) ExecString(filename, src string) error {

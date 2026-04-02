@@ -121,7 +121,9 @@ type Unit struct {
 	// Build
 	Container string // default container for all tasks
 	Tasks     []Task
-	Provides  string // virtual package name
+	Provides    string // virtual package name
+	Module      string // module that registered this unit (empty = project root)
+	ModuleIndex int    // module priority (0 = project root, 1+ = declaration order)
 
 	// Artifact metadata
 	Services    []string
