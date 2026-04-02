@@ -30,7 +30,6 @@ archives:
   - formats: ['binary']
     name_template: >-
       {{ .ProjectName }}-
-      {{- .Tag }}-
       {{- title .Os }}-
       {{- if eq .Arch "amd64" }}x86_64
       {{- else }}{{ .Arch }}{{ end }}
