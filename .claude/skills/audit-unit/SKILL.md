@@ -20,7 +20,7 @@ sub-package splits, and deviation from project conventions.
 Find and read the unit's `.star` file:
 
 ```
-Glob: layers/**/units/**/<name>.star
+Glob: modules/**/units/**/<name>.star
 ```
 
 ### Step 2: Cross-Reference with Other Distributions

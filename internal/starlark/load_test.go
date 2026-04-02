@@ -17,7 +17,7 @@ func TestLoadFunction(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(classesDir, "myclass.star"), []byte(`
 def my_builder(name, version):
-    autotools(name = name, version = version)
+    unit(name = name, version = version)
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -45,31 +45,31 @@ my_builder(name = "hello", version = "1.0")
 	if !ok {
 		t.Fatal("unit 'hello' not registered")
 	}
-	if r.Class != "autotools" {
-		t.Errorf("Class = %q, want %q", r.Class, "autotools")
+	if r.Class != "unit" {
+		t.Errorf("Class = %q, want %q", r.Class, "unit")
 	}
 	if r.Version != "1.0" {
 		t.Errorf("Version = %q, want %q", r.Version, "1.0")
 	}
 }
 
-func TestLoadFunction_LayerRef(t *testing.T) {
+func TestLoadFunction_ModuleRef(t *testing.T) {
 	tmp := t.TempDir()
 
-	// Create a layer directory with a helper class
-	layerDir := filepath.Join(tmp, "layers", "mylib")
+	// Create a module directory with a helper class
+	layerDir := filepath.Join(tmp, "modules", "mylib")
 	classesDir := filepath.Join(layerDir, "classes")
 	if err := os.MkdirAll(classesDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(classesDir, "helper.star"), []byte(`
 def helper(name, version):
-    autotools(name = name, version = version)
+    unit(name = name, version = version)
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	// Create a unit that loads from the layer
+	// Create a unit that loads from the module
 	unitsDir := filepath.Join(tmp, "units")
 	if err := os.MkdirAll(unitsDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -83,7 +83,7 @@ helper(name = "widget", version = "2.0")
 
 	eng := NewEngine()
 	eng.SetProjectRoot(tmp)
-	eng.SetLayerRoot("mylib", layerDir)
+	eng.SetModuleRoot("mylib", layerDir)
 
 	if err := eng.ExecFile(filepath.Join(unitsDir, "widget.star")); err != nil {
 		t.Fatalf("ExecFile: %v", err)
@@ -93,8 +93,8 @@ helper(name = "widget", version = "2.0")
 	if !ok {
 		t.Fatal("unit 'widget' not registered")
 	}
-	if r.Class != "autotools" {
-		t.Errorf("Class = %q, want %q", r.Class, "autotools")
+	if r.Class != "unit" {
+		t.Errorf("Class = %q, want %q", r.Class, "unit")
 	}
 	if r.Version != "2.0" {
 		t.Errorf("Version = %q, want %q", r.Version, "2.0")
@@ -111,7 +111,7 @@ func TestLoadFunction_Cache(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(classesDir, "shared.star"), []byte(`
 def shared_builder(name, version):
-    autotools(name = name, version = version)
+    unit(name = name, version = version)
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}

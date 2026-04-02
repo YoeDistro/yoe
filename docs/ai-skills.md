@@ -17,8 +17,8 @@ build isolation, and packaging can:
   configurations.
 - **Reduce debugging time.** Build failures in embedded systems often involve
   subtle interactions between toolchain flags, dependency ordering, and
-  cross-layer overrides. An AI that can read the full dependency graph and build
-  logs can diagnose issues faster than manual investigation.
+  cross-module overrides. An AI that can read the full dependency graph and
+  build logs can diagnose issues faster than manual investigation.
 - **Automate routine maintenance.** Version bumps, security patches, license
   audits, and dependency updates are tedious but critical. AI skills can
   automate these with human review.
@@ -180,24 +180,24 @@ world-readable sensitive files, default passwords.
 /security-review base-image
 ```
 
-### Layer Management
+### Module Management
 
-#### `/new-layer`
+#### `/new-module`
 
-Scaffold a new layer with LAYER.star, directory structure, and example units.
+Scaffold a new module with MODULE.star, directory structure, and example units.
 
 ```
-/new-layer vendor-bsp "BSP layer for our custom board"
-/new-layer product "Product-specific units and images"
+/new-module vendor-bsp "BSP module for our custom board"
+/new-module product "Product-specific units and images"
 ```
 
-#### `/layer-diff`
+#### `/module-diff`
 
-Compare two versions of a layer. Show what units changed, what versions bumped,
+Compare two versions of a module. Show what units changed, what versions bumped,
 what new units were added, and what was removed.
 
 ```
-/layer-diff @units-core v1.0.0 v1.1.0
+/module-diff @units-core v1.0.0 v1.1.0
 ```
 
 ### SDK & Development
@@ -235,7 +235,7 @@ specific project.
 ```
 /explain "how does caching work for my project"
 /explain "what happens when I run yoe build base-image"
-/explain "how do layers compose in my project"
+/explain "how do modules compose in my project"
 ```
 
 #### `/diff-from-yocto`

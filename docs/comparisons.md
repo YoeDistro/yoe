@@ -15,7 +15,7 @@ capable but carries significant complexity.
   configuration (kernel defconfig, device tree, bootloader, partition layout).
 - **Image units** — composable definitions of what goes into a root filesystem
   image and how it's laid out on disk.
-- **Layer architecture** — the ability to overlay vendor BSP customizations on
+- **Module architecture** — the ability to overlay vendor BSP customizations on
   top of a common base without forking.
 - **OTA integration** — first-class support for update frameworks (RAUC,
   SWUpdate).
@@ -30,6 +30,29 @@ capable but carries significant complexity.
   bucket URL.
 - Cross-compilation toolchains.
 - Python as the tooling language.
+
+**No conditional override syntax.** Yocto's
+[override system](https://docs.yoctoproject.org/bitbake/bitbake-user-manual/bitbake-user-manual-metadata.html#conditional-syntax-overrides)
+(`DEPENDS:append:raspberrypi4`, `SRC_URI:remove:aarch64`, etc.) exists because
+BitBake's metadata model is variable-based — you set global variables and then
+layer conditional string operations on top. The result is powerful but
+notoriously hard to debug (you need `bitbake -e` to see what a variable actually
+resolved to).
+
+Yoe-NG's model is function-based, which covers the same use cases more
+explicitly:
+
+| Yocto override                     | Yoe-NG equivalent                                         |
+| ---------------------------------- | --------------------------------------------------------- |
+| `DEPENDS:append:raspberrypi4`      | `if MACHINE == "raspberrypi4": extra_deps = [...]`        |
+| `SRC_URI:append:aarch64`           | `if ARCH == "aarch64": ...` in the unit                   |
+| `PACKAGECONFIG:remove:musl`        | Module scoping — musl project doesn't include that module |
+| `FILESEXTRAPATHS:prepend` + append | `load()` the upstream function, call with different args  |
+
+Starlark has `if` with predeclared variables (`MACHINE`, `ARCH`), and the
+function composition pattern handles the "extend from downstream" case. When
+machine-specific behavior is needed, it's right there in the `.star` file — no
+hidden layering of string operations.
 
 **Key differences:**
 

@@ -1,27 +1,27 @@
-# units-core Layer Design
+# units-core Module Design
 
-The base metadata layer for Yoe-NG. Contains the toolchain, base system,
+The base metadata module for Yoe-NG. Contains the toolchain, base system,
 essential libraries, build classes, and QEMU machine definitions that every
 Yoe-NG project depends on.
 
 ## Location
 
-`layers/units-core/` in the main yoe-ng repository. Will be extracted to its own
-Git repo (`github.com/yoe/units-core`) once stable. During development, projects
-reference it as a local layer override:
+`modules/units-core/` in the main yoe-ng repository. Will be extracted to its
+own Git repo (`github.com/yoe/units-core`) once stable. During development,
+projects reference it as a local module override:
 
 ```python
 # PROJECT.star
-layers = [
-    layer("github.com/yoe/units-core", local = "../layers/units-core"),
+modules = [
+    module("github.com/yoe/units-core", local = "../modules/units-core"),
 ]
 ```
 
 ## Directory Structure
 
 ```
-layers/units-core/
-├── LAYER.star
+modules/units-core/
+├── MODULE.star
 ├── classes/
 │   ├── autotools.star
 │   ├── cmake.star
@@ -93,15 +93,15 @@ layers/units-core/
 ```
 
 Units are organized by category in subdirectories. This scales better than a
-flat layout as the layer grows toward 100+ units.
+flat layout as the module grows toward 100+ units.
 
-## LAYER.star
+## MODULE.star
 
 ```python
-layer_info(
+module_info(
     name = "units-core",
-    description = "Yoe-NG base layer: toolchain, base system, essential libraries, and QEMU machines",
-    # No deps — this is the root layer. All other layers depend on this one.
+    description = "Yoe-NG base module: toolchain, base system, essential libraries, and QEMU machines",
+    # No deps — this is the root module. All other modules depend on this one.
 )
 ```
 
@@ -111,11 +111,11 @@ The `yoe` Go binary provides low-level **primitives** as Starlark builtins.
 These are the atoms that everything else is built from:
 
 **Go builtins (primitives):** `unit()`, `image()`, `machine()`, `project()`,
-`layer_info()`, `partition()`, `kernel()`, `uboot()`, `qemu_config()`,
-`defaults()`, `repository()`, `cache()`, `s3_cache()`, `sources()`, `layer()`,
+`module_info()`, `partition()`, `kernel()`, `uboot()`, `qemu_config()`,
+`defaults()`, `repository()`, `cache()`, `s3_cache()`, `sources()`, `module()`,
 `subunit()`, `auto()`
 
-**Starlark classes (in this layer):** `autotools()`, `cmake()`, `meson()`,
+**Starlark classes (in this module):** `autotools()`, `cmake()`, `meson()`,
 `go_binary()`, `rust_binary()`, `python_unit()`, `node_unit()`, `sdk()`,
 `systemd_service()`
 
@@ -234,17 +234,17 @@ def systemd_service(name, unit, conffiles = [], wants = [], after = []):
 
 `image()` and `sdk()` are Go primitives because they have fundamentally
 different build paths (rootfs assembly vs. source compilation). The
-`classes/image.star` and `classes/sdk.star` files in the layer are thin wrappers
-that re-export the primitive with layer-specific defaults (e.g., default
-partition layouts, default base packages). Units can use the primitive directly
-or use the class wrapper.
+`classes/image.star` and `classes/sdk.star` files in the module are thin
+wrappers that re-export the primitive with module-specific defaults (e.g.,
+default partition layouts, default base packages). Units can use the primitive
+directly or use the class wrapper.
 
 ## Unit Conventions
 
 1. **One unit per `.star` file**, named after the package. `zlib.star` produces
    the `zlib` package (plus automatic `-dev`, `-doc`, `-dbg` sub-packages).
 
-2. **Units use layer classes via `load()`:**
+2. **Units use module classes via `load()`:**
 
    ```python
    load("//classes/autotools.star", "autotools")
@@ -257,8 +257,8 @@ or use the class wrapper.
    )
    ```
 
-   Within the layer, `//` is relative to the layer root. Downstream projects
-   loading from this layer use `@units-core//classes/autotools.star`.
+   Within the module, `//` is relative to the module root. Downstream projects
+   loading from this module use `@units-core//classes/autotools.star`.
 
 3. **Default sub-packages** apply automatically (`-dev`, `-doc`, `-dbg`). Units
    only declare `subpackages` for custom splits (e.g., openssh-server vs.
@@ -549,9 +549,9 @@ image(
 
 ## Phasing
 
-### Phase 1: Layer skeleton + classes + toolchain
+### Phase 1: Module skeleton + classes + toolchain
 
-- `LAYER.star`
+- `MODULE.star`
 - All 10 class files (`autotools`, `cmake`, `meson`, `go`, `rust`, `python`,
   `node`, `image`, `sdk`, `systemd`)
 - Toolchain units: `gcc`, `binutils`, `glibc`, `linux-headers`
@@ -597,16 +597,16 @@ Moving classes from Go builtins to Starlark files requires these changes to the
 
 1. **Remove Go builtins for classes.** `autotools()`, `cmake()`, `go_binary()`
    are no longer registered as predeclared names. They exist only as Starlark
-   functions in layer `.star` files.
+   functions in module `.star` files.
 
 2. **Implement `load()` resolution.** The Starlark thread's load handler must
    resolve:
-   - `//path` — relative to the current file's layer root (or project root if
-     not in a layer)
-   - `@layer-name//path` — relative to the named layer's root
+   - `//path` — relative to the current file's module root (or project root if
+     not in a module)
+   - `@module-name//path` — relative to the named module's root
 
-3. **Evaluate layers before project units.** The loader must fetch/cache layers
-   (per `yoe layer sync`), then make their files available for `load()`
+3. **Evaluate modules before project units.** The loader must fetch/cache
+   modules (per `yoe module sync`), then make their files available for `load()`
    resolution before evaluating project units.
 
 4. **Add `package_extend()` primitive.** Needed for `systemd_service()` and

@@ -16,20 +16,19 @@ func (e *Engine) builtins() starlark.StringDict {
 		"cache":       starlark.NewBuiltin("cache", fnCache),
 		"s3_cache":    starlark.NewBuiltin("s3_cache", fnS3Cache),
 		"sources":     starlark.NewBuiltin("sources", fnSources),
-		"layer":       starlark.NewBuiltin("layer", fnLayer),
-		"layer_info":  starlark.NewBuiltin("layer_info", e.fnLayerInfo),
+		"module":      starlark.NewBuiltin("module", fnModule),
+		"module_info": starlark.NewBuiltin("module_info", e.fnModuleInfo),
 		"machine":     starlark.NewBuiltin("machine", e.fnMachine),
 		"kernel":      starlark.NewBuiltin("kernel", fnKernel),
 		"uboot":       starlark.NewBuiltin("uboot", fnUboot),
 		"qemu_config": starlark.NewBuiltin("qemu_config", fnQEMUConfig),
 		"unit":        starlark.NewBuiltin("unit", e.fnUnit),
-		"autotools":   starlark.NewBuiltin("autotools", e.fnAutotools),
-		"cmake":       starlark.NewBuiltin("cmake", e.fnCMake),
-		"go_binary":   starlark.NewBuiltin("go_binary", e.fnGoBinary),
 		"image":       starlark.NewBuiltin("image", e.fnImage),
 		"partition":   starlark.NewBuiltin("partition", fnPartition),
+		"task":        starlark.NewBuiltin("task", fnTask),
 		"command":     starlark.NewBuiltin("command", e.fnCommand),
 		"arg":         starlark.NewBuiltin("arg", fnArg),
+		"run":         starlark.NewBuiltin("run", fnRunPlaceholder),
 		"True":        starlark.True,
 		"False":       starlark.False,
 	}
@@ -40,6 +39,25 @@ func (e *Engine) builtins() starlark.StringDict {
 	}
 
 	return d
+}
+
+// fnRunPlaceholder is registered as a global so that lambda closures can
+// capture the name "run" at evaluation time.  When called from a build
+// thread (with sandbox config in thread-local storage) it delegates to the
+// real implementation in the build package.  When called outside a build
+// thread it returns an error.
+func fnRunPlaceholder(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	// Check if we're in a build thread by looking for the sandbox key.
+	if thread.Local("yoe.sandbox") != nil {
+		// Delegate to the real run() registered via BuildPredeclared.
+		// The build package sets "yoe.run" on the thread.
+		if fn := thread.Local("yoe.run"); fn != nil {
+			if callable, ok := fn.(starlark.Callable); ok {
+				return starlark.Call(thread, callable, args, kwargs)
+			}
+		}
+	}
+	return nil, fmt.Errorf("run() can only be called at build time (inside a task function)")
 }
 
 // --- Helper: extract keyword args ---
@@ -153,19 +171,19 @@ func fnSources(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs
 	return makeStruct("sources", kwargs), nil
 }
 
-func fnLayer(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func fnModule(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if len(args) < 1 {
-		return nil, fmt.Errorf("layer() requires a URL argument")
+		return nil, fmt.Errorf("module() requires a URL argument")
 	}
 	url, ok := args[0].(starlark.String)
 	if !ok {
-		return nil, fmt.Errorf("layer() URL must be a string")
+		return nil, fmt.Errorf("module() URL must be a string")
 	}
 	d := starlark.StringDict{"url": url}
 	for _, kv := range kwargs {
 		d[string(kv[0].(starlark.String))] = kv[1]
 	}
-	return starlarkstruct.FromStringDict(starlark.String("layer"), d), nil
+	return starlarkstruct.FromStringDict(starlark.String("module"), d), nil
 }
 
 func fnKernel(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
@@ -184,23 +202,23 @@ func fnPartition(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwar
 	return makeStruct("partition", kwargs), nil
 }
 
-// --- Built-in functions that register layer info ---
+// --- Built-in functions that register module info ---
 
-func (e *Engine) fnLayerInfo(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+func (e *Engine) fnModuleInfo(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	name := kwString(kwargs, "name")
 	if name == "" {
-		return nil, fmt.Errorf("layer_info() requires name")
+		return nil, fmt.Errorf("module_info() requires name")
 	}
 
-	info := &LayerInfo{
+	info := &ModuleInfo{
 		Name:        name,
 		Description: kwString(kwargs, "description"),
 	}
 
-	// Parse deps list of layer() structs
+	// Parse deps list of module() structs
 	for _, kv := range kwargs {
 		if string(kv[0].(starlark.String)) == "deps" {
 			if list, ok := kv[1].(*starlark.List); ok {
@@ -209,7 +227,7 @@ func (e *Engine) fnLayerInfo(_ *starlark.Thread, _ *starlark.Builtin, _ starlark
 				var v starlark.Value
 				for iter.Next(&v) {
 					if s, ok := v.(*starlarkstruct.Struct); ok {
-						info.Deps = append(info.Deps, LayerRef{
+						info.Deps = append(info.Deps, ModuleRef{
 							URL: structString(s, "url"),
 							Ref: structString(s, "ref"),
 						})
@@ -219,7 +237,7 @@ func (e *Engine) fnLayerInfo(_ *starlark.Thread, _ *starlark.Builtin, _ starlark
 		}
 	}
 
-	e.layerInfo = info
+	e.moduleInfo = info
 	return starlark.None, nil
 }
 
@@ -252,16 +270,16 @@ func (e *Engine) fnProject(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 		},
 	}
 
-	// Parse layers list
+	// Parse modules list
 	for _, kv := range kwargs {
-		if string(kv[0].(starlark.String)) == "layers" {
+		if string(kv[0].(starlark.String)) == "modules" {
 			if list, ok := kv[1].(*starlark.List); ok {
 				iter := list.Iterate()
 				defer iter.Done()
 				var v starlark.Value
 				for iter.Next(&v) {
 					if s, ok := v.(*starlarkstruct.Struct); ok {
-						p.Layers = append(p.Layers, LayerRef{
+						p.Modules = append(p.Modules, ModuleRef{
 							URL:   structString(s, "url"),
 							Ref:   structString(s, "ref"),
 							Path:  structString(s, "path"),
@@ -302,13 +320,20 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 			DeviceTrees: structStringList(kernelS, "device_trees"),
 			Unit:        structString(kernelS, "unit"),
 			Cmdline:     structString(kernelS, "cmdline"),
+			Provides:    structString(kernelS, "provides"),
 		},
+		Packages: kwStringList(kwargs, "packages"),
 	}
 
-	// Handle bootloader and qemu from kwargs
+	// Handle bootloader, qemu, and partitions from kwargs
 	for _, kv := range kwargs {
 		key := string(kv[0].(starlark.String))
-		if s, ok := kv[1].(*starlarkstruct.Struct); ok {
+		switch key {
+		case "bootloader", "uboot", "qemu":
+			s, ok := kv[1].(*starlarkstruct.Struct)
+			if !ok {
+				continue
+			}
 			switch key {
 			case "bootloader":
 				m.Bootloader = BootloaderConfig{
@@ -333,6 +358,28 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 					Display:  structString(s, "display"),
 				}
 			}
+		case "partitions":
+			if list, ok := kv[1].(*starlark.List); ok {
+				iter := list.Iterate()
+				defer iter.Done()
+				var v starlark.Value
+				for iter.Next(&v) {
+					if s, ok := v.(*starlarkstruct.Struct); ok {
+						p := Partition{
+							Label:    structString(s, "label"),
+							Type:     structString(s, "type"),
+							Size:     structString(s, "size"),
+							Contents: structStringList(s, "contents"),
+						}
+						if rv, err := s.Attr("root"); err == nil {
+							if b, ok := rv.(starlark.Bool); ok {
+								p.Root = bool(b)
+							}
+						}
+						m.Partitions = append(m.Partitions, p)
+					}
+				}
+			}
 		}
 	}
 
@@ -349,29 +396,84 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 		return nil, fmt.Errorf("%s() requires name", class)
 	}
 
+	// Allow Starlark to override class (e.g., image() class calls unit() with unit_class="image")
+	cls := kwString(kwargs, "unit_class")
+	if cls == "" {
+		cls = class
+	}
+
 	r := &Unit{
-		Name:          name,
-		Version:       kwString(kwargs, "version"),
-		Class:         class,
-		Description:   kwString(kwargs, "description"),
-		License:       kwString(kwargs, "license"),
-		Source:        kwString(kwargs, "source"),
-		SHA256:        kwString(kwargs, "sha256"),
-		Tag:           kwString(kwargs, "tag"),
-		Branch:        kwString(kwargs, "branch"),
-		Patches:       kwStringList(kwargs, "patches"),
-		Deps:          kwStringList(kwargs, "deps"),
-		RuntimeDeps:   kwStringList(kwargs, "runtime_deps"),
-		Build:         kwStringList(kwargs, "build"),
-		ConfigureArgs: kwStringList(kwargs, "configure_args"),
-		GoPackage:     kwString(kwargs, "package"),
-		Services:      kwStringList(kwargs, "services"),
-		Conffiles:     kwStringList(kwargs, "conffiles"),
-		Artifacts:     kwStringList(kwargs, "artifacts"),
-		Exclude:       kwStringList(kwargs, "exclude"),
-		Hostname:      kwString(kwargs, "hostname"),
-		Timezone:      kwString(kwargs, "timezone"),
-		Locale:        kwString(kwargs, "locale"),
+		Name:        name,
+		Version:     kwString(kwargs, "version"),
+		Class:       cls,
+		Scope:       kwString(kwargs, "scope"),
+		Description: kwString(kwargs, "description"),
+		License:     kwString(kwargs, "license"),
+		Source:      kwString(kwargs, "source"),
+		SHA256:      kwString(kwargs, "sha256"),
+		Tag:         kwString(kwargs, "tag"),
+		Branch:      kwString(kwargs, "branch"),
+		Patches:     kwStringList(kwargs, "patches"),
+		Deps:        kwStringList(kwargs, "deps"),
+		RuntimeDeps: kwStringList(kwargs, "runtime_deps"),
+		Container:   kwString(kwargs, "container"),
+		Provides:    kwString(kwargs, "provides"),
+		Services:    kwStringList(kwargs, "services"),
+		Conffiles:   kwStringList(kwargs, "conffiles"),
+		Artifacts:   kwStringList(kwargs, "artifacts"),
+		Exclude:     kwStringList(kwargs, "exclude"),
+		Hostname:    kwString(kwargs, "hostname"),
+		Timezone:    kwString(kwargs, "timezone"),
+		Locale:      kwString(kwargs, "locale"),
+	}
+
+	// Parse tasks
+	for _, kv := range kwargs {
+		if string(kv[0].(starlark.String)) == "tasks" {
+			if list, ok := kv[1].(*starlark.List); ok {
+				iter := list.Iterate()
+				defer iter.Done()
+				var v starlark.Value
+				for iter.Next(&v) {
+					s, ok := v.(*starlarkstruct.Struct)
+					if !ok {
+						continue
+					}
+					t := Task{
+						Name:      structString(s, "name"),
+						Container: structString(s, "container"),
+					}
+					// Parse steps: run (single string), fn (single callable),
+					// or steps (list of strings/callables)
+					if rv, err := s.Attr("run"); err == nil {
+						if cmd, ok := rv.(starlark.String); ok {
+							t.Steps = []Step{{Command: string(cmd)}}
+						}
+					}
+					if rv, err := s.Attr("fn"); err == nil {
+						if fn, ok := rv.(starlark.Callable); ok {
+							t.Steps = []Step{{Fn: fn}}
+						}
+					}
+					if rv, err := s.Attr("steps"); err == nil {
+						if list, ok := rv.(*starlark.List); ok {
+							si := list.Iterate()
+							var sv starlark.Value
+							for si.Next(&sv) {
+								switch val := sv.(type) {
+								case starlark.String:
+									t.Steps = append(t.Steps, Step{Command: string(val)})
+								case starlark.Callable:
+									t.Steps = append(t.Steps, Step{Fn: val})
+								}
+							}
+							si.Done()
+						}
+					}
+					r.Tasks = append(r.Tasks, t)
+				}
+			}
+		}
 	}
 
 	// Parse partitions if present
@@ -409,34 +511,33 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 }
 
 func (e *Engine) fnUnit(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	r, err := e.registerUnit("unit", kwargs)
-	if err != nil {
-		return nil, err
-	}
-	if len(r.Build) == 0 {
-		return nil, fmt.Errorf("unit(%q): build steps required", r.Name)
-	}
-	return starlark.None, nil
-}
-
-func (e *Engine) fnAutotools(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	_, err := e.registerUnit("autotools", kwargs)
-	return starlark.None, err
-}
-
-func (e *Engine) fnCMake(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	_, err := e.registerUnit("cmake", kwargs)
-	return starlark.None, err
-}
-
-func (e *Engine) fnGoBinary(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	_, err := e.registerUnit("go", kwargs)
+	_, err := e.registerUnit("unit", kwargs)
 	return starlark.None, err
 }
 
 func (e *Engine) fnImage(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	_, err := e.registerUnit("image", kwargs)
 	return starlark.None, err
+}
+
+// --- Task builtin ---
+
+func fnTask(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var name starlark.String
+	if err := starlark.UnpackPositionalArgs("task", args, nil, 1, &name); err != nil {
+		return nil, err
+	}
+
+	fields := starlark.StringDict{
+		"name": name,
+	}
+
+	for _, kv := range kwargs {
+		key := string(kv[0].(starlark.String))
+		fields[key] = kv[1]
+	}
+
+	return starlarkstruct.FromStringDict(starlark.String("task"), fields), nil
 }
 
 // --- Custom commands ---

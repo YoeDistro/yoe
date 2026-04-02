@@ -69,7 +69,14 @@ func TestStage0Commands(t *testing.T) {
 	unit := &yoestar.Unit{
 		Name:  "test",
 		Class: "autotools",
-		ConfigureArgs: []string{"--with-glibc"},
+		Tasks: []yoestar.Task{{
+			Name: "build",
+			Steps: []yoestar.Step{
+				{Command: "./configure --with-glibc"},
+				{Command: "make -j$NPROC"},
+				{Command: "make DESTDIR=$DESTDIR install"},
+			},
+		}},
 	}
 
 	cmds := stage0Commands(unit)
@@ -83,8 +90,11 @@ func TestStage0Commands(t *testing.T) {
 
 func TestStage0Commands_ExplicitBuild(t *testing.T) {
 	unit := &yoestar.Unit{
-		Name:  "test",
-		Build: []string{"make all", "make install"},
+		Name: "test",
+		Tasks: []yoestar.Task{{
+			Name:  "build",
+			Steps: []yoestar.Step{{Command: "make all"}, {Command: "make install"}},
+		}},
 	}
 
 	cmds := stage0Commands(unit)

@@ -12,82 +12,12 @@ import (
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
-func TestBuildCommands_Package(t *testing.T) {
-	unit := &yoestar.Unit{
-		Name:  "test",
-		Class: "unit",
-		Build: []string{"make", "make install"},
-	}
-	cmds := buildCommands(unit)
-	if len(cmds) != 2 {
-		t.Errorf("got %d commands, want 2", len(cmds))
-	}
-}
-
-func TestBuildCommands_Autotools(t *testing.T) {
-	unit := &yoestar.Unit{
-		Name:          "test",
-		Class:         "autotools",
-		ConfigureArgs: []string{"--with-ssl"},
-	}
-	cmds := buildCommands(unit)
-	if len(cmds) != 3 {
-		t.Errorf("got %d commands, want 3", len(cmds))
-	}
-	if !strings.Contains(cmds[0], "--with-ssl") {
-		t.Errorf("configure should include --with-ssl: %s", cmds[0])
-	}
-}
-
-func TestBuildCommands_CMake(t *testing.T) {
-	unit := &yoestar.Unit{
-		Name:  "test",
-		Class: "cmake",
-	}
-	cmds := buildCommands(unit)
-	if len(cmds) != 3 {
-		t.Errorf("got %d commands, want 3", len(cmds))
-	}
-	if !strings.Contains(cmds[0], "cmake -B build") {
-		t.Errorf("first command should be cmake: %s", cmds[0])
-	}
-}
-
-func TestBuildCommands_Go(t *testing.T) {
-	unit := &yoestar.Unit{
-		Name:      "myapp",
-		Class:     "go",
-		GoPackage: "./cmd/myapp",
-	}
-	cmds := buildCommands(unit)
-	if len(cmds) != 1 {
-		t.Errorf("got %d commands, want 1", len(cmds))
-	}
-	if !strings.Contains(cmds[0], "go build") {
-		t.Errorf("command should be go build: %s", cmds[0])
-	}
-	if !strings.Contains(cmds[0], "./cmd/myapp") {
-		t.Errorf("command should include package path: %s", cmds[0])
-	}
-}
-
-func TestBuildCommands_Image(t *testing.T) {
-	unit := &yoestar.Unit{
-		Name:  "base-image",
-		Class: "image",
-	}
-	cmds := buildCommands(unit)
-	if cmds != nil {
-		t.Errorf("image should have no build commands, got %v", cmds)
-	}
-}
-
 func TestDryRun(t *testing.T) {
 	proj := &yoestar.Project{
 		Name: "test",
 		Units: map[string]*yoestar.Unit{
-			"zlib":    {Name: "zlib", Version: "1.3", Class: "unit", Build: []string{"make"}},
-			"openssh": {Name: "openssh", Version: "9.6", Class: "unit", Deps: []string{"zlib"}, Build: []string{"make"}},
+			"zlib":    {Name: "zlib", Version: "1.3", Class: "unit", Tasks: []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "make"}}}}},
+			"openssh": {Name: "openssh", Version: "9.6", Class: "unit", Deps: []string{"zlib"}, Tasks: []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "make"}}}}},
 		},
 	}
 
@@ -192,13 +122,13 @@ func TestBuildUnits_WithDeps(t *testing.T) {
 				Name:    "hello",
 				Version: "1.0",
 				Class:   "package",
-				Build:   []string{"echo built > built.txt"},
+				Tasks: []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "echo built > built.txt"}}}},
 			},
 		},
 	}
 
 	// Create source directory with a file (simulating prepared source)
-	srcDir := filepath.Join(projectDir, "build", "x86_64", "hello", "src")
+	srcDir := filepath.Join(projectDir, "build", "hello.x86_64", "src")
 	os.MkdirAll(srcDir, 0755)
 	os.WriteFile(filepath.Join(srcDir, "Makefile"), []byte("all:\n\techo hello\n"), 0644)
 
@@ -235,7 +165,7 @@ func TestBuildUnits_WithDeps(t *testing.T) {
 	// Verify cache marker was written
 	if !IsBuildCached(projectDir, "x86_64", "hello", "") {
 		// The hash won't be "" — just verify the marker file exists
-		markerDir := filepath.Join(projectDir, "build", "x86_64", "hello")
+		markerDir := filepath.Join(projectDir, "build", "hello.x86_64")
 		entries, _ := os.ReadDir(markerDir)
 		found := false
 		for _, e := range entries {

@@ -49,7 +49,7 @@ func TestGenerateIndex(t *testing.T) {
 	}
 
 	// Generate index
-	if err := GenerateIndex(repoDir, "x86_64"); err != nil {
+	if err := GenerateIndex(repoDir); err != nil {
 		t.Fatalf("GenerateIndex: %v", err)
 	}
 
@@ -90,7 +90,7 @@ func TestGenerateIndex_EmptyRepo(t *testing.T) {
 	repoDir := t.TempDir()
 
 	// Should succeed with no apks
-	if err := GenerateIndex(repoDir, "x86_64"); err != nil {
+	if err := GenerateIndex(repoDir); err != nil {
 		t.Fatalf("GenerateIndex on empty repo: %v", err)
 	}
 
@@ -106,21 +106,25 @@ func TestParseAPKFilename(t *testing.T) {
 		filename    string
 		wantName    string
 		wantVersion string
+		wantScope   string
 	}{
-		{"hello-1.0.0-r0.apk", "hello", "1.0.0-r0"},
-		{"lib-foo-2.3.1-r5.apk", "lib-foo", "2.3.1-r5"},
-		{"zlib-1.2.13-r0.apk", "zlib", "1.2.13-r0"},
-		{"linux-headers-6.1-r0.apk", "linux-headers", "6.1-r0"},
+		{"hello-1.0.0-r0.arm64.apk", "hello", "1.0.0-r0", "arm64"},
+		{"lib-foo-2.3.1-r5.x86_64.apk", "lib-foo", "2.3.1-r5", "x86_64"},
+		{"zlib-1.2.13-r0.noarch.apk", "zlib", "1.2.13-r0", "noarch"},
+		{"linux-rpi4-6.12-r0.raspberrypi4.apk", "linux-rpi4", "6.12-r0", "raspberrypi4"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.filename, func(t *testing.T) {
-			name, version := parseAPKFilename(tt.filename)
+			name, version, scope := parseAPKFilename(tt.filename)
 			if name != tt.wantName {
 				t.Errorf("name = %q, want %q", name, tt.wantName)
 			}
 			if version != tt.wantVersion {
 				t.Errorf("version = %q, want %q", version, tt.wantVersion)
+			}
+			if scope != tt.wantScope {
+				t.Errorf("scope = %q, want %q", scope, tt.wantScope)
 			}
 		})
 	}

@@ -5,9 +5,11 @@ unit(
     sha256 = "abc123def456",
     deps = ["zlib"],
     runtime_deps = ["zlib"],
-    build = [
-        "./Configure --prefix=$PREFIX --openssldir=/etc/ssl",
-        "make -j$NPROC",
-        "make DESTDIR=$DESTDIR install",
+    tasks = [
+        task("build", steps = [
+            "./Configure --prefix=$PREFIX --openssldir=/etc/ssl",
+            "make -j$NPROC",
+            "make DESTDIR=$DESTDIR install",
+        ]),
     ],
 )

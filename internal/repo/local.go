@@ -13,27 +13,17 @@ import (
 )
 
 // RepoDir returns the local package repository path for a project.
-// Packages are stored in an architecture subdirectory (e.g., build/repo/x86_64/)
-// because apk expects this layout.
-func RepoDir(proj *yoestar.Project, projectDir, arch string) string {
-	base := filepath.Join(projectDir, "build", "repo")
-	if proj != nil && proj.Repository.Path != "" {
-		base = proj.Repository.Path
-	}
-	return filepath.Join(base, arch)
-}
-
-// RepoBaseDir returns the repository base path (without arch subdirectory).
-// This is what gets passed to apk --repository.
-func RepoBaseDir(proj *yoestar.Project, projectDir string) string {
+// All packages live in a single flat directory with scope in the filename
+// (e.g., busybox-1.36.1-r0.arm64.apk, linux-rpi4-6.12-r0.raspberrypi4.apk).
+func RepoDir(proj *yoestar.Project, projectDir string) string {
 	if proj != nil && proj.Repository.Path != "" {
 		return proj.Repository.Path
 	}
-	return filepath.Join(projectDir, "build", "repo")
+	return filepath.Join(projectDir, "repo")
 }
 
 // Publish copies an .apk file to the local repository.
-func Publish(apkPath, repoDir, arch string) error {
+func Publish(apkPath, repoDir string) error {
 	if err := os.MkdirAll(repoDir, 0755); err != nil {
 		return err
 	}
@@ -57,7 +47,7 @@ func Publish(apkPath, repoDir, arch string) error {
 		return err
 	}
 
-	return GenerateIndex(repoDir, arch)
+	return GenerateIndex(repoDir)
 }
 
 // List prints all packages in the local repository.

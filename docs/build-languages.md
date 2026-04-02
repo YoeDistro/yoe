@@ -10,7 +10,7 @@ Yoe-NG needs a way for users to define:
 
 - **Units** — what to build, from what source, with what dependencies
 - **Classes/rules** — how to build (autotools, cmake, go, image assembly)
-- **Project config** — cache locations, remote repos, layer references
+- **Project config** — cache locations, remote repos, module references
 - **Machine definitions** — architecture, kernel, bootloader, partitions
 - **Image definitions** — package lists, services, hostname, partitions
 
@@ -24,7 +24,7 @@ a language.
 
 1. **Simple for the common case** — defining a package unit should be as
    readable as a TOML file
-2. **Composable** — layers, overlays, and unit extensions without modifying
+2. **Composable** — modules, overlays, and unit extensions without modifying
    originals
 3. **Expressive when needed** — conditionals, loops, helper functions for
    complex build logic
@@ -80,7 +80,7 @@ autotools(
   themselves
 
 **Composability model:** Function calls and macros. A base unit exports a
-configurable function; layers call it with overrides. Explicit but verbose:
+configurable function; modules call it with overrides. Explicit but verbose:
 
 ```python
 # units-core/openssh.star — base unit as a function
@@ -93,7 +93,7 @@ def openssh(extra_deps=[], extra_configure_args=[], **overrides):
         **overrides,
     )
 
-# vendor-bsp/openssh.star — vendor layer extends it
+# vendor-bsp/openssh.star — vendor module extends it
 load("//units-core/openssh.star", "openssh")
 openssh(extra_deps=["vendor-crypto"])
 ```
@@ -365,7 +365,7 @@ indirection makes debugging non-trivial.
 **What we give up compared to Nix/CUE:**
 
 - No implicit merging — composition is through explicit function calls and
-  `**kwargs`. This means layer overrides are more verbose but also more
+  `**kwargs`. This means module overrides are more verbose but also more
   traceable. When debugging "why does openssh have vendor-crypto in its deps?",
   you can grep for the function call. In Nix, you'd have to trace overlay
   evaluation order.
@@ -374,13 +374,13 @@ indirection makes debugging non-trivial.
   `yoe` engine) rather than in the language itself. CUE's constraint system is
   elegant, but adding a second language isn't worth it.
 
-**Composability pattern for layers:**
+**Composability pattern for modules:**
 
-Yoe-NG's layer system (vendor BSP layers, product layers) works through
+Yoe-NG's module system (vendor BSP modules, product modules) works through
 Starlark's function composition:
 
 ```python
-# Layer 1: units-core/openssh.star
+# Module 1: units-core/openssh.star
 def openssh(extra_deps=[], **overrides):
     unit(
         name = "openssh",
@@ -389,16 +389,16 @@ def openssh(extra_deps=[], **overrides):
         **overrides,
     )
 
-# Layer 2: vendor-bsp/openssh.star
+# Module 2: vendor-bsp/openssh.star
 load("//units-core/openssh.star", "openssh")
 openssh(extra_deps=["vendor-crypto"])
 
-# Layer 3: product/openssh.star (further customization)
+# Module 3: product/openssh.star (further customization)
 load("//vendor-bsp/openssh.star", "openssh")
 openssh(extra_configure_args=["--with-pam"])
 ```
 
-Each layer is explicit about what it modifies and where the base comes from.
+Each module is explicit about what it modifies and where the base comes from.
 This is less magical than Nix overlays but easier to debug.
 
 ## What This Means for Yoe-NG
@@ -407,7 +407,7 @@ With Starlark as the single language, the project structure becomes:
 
 ```
 my-project/
-├── PROJECT.star              # project config: name, caches, layers
+├── PROJECT.star              # project config: name, caches, modules
 ├── machines/
 │   ├── beaglebone-black.star
 │   ├── raspberrypi4.star

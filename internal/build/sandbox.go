@@ -23,6 +23,7 @@ type SandboxConfig struct {
 	Sysroot    string
 	Env        map[string]string
 	ProjectDir string
+	NoUser     bool      // run as root (for losetup/mount)
 	Stdout     io.Writer // build output (nil = os.Stdout)
 	Stderr     io.Writer // build errors (nil = os.Stderr)
 }
@@ -71,6 +72,7 @@ func RunSimple(cfg *SandboxConfig, command string) error {
 		Command:    fullCmd,
 		ProjectDir: cfg.ProjectDir,
 		Mounts:     mounts,
+		NoUser:     cfg.NoUser,
 		Stdout:     cfg.Stdout,
 		Stderr:     cfg.Stderr,
 	})
@@ -253,6 +255,9 @@ func Arch() string {
 }
 
 // UnitBuildDir returns the build directory for a unit.
-func UnitBuildDir(projectDir, arch, unitName string) string {
-	return filepath.Join(projectDir, "build", arch, unitName)
+// The scopeDir is "noarch", an architecture name, or a machine name,
+// determined by the unit's scope field.
+// Layout: build/<name>.<scopeDir>/  (e.g., build/busybox.arm64/)
+func UnitBuildDir(projectDir, scopeDir, unitName string) string {
+	return filepath.Join(projectDir, "build", unitName+"."+scopeDir)
 }

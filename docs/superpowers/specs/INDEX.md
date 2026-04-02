@@ -7,7 +7,7 @@ Status of design specs and their corresponding implementation plans.
 | Spec                                   | Plan                                   | Status      |
 | -------------------------------------- | -------------------------------------- | ----------- |
 | Container as build worker (2026-03-27) | container-as-build-worker (2026-03-27) | Done        |
-| Recipes-core layer design (2026-03-26) | yoe-ng implementation (2026-03-25)     | In progress |
+| Units-core module design (2026-03-26)  | yoe-ng implementation (2026-03-25)     | In progress |
 | TUI redesign (2026-03-30)              | tui-redesign (2026-03-30)              | In progress |
 
 ## Plans

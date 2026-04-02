@@ -8,6 +8,42 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-03-31
+
+**BASE-IMAGE boots on RPI4**
+
+- **Tasks replace build steps** — `build = [...]` replaced by `tasks = [...]`
+  with named build phases. Each task has `run` (shell string), `fn` (Starlark
+  function), or `steps` (mixed list). Classes (autotools, cmake, go) are now
+  pure Starlark.
+- **`run()` builtin** — Starlark functions can execute shell commands directly
+  during builds. Errors show `.star` file and line number, not generated shell.
+  `run(cmd, check=False)` returns exit code/stdout/stderr for conditional logic.
+  `run(cmd, privileged=True)` runs directly in the container as root for
+  operations like losetup/mount that bwrap can't do.
+- **Unit scope** — units declare `scope = "machine"`, `"noarch"`, or `"arch"`
+  (default). Machine-scoped units (kernels, images) build per-machine. Build
+  directories are flat: `build/<name>.<scope>/`. Repo is flat with scope in
+  filenames: `repo/<name>-<ver>-r0.<scope>.apk`.
+- **Machine-portable images** — images no longer hard-code machine-specific
+  packages or partitions. `MACHINE_CONFIG` and `PROVIDES` inject machine
+  hardware specifics automatically. `base-image` works across QEMU x86, QEMU
+  arm64, and Raspberry Pi without changes.
+- **`PROVIDES` virtual packages** — units and kernels declare `provides` to
+  fulfill virtual names. `provides = "linux"` on `linux-rpi4` means images that
+  list `"linux"` get the RPi kernel when building for `raspberrypi4`.
+- **Image assembly in Starlark** — disk image creation moved from Go to
+  `classes/image.star` using `run()`. Fully readable, customizable, forkable.
+- **Raspberry Pi BSP module** (`units-rpi`) — machine definitions, kernel fork
+  units, GPU firmware, and boot config for Raspberry Pi 4 and 5.
+- **Runtime dependency resolution** — image assembly now resolves transitive
+  runtime dependencies automatically. `RUNTIME_DEPS` predeclared variable
+  available after unit evaluation. Three-phase loader: machines → units →
+  images.
+- **Layers renamed to modules** — `layer()` → `module()`, `LAYER.star` →
+  `MODULE.star`, `yoe layer` → `yoe module`, `layers/` → `modules/`. Aligns
+  terminology with Go modules model used for dependency resolution.
+
 ## [0.4.0] - 2026-03-31
 
 **ARM BUILDS ON X86 NOW WORK**

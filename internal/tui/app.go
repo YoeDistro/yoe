@@ -124,20 +124,24 @@ func Run(proj *yoestar.Project, projectDir string) error {
 	if m, ok := proj.Machines[proj.Defaults.Machine]; ok {
 		arch = m.Arch
 	}
-	hashes, err := resolve.ComputeAllHashes(dag, arch)
+	hashes, err := resolve.ComputeAllHashes(dag, arch, proj.Defaults.Machine)
 	if err != nil {
 		return fmt.Errorf("computing hashes: %w", err)
 	}
 
-	units := sortedKeys(proj.Units)
+	units := reachableUnits(proj, dag)
 	statuses := make(map[string]unitStatus, len(units))
 	for _, name := range units {
 		hash := hashes[name]
-		if build.IsBuildCached(projectDir, arch, name, hash) {
+		sd := arch
+		if u, ok := proj.Units[name]; ok {
+			sd = build.ScopeDir(u, arch, proj.Defaults.Machine)
+		}
+		if build.IsBuildCached(projectDir, sd, name, hash) {
 			statuses[name] = statusCached
-		} else if build.IsBuildInProgress(projectDir, arch, name) {
+		} else if build.IsBuildInProgress(projectDir, sd, name) {
 			statuses[name] = statusBuilding
-		} else if build.HasBuildLog(projectDir, arch, name) {
+		} else if build.HasBuildLog(projectDir, sd, name) {
 			statuses[name] = statusFailed
 		}
 	}
@@ -375,7 +379,7 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "l":
 		if m.cursor < len(m.units) {
 			name := m.units[m.cursor]
-			logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.arch, name), "build.log")
+			logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.unitScopeDir(name), name), "build.log")
 			if _, err := os.Stat(logPath); err == nil {
 				return m, m.execEditor(logPath)
 			}
@@ -386,7 +390,7 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "d":
 		if m.cursor < len(m.units) {
 			name := m.units[m.cursor]
-			logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.arch, name), "build.log")
+			logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.unitScopeDir(name), name), "build.log")
 			c := exec.Command("claude", fmt.Sprintf("diagnose %s", logPath))
 			c.Dir = m.projectDir
 			return m, tea.ExecProcess(c, func(err error) tea.Msg {
@@ -551,7 +555,7 @@ func (m model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		} else if strings.HasPrefix(action, "clean:") {
 			name := strings.TrimPrefix(action, "clean:")
-			buildDir := build.UnitBuildDir(m.projectDir, m.arch, name)
+			buildDir := build.UnitBuildDir(m.projectDir, m.unitScopeDir(name), name)
 			if err := os.RemoveAll(buildDir); err != nil {
 				m.message = fmt.Sprintf("Clean failed: %v", err)
 			} else {
@@ -720,7 +724,7 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.startBuild(m.detailUnit)
 
 	case "d":
-		logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.arch, m.detailUnit), "build.log")
+		logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.unitScopeDir(m.detailUnit), m.detailUnit), "build.log")
 		c := exec.Command("claude", fmt.Sprintf("diagnose %s", logPath))
 		c.Dir = m.projectDir
 		return m, tea.ExecProcess(c, func(err error) tea.Msg {
@@ -739,7 +743,7 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "l":
-		logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.arch, m.detailUnit), "build.log")
+		logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.unitScopeDir(m.detailUnit), m.detailUnit), "build.log")
 		if _, err := os.Stat(logPath); err == nil {
 			return m, m.execEditor(logPath)
 		}
@@ -1055,10 +1059,15 @@ func (m *model) startBuild(name string) tea.Cmd {
 	proj := m.proj
 	projectDir := m.projectDir
 	arch := m.arch
+	machine := m.proj.Defaults.Machine
 	unitName := name
 
 	// Write executor output to a log file so detail view can tail it
-	outputPath := filepath.Join(build.UnitBuildDir(projectDir, arch, unitName), ".output.log")
+	sd := arch
+	if u, ok := m.proj.Units[name]; ok {
+		sd = build.ScopeDir(u, arch, machine)
+	}
+	outputPath := filepath.Join(build.UnitBuildDir(projectDir, sd, unitName), ".output.log")
 	build.EnsureDir(filepath.Dir(outputPath))
 
 	return func() tea.Msg {
@@ -1071,7 +1080,8 @@ func (m *model) startBuild(name string) tea.Cmd {
 
 		// Reload project from .star files so we pick up any changes
 		// made since the TUI started (e.g., edited build steps).
-		freshProj, err := yoestar.LoadProject(projectDir)
+		freshProj, err := yoestar.LoadProject(projectDir,
+			yoestar.WithMachine(machine))
 		if err != nil {
 			fmt.Fprintf(f, "warning: could not reload project: %v, using cached config\n", err)
 			freshProj = proj
@@ -1082,6 +1092,7 @@ func (m *model) startBuild(name string) tea.Cmd {
 			Force:      true,
 			ProjectDir: projectDir,
 			Arch:       arch,
+			Machine:    machine,
 			OnEvent: func(ev build.BuildEvent) {
 				if tuiProgram != nil {
 					tuiProgram.Send(buildEventMsg{
@@ -1107,7 +1118,7 @@ func (m model) execEditor(path string) tea.Cmd {
 }
 
 func (m *model) refreshDetail() {
-	unitDir := build.UnitBuildDir(m.projectDir, m.arch, m.detailUnit)
+	unitDir := build.UnitBuildDir(m.projectDir, m.unitScopeDir(m.detailUnit), m.detailUnit)
 	outputPath := filepath.Join(unitDir, ".output.log")
 	m.outputLines = readFileAll(outputPath)
 	logPath := filepath.Join(unitDir, "build.log")
@@ -1188,10 +1199,34 @@ func (m *model) adjustListOffset() {
 	}
 }
 
-// recomputeStatuses recomputes hashes and cache statuses for the current arch.
-// Called when the machine (and thus arch) changes.
+// unitScopeDir returns the scope directory for a unit (arch, machine name, or noarch).
+func (m model) unitScopeDir(name string) string {
+	if u, ok := m.proj.Units[name]; ok {
+		return build.ScopeDir(u, m.arch, m.proj.Defaults.Machine)
+	}
+	return m.arch
+}
+
+// recomputeStatuses reloads the project for the new machine and recomputes
+// hashes and cache statuses. Required because image definitions depend on
+// MACHINE_CONFIG which changes per machine.
 func (m *model) recomputeStatuses() {
-	hashes, err := resolve.ComputeAllHashes(m.dag, m.arch)
+	// Reload project with the new machine so MACHINE_CONFIG/PROVIDES/ARCH
+	// are correct for image definitions.
+	freshProj, err := yoestar.LoadProject(m.projectDir,
+		yoestar.WithMachine(m.proj.Defaults.Machine))
+	if err == nil {
+		m.proj = freshProj
+		// Rebuild DAG and unit list from fresh project
+		if dag, err := resolve.BuildDAG(freshProj); err == nil {
+			m.dag = dag
+			m.units = reachableUnits(freshProj, dag)
+			m.cursor = 0
+			m.listOffset = 0
+		}
+	}
+
+	hashes, err := resolve.ComputeAllHashes(m.dag, m.arch, m.proj.Defaults.Machine)
 	if err != nil {
 		return
 	}
@@ -1201,11 +1236,15 @@ func (m *model) recomputeStatuses() {
 			continue // don't override in-progress builds
 		}
 		hash := hashes[name]
-		if build.IsBuildCached(m.projectDir, m.arch, name, hash) {
+		sd := m.arch
+		if u, ok := m.proj.Units[name]; ok {
+			sd = build.ScopeDir(u, m.arch, m.proj.Defaults.Machine)
+		}
+		if build.IsBuildCached(m.projectDir, sd, name, hash) {
 			m.statuses[name] = statusCached
-		} else if build.IsBuildInProgress(m.projectDir, m.arch, name) {
+		} else if build.IsBuildInProgress(m.projectDir, sd, name) {
 			m.statuses[name] = statusBuilding
-		} else if build.HasBuildLog(m.projectDir, m.arch, name) {
+		} else if build.HasBuildLog(m.projectDir, sd, name) {
 			m.statuses[name] = statusFailed
 		} else {
 			m.statuses[name] = statusNone
@@ -1234,33 +1273,33 @@ func (m model) listViewportHeight() int {
 
 func findUnitFile(projectDir, name string) string {
 	// Collect directories to search for .star files.
-	// For the project and parent dirs, search under layers/.
-	// For cached layers, search the layer root directly (units/, images/, etc.).
+	// For the project and parent dirs, search under modules/.
+	// For cached modules, search the module root directly (units/, images/, etc.).
 	var searchDirs []string
 
 	for _, root := range []string{projectDir} {
-		d := filepath.Join(root, "layers")
+		d := filepath.Join(root, "modules")
 		if _, err := os.Stat(d); err == nil {
 			searchDirs = append(searchDirs, d)
 		}
 	}
 	for _, rel := range []string{"..", filepath.Join("..", "..")} {
-		d := filepath.Join(projectDir, rel, "layers")
+		d := filepath.Join(projectDir, rel, "modules")
 		if _, err := os.Stat(d); err == nil {
 			searchDirs = append(searchDirs, d)
 		}
 	}
 
-	// Add cached layer directories
+	// Add cached module directories
 	cacheDir := os.Getenv("YOE_CACHE")
 	if cacheDir == "" {
 		cacheDir = "cache"
 	}
-	cachedLayers := filepath.Join(cacheDir, "layers")
-	if entries, err := os.ReadDir(cachedLayers); err == nil {
+	cachedModules := filepath.Join(cacheDir, "modules")
+	if entries, err := os.ReadDir(cachedModules); err == nil {
 		for _, e := range entries {
 			if e.IsDir() {
-				searchDirs = append(searchDirs, filepath.Join(cachedLayers, e.Name()))
+				searchDirs = append(searchDirs, filepath.Join(cachedModules, e.Name()))
 			}
 		}
 	}
@@ -1325,6 +1364,27 @@ func readFileAll(path string) []string {
 		lines = append(lines, scanner.Text())
 	}
 	return lines
+}
+
+// reachableUnits returns sorted unit names reachable from any image unit
+// in the DAG. Only shows units that would actually be built for the
+// current machine.
+func reachableUnits(proj *yoestar.Project, dag *resolve.DAG) []string {
+	seen := map[string]bool{}
+	for name, unit := range proj.Units {
+		if unit.Class == "image" {
+			seen[name] = true
+			for _, dep := range dag.TransitiveDeps(name) {
+				seen[dep] = true
+			}
+		}
+	}
+	result := make([]string, 0, len(seen))
+	for name := range seen {
+		result = append(result, name)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func sortedKeys[V any](m map[string]V) []string {

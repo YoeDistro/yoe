@@ -43,12 +43,12 @@ func Stage0(proj *yoestar.Project, projectDir string, w io.Writer) error {
 		}
 	}
 	if len(missing) > 0 {
-		return fmt.Errorf("bootstrap units not found: %s\nAdd them to your project or include a layer that provides them",
+		return fmt.Errorf("bootstrap units not found: %s\nAdd them to your project or include a module that provides them",
 			strings.Join(missing, ", "))
 	}
 
 	// Build each bootstrap unit without sandbox isolation (using host tools)
-	repoDir := repo.RepoDir(proj, projectDir, arch)
+	repoDir := repo.RepoDir(proj, projectDir)
 
 	for _, name := range bootstrapUnits {
 		unit := proj.Units[name]
@@ -97,7 +97,7 @@ func Stage0(proj *yoestar.Project, projectDir string, w io.Writer) error {
 		}
 
 		// Publish to the local repo
-		if err := repo.Publish(apkPath, repoDir, arch); err != nil {
+		if err := repo.Publish(apkPath, repoDir); err != nil {
 			return fmt.Errorf("publishing %s: %w", unit.Name, err)
 		}
 
@@ -116,7 +116,7 @@ func Stage1(proj *yoestar.Project, projectDir string, w io.Writer) error {
 	fmt.Fprintln(w)
 
 	arch := build.Arch()
-	repoDir := repo.RepoDir(proj, projectDir, arch)
+	repoDir := repo.RepoDir(proj, projectDir)
 
 	// Verify Stage 0 packages exist in the repo
 	if err := verifyStage0(repoDir); err != nil {
@@ -174,7 +174,7 @@ func Stage1(proj *yoestar.Project, projectDir string, w io.Writer) error {
 		if err != nil {
 			return fmt.Errorf("packaging %s: %w", unit.Name, err)
 		}
-		if err := repo.Publish(apkPath, repoDir, arch); err != nil {
+		if err := repo.Publish(apkPath, repoDir); err != nil {
 			return fmt.Errorf("publishing %s: %w", unit.Name, err)
 		}
 
@@ -187,7 +187,7 @@ func Stage1(proj *yoestar.Project, projectDir string, w io.Writer) error {
 
 // Status shows the current bootstrap state.
 func Status(proj *yoestar.Project, projectDir string, w io.Writer) error {
-	repoDir := repo.RepoDir(proj, projectDir, build.Arch())
+	repoDir := repo.RepoDir(proj, projectDir)
 
 	fmt.Fprintf(w, "Bootstrap status for %s\n\n", proj.Name)
 	fmt.Fprintf(w, "Repository: %s\n", repoDir)
@@ -216,38 +216,17 @@ func Status(proj *yoestar.Project, projectDir string, w io.Writer) error {
 	return nil
 }
 
-// stage0Commands returns the build commands for a bootstrap unit.
-// Bootstrap builds use the host toolchain directly, so we use the unit's
-// build steps if available, or class-specific defaults.
+// stage0Commands extracts shell commands from a unit's tasks for bootstrap builds.
 func stage0Commands(unit *yoestar.Unit) []string {
-	if len(unit.Build) > 0 {
-		return unit.Build
-	}
-
-	switch unit.Class {
-	case "autotools":
-		args := ""
-		if len(unit.ConfigureArgs) > 0 {
-			args = " " + strings.Join(unit.ConfigureArgs, " ")
-		}
-		return []string{
-			"./configure --prefix=$PREFIX" + args,
-			"make -j$NPROC",
-			"make DESTDIR=$DESTDIR install",
-		}
-	case "cmake":
-		args := ""
-		if len(unit.ConfigureArgs) > 0 {
-			args = " " + strings.Join(unit.ConfigureArgs, " ")
-		}
-		return []string{
-			"cmake -B build -DCMAKE_INSTALL_PREFIX=$PREFIX" + args,
-			"cmake --build build -j $NPROC",
-			"DESTDIR=$DESTDIR cmake --install build",
+	var cmds []string
+	for _, t := range unit.Tasks {
+		for _, s := range t.Steps {
+			if s.Command != "" {
+				cmds = append(cmds, s.Command)
+			}
 		}
 	}
-
-	return nil
+	return cmds
 }
 
 func verifyStage0(repoDir string) error {

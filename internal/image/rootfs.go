@@ -13,7 +13,7 @@ import (
 )
 
 // Assemble creates a root filesystem image from an image unit.
-func Assemble(unit *yoestar.Unit, proj *yoestar.Project, projectDir, outputDir, arch string, w io.Writer) error {
+func Assemble(unit *yoestar.Unit, proj *yoestar.Project, projectDir, outputDir, arch, machine string, w io.Writer) error {
 	rootfs := filepath.Join(outputDir, "rootfs")
 	os.RemoveAll(rootfs)
 	if err := os.MkdirAll(rootfs, 0755); err != nil {
@@ -22,9 +22,10 @@ func Assemble(unit *yoestar.Unit, proj *yoestar.Project, projectDir, outputDir, 
 
 	// Step 1: Install packages into rootfs — resolve deps so libraries
 	// are included automatically (e.g., openssh pulls in openssl, zlib).
-	repoDir := repo.RepoBaseDir(proj, projectDir)
+	// The flat repo has scope in filenames (e.g., busybox-1.36.1-r0.arm64.apk).
+	repoDir := repo.RepoDir(proj, projectDir)
 	allPackages := resolvePackageDeps(unit.Artifacts, proj)
-	if err := installPackages(rootfs, repoDir, allPackages, arch, w); err != nil {
+	if err := installPackages(rootfs, repoDir, allPackages, w); err != nil {
 		return fmt.Errorf("installing packages: %w", err)
 	}
 
@@ -84,7 +85,9 @@ func resolvePackageDeps(packages []string, proj *yoestar.Project) []string {
 	return result
 }
 
-func installPackages(rootfs, repoDir string, packages []string, arch string, w io.Writer) error {
+// installPackages installs packages from a flat repo directory into the rootfs.
+// Package filenames include scope (e.g., busybox-1.36.1-r0.arm64.apk).
+func installPackages(rootfs, repoDir string, packages []string, w io.Writer) error {
 	if len(packages) == 0 {
 		fmt.Fprintln(w, "  (no packages to install)")
 		return nil
@@ -92,13 +95,10 @@ func installPackages(rootfs, repoDir string, packages []string, arch string, w i
 
 	fmt.Fprintf(w, "  Installing %d packages into rootfs...\n", len(packages))
 
-	// Install packages by extracting .apk files directly into the rootfs.
-	// Our packages are single-stream gzip'd tars with .PKGINFO + files.
-	// tar is available on the host — no container needed.
 	absRepo, _ := filepath.Abs(repoDir)
 
 	for _, pkg := range packages {
-		apkFile := findAPK(absRepo, pkg, arch)
+		apkFile := findAPK(absRepo, pkg)
 		if apkFile == "" {
 			return fmt.Errorf("package %q not found in %s", pkg, absRepo)
 		}
@@ -114,22 +114,21 @@ func installPackages(rootfs, repoDir string, packages []string, arch string, w i
 	return nil
 }
 
-// findAPK finds the .apk file for a package name in the repo directory.
-func findAPK(repoDir, pkgName, arch string) string {
-	// Check arch subdirectory first, then root
-	for _, dir := range []string{repoDir, filepath.Join(repoDir, arch)} {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			continue
-		}
-		for _, e := range entries {
-			if strings.HasPrefix(e.Name(), pkgName+"-") && strings.HasSuffix(e.Name(), ".apk") {
-				return filepath.Join(dir, e.Name())
-			}
+// findAPK finds the .apk file for a package in a flat repo directory.
+// Matches by package name prefix (e.g., "busybox" matches "busybox-1.36.1-r0.arm64.apk").
+func findAPK(repoDir, pkgName string) string {
+	entries, err := os.ReadDir(repoDir)
+	if err != nil {
+		return ""
+	}
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), pkgName+"-") && strings.HasSuffix(e.Name(), ".apk") {
+			return filepath.Join(repoDir, e.Name())
 		}
 	}
 	return ""
 }
+
 
 func applyConfig(rootfs string, unit *yoestar.Unit, w io.Writer) error {
 	if unit.Hostname != "" {

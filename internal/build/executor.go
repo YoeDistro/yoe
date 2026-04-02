@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/YoeDistro/yoe-ng/internal/image"
 	"github.com/YoeDistro/yoe-ng/internal/artifact"
 	"github.com/YoeDistro/yoe-ng/internal/repo"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
 	"github.com/YoeDistro/yoe-ng/internal/source"
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
+	"go.starlark.net/starlark"
 )
 
 // Options controls build behavior.
@@ -32,7 +32,21 @@ type Options struct {
 	Verbose    bool   // show build output in console (default: log only)
 	ProjectDir string // project root
 	Arch       string // target architecture
+	Machine    string // target machine name
 	OnEvent    func(BuildEvent) // optional callback for build progress
+}
+
+// ScopeDir returns the build subdirectory for a unit based on its scope.
+// "machine" → machine name, "noarch" → "noarch", default → arch.
+func ScopeDir(unit *yoestar.Unit, arch, machine string) string {
+	switch unit.Scope {
+	case "machine":
+		return machine
+	case "noarch":
+		return "noarch"
+	default:
+		return arch
+	}
 }
 
 // BuildUnits builds the specified units (or all if names is empty).
@@ -52,7 +66,7 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 	}
 
 	// Compute hashes for cache
-	hashes, err := resolve.ComputeAllHashes(dag, opts.Arch)
+	hashes, err := resolve.ComputeAllHashes(dag, opts.Arch, opts.Machine)
 	if err != nil {
 		return err
 	}
@@ -83,8 +97,9 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 	// can show the full build queue before any work starts.
 	for _, name := range order {
 		hash := hashes[name]
+		sd := ScopeDir(proj.Units[name], opts.Arch, opts.Machine)
 		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
-		if !forceThis && !opts.NoCache && IsBuildCached(opts.ProjectDir, opts.Arch, name, hash) {
+		if !forceThis && !opts.NoCache && IsBuildCached(opts.ProjectDir, sd, name, hash) {
 			notify(name, "cached")
 		} else {
 			notify(name, "waiting")
@@ -104,13 +119,14 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 
 		unit := proj.Units[name]
 		hash := hashes[name]
+		sd := ScopeDir(unit, opts.Arch, opts.Machine)
 
 		// --force/--clean only apply to explicitly requested units;
 		// dependencies still use the cache.
 		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
 
 		if !forceThis && !opts.NoCache {
-			if IsBuildCached(opts.ProjectDir, opts.Arch, name, hash) {
+			if IsBuildCached(opts.ProjectDir, sd, name, hash) {
 				fmt.Fprintf(w, "%-20s [cached] %s\n", name, hash[:12])
 				continue
 			}
@@ -133,7 +149,7 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		}
 
 		// Write cache marker
-		writeCacheMarker(opts.ProjectDir, opts.Arch, name, hash)
+		writeCacheMarker(opts.ProjectDir, sd, name, hash)
 		fmt.Fprintf(w, "%-20s [done] %s\n", name, hash[:12])
 		notify(name, "done")
 	}
@@ -142,21 +158,22 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 }
 
 func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit *yoestar.Unit, hash string, opts Options, w io.Writer) error {
-	buildDir := UnitBuildDir(opts.ProjectDir, opts.Arch, unit.Name)
+	sd := ScopeDir(unit, opts.Arch, opts.Machine)
+	buildDir := UnitBuildDir(opts.ProjectDir, sd, unit.Name)
 	EnsureDir(buildDir)
 
 	// Skip if another process is already building this unit.
-	if IsBuildInProgress(opts.ProjectDir, opts.Arch, unit.Name) {
+	if IsBuildInProgress(opts.ProjectDir, sd, unit.Name) {
 		fmt.Fprintf(w, "  %s: build already in progress, skipping\n", unit.Name)
 		return nil
 	}
 
 	// Remove the cache marker before starting so a cancelled or failed
 	// build does not leave a stale marker that makes it appear cached.
-	os.Remove(CacheMarkerPath(opts.ProjectDir, opts.Arch, unit.Name, hash))
+	os.Remove(CacheMarkerPath(opts.ProjectDir, sd, unit.Name, hash))
 
 	// Write a lock file so other yoe instances can detect an in-progress build.
-	lockPath := BuildingLockPath(opts.ProjectDir, opts.Arch, unit.Name)
+	lockPath := BuildingLockPath(opts.ProjectDir, sd, unit.Name)
 	os.WriteFile(lockPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0644)
 	defer os.Remove(lockPath)
 
@@ -176,18 +193,6 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		logW = logFile
 	}
 
-	// Image units go through a different path — assemble rootfs
-	if unit.Class == "image" {
-		outputDir := filepath.Join(buildDir, "output")
-		if err := image.Assemble(unit, proj, opts.ProjectDir, outputDir, opts.Arch, logW); err != nil {
-			if !opts.Verbose {
-				fmt.Fprintf(w, "  build log: %s\n", logPath)
-			}
-			return err
-		}
-		return nil
-	}
-
 	srcDir := filepath.Join(buildDir, "src")
 	destDir := filepath.Join(buildDir, "destdir")
 
@@ -203,17 +208,15 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	// Prepare source (fetch + extract + patch, or reuse dev source).
 	// Units without a source field (e.g., musl) skip this step.
 	if unit.Source != "" {
-		if _, err := source.Prepare(opts.ProjectDir, opts.Arch, unit, w); err != nil {
+		if _, err := source.Prepare(opts.ProjectDir, sd, unit, w); err != nil {
 			return fmt.Errorf("preparing source: %w", err)
 		}
 	} else {
 		EnsureDir(srcDir)
 	}
 
-	// Determine build commands based on class
-	commands := buildCommands(unit)
-	if len(commands) == 0 {
-		fmt.Fprintf(w, "  (no build steps for %s class %q)\n", unit.Name, unit.Class)
+	if len(unit.Tasks) == 0 {
+		fmt.Fprintf(w, "  (no tasks for %s class %q)\n", unit.Name, unit.Class)
 		return nil
 	}
 
@@ -222,11 +225,28 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	if err := AssembleSysroot(sysroot, dag, unit.Name, opts.ProjectDir, opts.Arch); err != nil {
 		return fmt.Errorf("assembling sysroot: %w", err)
 	}
+	// Extract console device from machine kernel cmdline (e.g., "console=ttyS0,115200" → "ttyS0")
+	console := ""
+	if m, ok := proj.Machines[opts.Machine]; ok && m.Kernel.Cmdline != "" {
+		for _, part := range strings.Split(m.Kernel.Cmdline, " ") {
+			if strings.HasPrefix(part, "console=") {
+				c := strings.TrimPrefix(part, "console=")
+				if idx := strings.Index(c, ","); idx > 0 {
+					c = c[:idx]
+				}
+				console = c
+				break
+			}
+		}
+	}
+
 	env := map[string]string{
 		"PREFIX":          "/usr",
 		"DESTDIR":         "/build/destdir",
 		"NPROC":           NProc(),
 		"ARCH":            opts.Arch,
+		"MACHINE":         opts.Machine,
+		"CONSOLE":         console,
 		"HOME":            "/tmp",
 		"PATH":            "/build/sysroot/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 		"PKG_CONFIG_PATH": "/build/sysroot/usr/lib/pkgconfig:/usr/lib/pkgconfig",
@@ -235,44 +255,72 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		"LDFLAGS":         "-L/build/sysroot/usr/lib",
 		"LD_LIBRARY_PATH": "/build/sysroot/usr/lib",
 		"PYTHONPATH":      "/build/sysroot/usr/lib/python3.12/site-packages",
+		"REPO":            filepath.Join("/project", repoRelPath(proj, opts.ProjectDir)),
 	}
 
-	// Execute each build step inside the container with bwrap
-	for i, cmd := range commands {
-		if err := ctx.Err(); err != nil {
-			return fmt.Errorf("build cancelled")
-		}
-		fmt.Fprintf(logW, "  [%d/%d] %s\n", i+1, len(commands), cmd)
+	// Execute tasks
+	for ti, t := range unit.Tasks {
+		fmt.Fprintf(w, "  [%d/%d] task: %s\n", ti+1, len(unit.Tasks), t.Name)
+		fmt.Fprintf(logW, "  task: %s (%d steps)\n", t.Name, len(t.Steps))
 
-		cfg := &SandboxConfig{
-			Ctx:        ctx,
-			Arch:       opts.Arch,
-			SrcDir:     srcDir,
-			DestDir:    destDir,
-			Sysroot:    sysroot,
-			Env:        env,
-			ProjectDir: opts.ProjectDir,
-			Stdout:     logW,
-			Stderr:     logW,
-		}
-		if err := RunInSandbox(cfg, cmd); err != nil {
-			if !opts.Verbose {
-				fmt.Fprintf(w, "  build log: %s\n", logPath)
+		for i, step := range t.Steps {
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("build cancelled")
 			}
-			return err
+
+			if step.Command != "" {
+				fmt.Fprintf(logW, "    [%d/%d] %s\n", i+1, len(t.Steps), step.Command)
+				cfg := &SandboxConfig{
+					Ctx:        ctx,
+					Arch:       opts.Arch,
+					SrcDir:     srcDir,
+					DestDir:    destDir,
+					Sysroot:    sysroot,
+					Env:        env,
+					ProjectDir: opts.ProjectDir,
+					Stdout:     logW,
+					Stderr:     logW,
+				}
+				if err := RunInSandbox(cfg, step.Command); err != nil {
+					if !opts.Verbose {
+						fmt.Fprintf(w, "  build log: %s\n", logPath)
+					}
+					return err
+				}
+			} else if step.Fn != nil {
+				fmt.Fprintf(logW, "    [%d/%d] fn: %s\n", i+1, len(t.Steps), step.Fn.Name())
+				cfg := &SandboxConfig{
+					Ctx:        ctx,
+					Arch:       opts.Arch,
+					SrcDir:     srcDir,
+					DestDir:    destDir,
+					Sysroot:    sysroot,
+					Env:        env,
+					ProjectDir: opts.ProjectDir,
+					Stdout:     logW,
+					Stderr:     logW,
+				}
+				thread := NewBuildThread(ctx, cfg, RealExecer{})
+				if _, err := starlark.Call(thread, step.Fn, nil, nil); err != nil {
+					if !opts.Verbose {
+						fmt.Fprintf(w, "  build log: %s\n", logPath)
+					}
+					return fmt.Errorf("task %s: %w", t.Name, err)
+				}
+			}
 		}
 	}
 
 	// Package the output into an .apk and publish to the local repo
 	if unit.Class != "image" {
-		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), opts.Arch)
+		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), sd)
 		if err != nil {
 			return fmt.Errorf("creating apk: %w", err)
 		}
 		fmt.Fprintf(w, "  → %s\n", filepath.Base(apkPath))
 
-		repoDir := repo.RepoDir(nil, opts.ProjectDir, opts.Arch)
-		if err := repo.Publish(apkPath, repoDir, opts.Arch); err != nil {
+		repoDir := repo.RepoDir(nil, opts.ProjectDir)
+		if err := repo.Publish(apkPath, repoDir); err != nil {
 			return fmt.Errorf("publishing to repo: %w", err)
 		}
 
@@ -283,59 +331,6 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	}
 
 	return nil
-}
-
-// buildCommands returns the shell commands to execute for a unit.
-func buildCommands(unit *yoestar.Unit) []string {
-	// Explicit build steps take priority
-	if len(unit.Build) > 0 {
-		return unit.Build
-	}
-
-	// Class-specific defaults
-	switch unit.Class {
-	case "autotools":
-		configureArgs := ""
-		if len(unit.ConfigureArgs) > 0 {
-			configureArgs = " " + joinArgs(unit.ConfigureArgs)
-		}
-		return []string{
-			"./configure --prefix=$PREFIX" + configureArgs,
-			"make -j$NPROC",
-			"make DESTDIR=$DESTDIR install",
-		}
-	case "cmake":
-		cmakeArgs := ""
-		if len(unit.ConfigureArgs) > 0 {
-			cmakeArgs = " " + joinArgs(unit.ConfigureArgs)
-		}
-		return []string{
-			"cmake -B build -DCMAKE_INSTALL_PREFIX=$PREFIX" + cmakeArgs,
-			"cmake --build build -j $NPROC",
-			"DESTDIR=$DESTDIR cmake --install build",
-		}
-	case "go":
-		pkg := unit.GoPackage
-		if pkg == "" {
-			pkg = "."
-		}
-		return []string{
-			fmt.Sprintf("go build -o $DESTDIR/usr/bin/%s %s", unit.Name, pkg),
-		}
-	case "image":
-		// Images are assembled, not compiled — handled separately
-		return nil
-	}
-
-	return nil
-}
-
-func joinArgs(args []string) string {
-	result := ""
-	for _, a := range args {
-		result += " " + a
-	}
-	return result
 }
 
 func filterBuildOrder(dag *resolve.DAG, fullOrder []string, names []string) ([]string, error) {
@@ -385,9 +380,10 @@ func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[strin
 	fmt.Fprintln(w, "Dry run — would build in this order:")
 	for _, name := range order {
 		unit := proj.Units[name]
+		sd := ScopeDir(unit, opts.Arch, opts.Machine)
 		cached := ""
 		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
-		if !forceThis && IsBuildCached(opts.ProjectDir, opts.Arch, name, hashes[name]) {
+		if !forceThis && IsBuildCached(opts.ProjectDir, sd, name, hashes[name]) {
 			cached = " [cached, skip]"
 		}
 		fmt.Fprintf(w, "  %-20s [%s] %s%s\n", name, unit.Class, hashes[name][:12], cached)
@@ -459,4 +455,14 @@ func warnOldLayout(projectDir, arch string, w io.Writer) {
 			return
 		}
 	}
+}
+
+// repoRelPath returns the repo directory path relative to the project root.
+func repoRelPath(proj *yoestar.Project, projectDir string) string {
+	repoDir := repo.RepoDir(proj, projectDir)
+	rel, err := filepath.Rel(projectDir, repoDir)
+	if err != nil {
+		return "repo"
+	}
+	return rel
 }

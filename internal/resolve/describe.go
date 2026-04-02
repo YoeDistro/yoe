@@ -20,7 +20,7 @@ func Describe(w io.Writer, proj *yoestar.Project, name string, arch string) erro
 		return err
 	}
 
-	hashes, err := ComputeAllHashes(dag, arch)
+	hashes, err := ComputeAllHashes(dag, arch, "")
 	if err != nil {
 		return err
 	}

@@ -1,5 +1,7 @@
 package starlark
 
+import "go.starlark.net/starlark"
+
 // Project represents an evaluated PROJECT.star.
 type Project struct {
 	Name       string
@@ -8,7 +10,7 @@ type Project struct {
 	Repository RepositoryConfig
 	Cache      CacheConfig
 	Sources    SourcesConfig
-	Layers     []LayerRef
+	Modules    []ModuleRef
 	Machines   map[string]*Machine
 	Units      map[string]*Unit
 }
@@ -44,18 +46,18 @@ type SourcesConfig struct {
 	PypiMirror    string
 }
 
-type LayerRef struct {
+type ModuleRef struct {
 	URL   string
 	Ref   string
-	Path  string // subdirectory within the repo containing LAYER.star
+	Path  string // subdirectory within the repo containing MODULE.star
 	Local string // local path override (like Go's replace directive)
 }
 
-// LayerInfo represents an evaluated LAYER.star from an external layer.
-type LayerInfo struct {
+// ModuleInfo represents an evaluated MODULE.star from an external module.
+type ModuleInfo struct {
 	Name        string
 	Description string
-	Deps        []LayerRef
+	Deps        []ModuleRef
 }
 
 // Machine represents an evaluated machine() call.
@@ -66,6 +68,8 @@ type Machine struct {
 	Kernel      KernelConfig
 	Bootloader  BootloaderConfig
 	QEMU        *QEMUConfig // nil if not a QEMU machine
+	Packages    []string    // packages added to every image for this machine
+	Partitions  []Partition // default partition layout for images
 }
 
 type KernelConfig struct {
@@ -76,6 +80,7 @@ type KernelConfig struct {
 	DeviceTrees []string
 	Unit        string
 	Cmdline     string
+	Provides    string // virtual package name (e.g., "linux")
 }
 
 type BootloaderConfig struct {
@@ -93,11 +98,12 @@ type QEMUConfig struct {
 	Display  string
 }
 
-// Unit represents an evaluated unit(), autotools(), image(), etc. call.
+// Unit represents an evaluated unit(), image(), etc. call.
 type Unit struct {
 	Name        string
 	Version     string
-	Class       string // "unit", "autotools", "cmake", "go", "image", etc.
+	Class       string // "unit", "image", etc.
+	Scope       string // "arch" (default), "machine", or "noarch"
 	Description string
 	License     string
 
@@ -113,9 +119,9 @@ type Unit struct {
 	RuntimeDeps []string
 
 	// Build
-	Build         []string // shell commands (for generic unit())
-	ConfigureArgs []string // for autotools/cmake
-	GoPackage     string   // for go_binary
+	Container string // default container for all tasks
+	Tasks     []Task
+	Provides  string // virtual package name
 
 	// Artifact metadata
 	Services    []string
@@ -137,6 +143,19 @@ type Partition struct {
 	Size     string // "64M", "fill", etc.
 	Root     bool
 	Contents []string
+}
+
+// Step is a single build action — either a shell command or a Starlark function.
+type Step struct {
+	Command string            // shell command (set when step is a string)
+	Fn      starlark.Callable // Starlark function (set when step is callable)
+}
+
+// Task is a named build phase containing one or more steps.
+type Task struct {
+	Name      string
+	Container string // optional container image override
+	Steps     []Step
 }
 
 // Command represents a user-defined CLI command from commands/*.star.

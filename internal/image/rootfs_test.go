@@ -15,10 +15,10 @@ func TestAssemble(t *testing.T) {
 	projectDir := t.TempDir()
 	outputDir := filepath.Join(projectDir, "build", "output")
 
-	// Create a fake local repo with minimal .apk files (tar.gz archives)
-	repoDir := filepath.Join(projectDir, "build", "repo")
+	// Create a fake local repo with minimal .apk files (flat, scope in filename)
+	repoDir := filepath.Join(projectDir, "repo")
 	os.MkdirAll(repoDir, 0755)
-	for _, pkg := range []string{"openssh-9.0-r0.apk", "myapp-1.0-r0.apk"} {
+	for _, pkg := range []string{"openssh-9.0-r0.x86_64.apk", "myapp-1.0-r0.x86_64.apk"} {
 		createFakeAPK(t, repoDir, pkg)
 	}
 
@@ -43,7 +43,7 @@ func TestAssemble(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := Assemble(unit, proj, projectDir, outputDir, "x86_64", &buf); err != nil {
+	if err := Assemble(unit, proj, projectDir, outputDir, "x86_64", "qemu-x86_64", &buf); err != nil {
 		t.Fatalf("Assemble: %v", err)
 	}
 

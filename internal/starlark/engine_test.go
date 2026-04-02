@@ -118,10 +118,12 @@ unit(
     sha256 = "abc123",
     deps = ["zlib", "openssl"],
     runtime_deps = ["zlib", "openssl"],
-    build = [
-        "./configure --prefix=$PREFIX",
-        "make -j$NPROC",
-        "make DESTDIR=$DESTDIR install",
+    tasks = [
+        task("build", steps = [
+            "./configure --prefix=$PREFIX",
+            "make -j$NPROC",
+            "make DESTDIR=$DESTDIR install",
+        ]),
     ],
     services = ["sshd"],
     conffiles = ["/etc/ssh/sshd_config"],
@@ -145,21 +147,29 @@ unit(
 	if len(r.Deps) != 2 {
 		t.Errorf("Deps = %v, want 2 entries", r.Deps)
 	}
-	if len(r.Build) != 3 {
-		t.Errorf("Build = %v, want 3 entries", r.Build)
+	if len(r.Tasks) != 1 {
+		t.Errorf("Tasks = %v, want 1 task", r.Tasks)
+	} else if len(r.Tasks[0].Steps) != 3 {
+		t.Errorf("Tasks[0].Steps = %v, want 3 steps", r.Tasks[0].Steps)
 	}
 	if len(r.Services) != 1 || r.Services[0] != "sshd" {
 		t.Errorf("Services = %v, want [sshd]", r.Services)
 	}
 }
 
-func TestEvalAutotoolsUnit(t *testing.T) {
+func TestEvalUnitWithTasks(t *testing.T) {
 	src := `
-autotools(
+unit(
     name = "zlib",
     version = "1.3.1",
     source = "https://zlib.net/zlib-1.3.1.tar.gz",
-    configure_args = ["--prefix=$PREFIX"],
+    tasks = [
+        task("build", steps = [
+            "./configure --prefix=$PREFIX",
+            "make -j$NPROC",
+            "make DESTDIR=$DESTDIR install",
+        ]),
+    ],
 )
 `
 	eng := NewEngine()
@@ -167,19 +177,32 @@ autotools(
 		t.Fatalf("ExecString: %v", err)
 	}
 	r := eng.Units()["zlib"]
-	if r.Class != "autotools" {
-		t.Errorf("Class = %q, want %q", r.Class, "autotools")
+	if r.Class != "unit" {
+		t.Errorf("Class = %q, want %q", r.Class, "unit")
+	}
+	if len(r.Tasks) != 1 {
+		t.Fatalf("Tasks count = %d, want 1", len(r.Tasks))
+	}
+	if r.Tasks[0].Name != "build" {
+		t.Errorf("Tasks[0].Name = %q, want %q", r.Tasks[0].Name, "build")
+	}
+	if len(r.Tasks[0].Steps) != 3 {
+		t.Errorf("Tasks[0].Steps count = %d, want 3", len(r.Tasks[0].Steps))
 	}
 }
 
-func TestEvalGoBinaryUnit(t *testing.T) {
+func TestEvalUnitWithTaskContainer(t *testing.T) {
 	src := `
-go_binary(
+unit(
     name = "myapp",
     version = "1.2.3",
     source = "https://github.com/example/myapp.git",
     tag = "v1.2.3",
-    package = "./cmd/myapp",
+    tasks = [
+        task("build", container = "golang:1.22",
+            steps = ["go build -o $DESTDIR/usr/bin/myapp ./cmd/myapp"],
+        ),
+    ],
 )
 `
 	eng := NewEngine()
@@ -187,11 +210,17 @@ go_binary(
 		t.Fatalf("ExecString: %v", err)
 	}
 	r := eng.Units()["myapp"]
-	if r.Class != "go" {
-		t.Errorf("Class = %q, want %q", r.Class, "go")
+	if r.Class != "unit" {
+		t.Errorf("Class = %q, want %q", r.Class, "unit")
 	}
-	if r.GoPackage != "./cmd/myapp" {
-		t.Errorf("GoPackage = %q, want %q", r.GoPackage, "./cmd/myapp")
+	if len(r.Tasks) != 1 {
+		t.Fatalf("Tasks count = %d, want 1", len(r.Tasks))
+	}
+	if r.Tasks[0].Container != "golang:1.22" {
+		t.Errorf("Tasks[0].Container = %q, want %q", r.Tasks[0].Container, "golang:1.22")
+	}
+	if len(r.Tasks[0].Steps) != 1 {
+		t.Errorf("Tasks[0].Steps count = %d, want 1", len(r.Tasks[0].Steps))
 	}
 }
 
@@ -257,7 +286,9 @@ unit(
         "patches/busybox/fix-ash-segfault.patch",
         "patches/busybox/add-custom-applet.patch",
     ],
-    build = ["make -j$NPROC", "make DESTDIR=$DESTDIR install"],
+    tasks = [
+        task("build", steps = ["make -j$NPROC", "make DESTDIR=$DESTDIR install"]),
+    ],
 )
 `
 	eng := NewEngine()
@@ -273,12 +304,16 @@ unit(
 	}
 }
 
-func TestEvalPackageRequiresBuild(t *testing.T) {
-	src := `unit(name = "broken", version = "1.0.0")`
+func TestEvalUnitNoTasks(t *testing.T) {
+	// Units without tasks are valid — they may get tasks from a class in Starlark.
+	src := `unit(name = "minimal", version = "1.0.0")`
 	eng := NewEngine()
-	err := eng.ExecString("units/broken.star", src)
-	if err == nil {
-		t.Fatal("expected error for unit with no build steps, got nil")
+	if err := eng.ExecString("units/minimal.star", src); err != nil {
+		t.Fatalf("ExecString: %v", err)
+	}
+	r := eng.Units()["minimal"]
+	if len(r.Tasks) != 0 {
+		t.Errorf("Tasks = %v, want empty", r.Tasks)
 	}
 }
 

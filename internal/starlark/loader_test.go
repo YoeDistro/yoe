@@ -48,8 +48,8 @@ func TestLoadProject(t *testing.T) {
 	}
 	if r, ok := proj.Units["myapp"]; !ok {
 		t.Error("expected unit 'myapp'")
-	} else if r.Class != "go" {
-		t.Errorf("myapp class = %q, want %q", r.Class, "go")
+	} else if r.Class != "unit" {
+		t.Errorf("myapp class = %q, want %q", r.Class, "unit")
 	}
 	if r, ok := proj.Units["base-image"]; !ok {
 		t.Error("expected unit 'base-image'")

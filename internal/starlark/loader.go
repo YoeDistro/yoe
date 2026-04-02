@@ -8,21 +8,22 @@ import (
 	"strings"
 
 	"go.starlark.net/starlark"
+	"go.starlark.net/starlarkstruct"
 )
 
 // LoadOption configures optional behavior for LoadProject / LoadProjectFromRoot.
 type LoadOption func(*loadConfig)
 
 type loadConfig struct {
-	layerSync func([]LayerRef, io.Writer) error
+	moduleSync func([]ModuleRef, io.Writer) error
 	machine   string // override default machine before evaluating units/images
 }
 
-// WithLayerSync provides a callback that is invoked after PROJECT.star is
-// evaluated to ensure all declared layers are available (e.g. cloned).
-// The callback receives the layer list and a writer for progress output.
-func WithLayerSync(fn func([]LayerRef, io.Writer) error) LoadOption {
-	return func(c *loadConfig) { c.layerSync = fn }
+// WithModuleSync provides a callback that is invoked after PROJECT.star is
+// evaluated to ensure all declared modules are available (e.g. cloned).
+// The callback receives the module list and a writer for progress output.
+func WithModuleSync(fn func([]ModuleRef, io.Writer) error) LoadOption {
+	return func(c *loadConfig) { c.moduleSync = fn }
 }
 
 // WithMachine overrides the project's default machine before units and
@@ -84,61 +85,61 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		return nil, fmt.Errorf("evaluating PROJECT.star: %w", err)
 	}
 
-	// Sync layers if a sync callback was provided (auto-clone missing layers).
-	if cfg.layerSync != nil {
-		if proj := eng.Project(); proj != nil && len(proj.Layers) > 0 {
-			if err := cfg.layerSync(proj.Layers, os.Stderr); err != nil {
-				return nil, fmt.Errorf("syncing layers: %w", err)
+	// Sync modules if a sync callback was provided (auto-clone missing modules).
+	if cfg.moduleSync != nil {
+		if proj := eng.Project(); proj != nil && len(proj.Modules) > 0 {
+			if err := cfg.moduleSync(proj.Modules, os.Stderr); err != nil {
+				return nil, fmt.Errorf("syncing modules: %w", err)
 			}
 		}
 	}
 
-	// Register layer roots so load("@layer//...") works.
-	// Check local overrides first, then the layer cache.
+	// Register module roots so load("@module//...") works.
+	// Check local overrides first, then the module cache.
 	if proj := eng.Project(); proj != nil {
-		for _, l := range proj.Layers {
-			// Derive layer name: use Path's last component if set, otherwise URL's
-			name := filepath.Base(strings.TrimSuffix(l.URL, ".git"))
-			if l.Path != "" {
-				name = filepath.Base(l.Path)
+		for _, m := range proj.Modules {
+			// Derive module name: use Path's last component if set, otherwise URL's
+			name := filepath.Base(strings.TrimSuffix(m.URL, ".git"))
+			if m.Path != "" {
+				name = filepath.Base(m.Path)
 			}
 
-			if l.Local != "" {
-				layerPath := l.Local
-				if !filepath.IsAbs(layerPath) {
-					layerPath = filepath.Join(root, layerPath)
+			if m.Local != "" {
+				modulePath := m.Local
+				if !filepath.IsAbs(modulePath) {
+					modulePath = filepath.Join(root, modulePath)
 				}
-				if l.Path != "" {
-					layerPath = filepath.Join(layerPath, l.Path)
+				if m.Path != "" {
+					modulePath = filepath.Join(modulePath, m.Path)
 				}
-				eng.SetLayerRoot(name, layerPath)
+				eng.SetModuleRoot(name, modulePath)
 				continue
 			}
 
-			// Check layer cache
+			// Check module cache
 			cacheDir := os.Getenv("YOE_CACHE")
 			if cacheDir == "" {
 				cacheDir = "cache"
 			}
-			layerDir := filepath.Join(cacheDir, "layers", name)
-			if l.Path != "" {
-				layerDir = filepath.Join(layerDir, l.Path)
+			moduleDir := filepath.Join(cacheDir, "modules", name)
+			if m.Path != "" {
+				moduleDir = filepath.Join(moduleDir, m.Path)
 			}
-			if _, err := os.Stat(layerDir); err == nil {
-				eng.SetLayerRoot(name, layerDir)
+			if _, err := os.Stat(moduleDir); err == nil {
+				eng.SetModuleRoot(name, moduleDir)
 			}
 		}
 	}
 
-	// Phase 1: Evaluate all machine definitions (project + layers).
+	// Phase 1: Evaluate all machine definitions (project + modules).
 	// Machines must be loaded before units/images so that target_arch()
 	// returns the correct value during Starlark evaluation.
 	if err := evalDir(eng, root, "machines"); err != nil {
 		return nil, err
 	}
-	if eng.layerRoots != nil {
-		for _, layerPath := range eng.layerRoots {
-			if err := evalDir(eng, layerPath, "machines"); err != nil {
+	if eng.moduleRoots != nil {
+		for _, modulePath := range eng.moduleRoots {
+			if err := evalDir(eng, modulePath, "machines"); err != nil {
 				return nil, err
 			}
 		}
@@ -146,6 +147,9 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 
 	// Apply machine override before evaluating units/images.
 	if cfg.machine != "" {
+		if _, ok := eng.Machines()[cfg.machine]; !ok {
+			return nil, fmt.Errorf("machine %q not found", cfg.machine)
+		}
 		if proj := eng.Project(); proj != nil {
 			proj.Defaults.Machine = cfg.machine
 		}
@@ -162,16 +166,107 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	}
 	eng.SetVar("ARCH", starlark.String(arch))
 
-	// Phase 2: Evaluate units and images (project + layers).
+	// Set MACHINE variable so image definitions can conditionally include
+	// board-specific units (e.g., different kernels per RPi board).
+	machine := ""
+	if proj := eng.Project(); proj != nil {
+		machine = proj.Defaults.Machine
+	}
+	eng.SetVar("MACHINE", starlark.String(machine))
+
+	// Set MACHINE_CONFIG — a Starlark struct exposing the active machine's
+	// configuration to unit and image definitions.
+	if proj := eng.Project(); proj != nil {
+		if m, ok := eng.Machines()[proj.Defaults.Machine]; ok {
+			machineDict := starlark.StringDict{
+				"name":     starlark.String(m.Name),
+				"arch":     starlark.String(m.Arch),
+				"packages": toStarlarkStringList(m.Packages),
+			}
+			// Add partitions as a Starlark list
+			var partList []starlark.Value
+			for _, p := range m.Partitions {
+				fields := starlark.StringDict{
+					"label": starlark.String(p.Label),
+					"type":  starlark.String(p.Type),
+					"size":  starlark.String(p.Size),
+					"root":  starlark.Bool(p.Root),
+				}
+				if len(p.Contents) > 0 {
+					fields["contents"] = toStarlarkStringList(p.Contents)
+				}
+				partList = append(partList, starlarkstruct.FromStringDict(starlark.String("partition"), fields))
+			}
+			machineDict["partitions"] = starlark.NewList(partList)
+
+			// Add kernel info
+			if m.Kernel.Unit != "" {
+				machineDict["kernel"] = starlarkstruct.FromStringDict(
+					starlark.String("kernel"), starlark.StringDict{
+						"unit":      starlark.String(m.Kernel.Unit),
+						"provides":  starlark.String(m.Kernel.Provides),
+						"defconfig": starlark.String(m.Kernel.Defconfig),
+						"cmdline":   starlark.String(m.Kernel.Cmdline),
+					})
+			}
+
+			eng.SetVar("MACHINE_CONFIG", starlarkstruct.FromStringDict(
+				starlark.String("machine_config"), machineDict))
+		}
+	}
+
+	// Set PROVIDES — a Starlark dict mapping virtual package names to concrete
+	// unit names. Initially populated from kernel.provides; updated after phase 2
+	// with unit provides.
+	provides := starlark.NewDict(4)
+	if proj := eng.Project(); proj != nil {
+		if m, ok := eng.Machines()[proj.Defaults.Machine]; ok {
+			if m.Kernel.Provides != "" {
+				_ = provides.SetKey(starlark.String(m.Kernel.Provides),
+					starlark.String(m.Kernel.Unit))
+			}
+		}
+	}
+	eng.SetVar("PROVIDES", provides)
+
+	// Phase 2a: Evaluate all unit definitions (project + modules).
 	if err := evalDir(eng, root, "units"); err != nil {
 		return nil, err
 	}
-	if eng.layerRoots != nil {
-		for _, layerPath := range eng.layerRoots {
-			for _, subdir := range []string{"units", "images"} {
-				if err := evalDir(eng, layerPath, subdir); err != nil {
-					return nil, err
-				}
+	if eng.moduleRoots != nil {
+		for _, modulePath := range eng.moduleRoots {
+			if err := evalDir(eng, modulePath, "units"); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Now that all units are loaded, update predeclared variables before
+	// evaluating images (phase 2b).
+
+	// Add unit provides to PROVIDES dict
+	if prov, ok := eng.vars["PROVIDES"].(*starlark.Dict); ok {
+		for _, u := range eng.Units() {
+			if u.Provides != "" {
+				_ = prov.SetKey(starlark.String(u.Provides), starlark.String(u.Name))
+			}
+		}
+	}
+
+	// Set RUNTIME_DEPS: unit name → list of runtime dep names.
+	runtimeDeps := starlark.NewDict(len(eng.Units()))
+	for _, u := range eng.Units() {
+		if len(u.RuntimeDeps) > 0 {
+			_ = runtimeDeps.SetKey(starlark.String(u.Name), toStarlarkStringList(u.RuntimeDeps))
+		}
+	}
+	eng.SetVar("RUNTIME_DEPS", runtimeDeps)
+
+	// Phase 2b: Evaluate image definitions (project + modules).
+	if eng.moduleRoots != nil {
+		for _, modulePath := range eng.moduleRoots {
+			if err := evalDir(eng, modulePath, "images"); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -185,6 +280,14 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	proj.Units = eng.Units()
 
 	return proj, nil
+}
+
+func toStarlarkStringList(ss []string) *starlark.List {
+	vals := make([]starlark.Value, len(ss))
+	for i, s := range ss {
+		vals[i] = starlark.String(s)
+	}
+	return starlark.NewList(vals)
 }
 
 func evalDir(eng *Engine, root, subdir string) error {

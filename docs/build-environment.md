@@ -4,7 +4,7 @@ How Yoe-NG manages host tools, build isolation, and the bootstrap process.
 
 ## Architecture
 
-Yoe-NG uses a layered build environment with three tiers:
+Yoe-NG uses a tiered build environment with three tiers:
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -24,7 +24,7 @@ Yoe-NG uses a layered build environment with three tiers:
 └─────────────────────────────────────────────────────┘
 ```
 
-### Tier 0: Bootstrap Layer (Automatic Container)
+### Tier 0: Bootstrap Module (Automatic Container)
 
 **All build operations run inside a Docker/Podman container. The host provides
 ONLY the `yoe` binary and a container runtime. No build tools, no compilers, no

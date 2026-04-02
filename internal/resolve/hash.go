@@ -33,10 +33,20 @@ func UnitHash(unit *yoestar.Unit, arch string, depHashes map[string]string) stri
 	fmt.Fprintf(h, "branch:%s\n", unit.Branch)
 	fmt.Fprintf(h, "patches:%s\n", strings.Join(unit.Patches, "|"))
 
-	// Build configuration
-	fmt.Fprintf(h, "build:%s\n", strings.Join(unit.Build, "|"))
-	fmt.Fprintf(h, "configure_args:%s\n", strings.Join(unit.ConfigureArgs, "|"))
-	fmt.Fprintf(h, "go_package:%s\n", unit.GoPackage)
+	// Tasks
+	for _, t := range unit.Tasks {
+		fmt.Fprintf(h, "task:%s:%s\n", t.Name, t.Container)
+		for _, s := range t.Steps {
+			if s.Command != "" {
+				fmt.Fprintf(h, "step:cmd:%s\n", s.Command)
+			}
+			if s.Fn != nil {
+				fmt.Fprintf(h, "step:fn:%s\n", s.Fn.Name())
+			}
+		}
+	}
+	fmt.Fprintf(h, "container:%s\n", unit.Container)
+	fmt.Fprintf(h, "provides:%s\n", unit.Provides)
 
 	// Dependencies — include their hashes for transitivity
 	deps := make([]string, len(unit.Deps))
@@ -64,7 +74,7 @@ func UnitHash(unit *yoestar.Unit, arch string, depHashes map[string]string) stri
 
 // ComputeAllHashes computes hashes for all units in build order.
 // Returns a map of unit name -> hash.
-func ComputeAllHashes(dag *DAG, arch string) (map[string]string, error) {
+func ComputeAllHashes(dag *DAG, arch, machine string) (map[string]string, error) {
 	order, err := dag.TopologicalSort()
 	if err != nil {
 		return nil, err
@@ -73,7 +83,13 @@ func ComputeAllHashes(dag *DAG, arch string) (map[string]string, error) {
 	hashes := make(map[string]string, len(order))
 	for _, name := range order {
 		node := dag.Nodes[name]
-		hashes[name] = UnitHash(node.Unit, arch, hashes)
+		unitArch := arch
+		// Machine-scoped units include the machine name in the hash
+		// so the same unit built for different machines caches separately.
+		if node.Unit.Scope == "machine" {
+			unitArch = arch + ":" + machine
+		}
+		hashes[name] = UnitHash(node.Unit, unitArch, hashes)
 	}
 
 	return hashes, nil

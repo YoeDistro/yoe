@@ -28,7 +28,7 @@ yoe build           Build units (packages and images)
 yoe dev             Manage source modifications (extract, diff, status)
 yoe flash           Write an image to a device/SD card
 yoe run             Run an image in QEMU
-yoe layer           Manage external layers (fetch, sync, list)
+yoe module          Manage external modules (fetch, sync, list)
 yoe repo            Manage the local apk package repository
 yoe cache           Manage the build cache (local and remote)
 yoe source          Download and manage source archives/repos
@@ -45,7 +45,7 @@ yoe container       Manage the build container (build, binfmt, status)
 All commands except `init`, `version`, and `container` run inside an Alpine
 build container automatically. The container is built on first use from
 `containers/Dockerfile.build`. See
-[Build Environment](build-environment.md#tier-0-bootstrap-layer-automatic-container)
+[Build Environment](build-environment.md#tier-0-bootstrap-module-automatic-container)
 for details.
 
 ## Commands
@@ -131,10 +131,10 @@ model. The entire dependency graph is resolved and validated _before_ any build
 work starts. This catches missing dependencies, cycles, and configuration errors
 up front rather than mid-build.
 
-1. **Sync layers** — fetch or update external layers declared in `PROJECT.star`
-   (skipped if already up to date). See `yoe layer sync`.
+1. **Sync modules** — fetch or update external modules declared in
+   `PROJECT.star` (skipped if already up to date). See `yoe module sync`.
 2. **Evaluate Starlark** — load and evaluate all `.star` unit files (including
-   those from layers) to produce the set of build targets. Each class function
+   those from modules) to produce the set of build targets. Each class function
    call (`unit()`, `autotools()`, `image()`, etc.) registers a target.
 3. **Resolve dependencies** — topologically sort the build order from declared
    dependencies. Validate that all referenced units exist and the graph is
@@ -161,7 +161,7 @@ up front rather than mid-build.
 **For image units** (`image()` class), steps 5-9 are replaced with image
 assembly:
 
-1. **Sync layers** — same as above.
+1. **Sync modules** — same as above.
 2. **Evaluate Starlark** — same as above.
 3. **Resolve dependencies** — same as above.
 4. **Check cache** — same as above.
@@ -284,60 +284,60 @@ settings directly. When given a hardware machine without `qemu` configuration,
 it falls back to a reasonable default QEMU configuration for the machine's
 architecture.
 
-### `yoe layer`
+### `yoe module`
 
-Manages external layers — the Git repositories declared in `PROJECT.star` that
+Manages external modules — the Git repositories declared in `PROJECT.star` that
 provide units, classes, and machine definitions.
 
 ```sh
-# Fetch/update all layers to the refs declared in PROJECT.star
-yoe layer sync
+# Fetch/update all modules to the refs declared in PROJECT.star
+yoe module sync
 
-# List all layers with status (fetched, local override, version)
-yoe layer list
+# List all modules with status (fetched, local override, version)
+yoe module list
 
-# Show the full resolved layer tree (including transitive deps from LAYER.star)
-yoe layer list --tree
+# Show the full resolved module tree (including transitive deps from MODULE.star)
+yoe module list --tree
 
-# Show details for a specific layer
-yoe layer info @vendor-bsp
+# Show details for a specific module
+yoe module info @vendor-bsp
 
 # Check for updates — show if upstream has newer tags
-yoe layer check-updates
+yoe module check-updates
 ```
 
-**What happens during `yoe layer sync`:**
+**What happens during `yoe module sync`:**
 
-1. **Read PROJECT.star** — parse the `layers` list.
-2. **Read LAYER.star from each layer** — discover transitive dependencies.
+1. **Read PROJECT.star** — parse the `modules` list.
+2. **Read MODULE.star from each module** — discover transitive dependencies.
 3. **Resolve versions** — PROJECT.star versions override transitive deps. If a
    required transitive dep is missing, error with an actionable message.
-4. **Fetch/update** — clone or update each layer's Git repo into
-   `$YOE_CACHE/layers/`. Checkout the declared ref.
-5. **Verify** — confirm that each layer's `LAYER.star` (if present) is valid
+4. **Fetch/update** — clone or update each module's Git repo into
+   `$YOE_CACHE/modules/`. Checkout the declared ref.
+5. **Verify** — confirm that each module's `MODULE.star` (if present) is valid
    Starlark.
 
-**Layer caching:** Layers are cached in `$YOE_CACHE/layers/` as bare Git
-repositories with worktree checkouts at the pinned ref. `yoe layer sync`
+**Module caching:** Modules are cached in `$YOE_CACHE/modules/` as bare Git
+repositories with worktree checkouts at the pinned ref. `yoe module sync`
 performs incremental fetches — only downloading new objects.
 
-**Automatic sync:** `yoe build` automatically runs layer sync if any layer is
+**Automatic sync:** `yoe build` automatically runs module sync if any module is
 missing or if `PROJECT.star` has changed since the last sync. You rarely need to
-run `yoe layer sync` manually.
+run `yoe module sync` manually.
 
-**Local overrides:** Layers with `local = "..."` in PROJECT.star skip fetching
-entirely and use the local directory. `yoe layer list` shows these as
+**Local overrides:** Modules with `local = "..."` in PROJECT.star skip fetching
+entirely and use the local directory. `yoe module list` shows these as
 `(local: ../path)`.
 
-**Example output of `yoe layer list`:**
+**Example output of `yoe module list`:**
 
 ```
-Layer                              Ref        Status
+Module                             Ref        Status
 @units-core                      v1.0.0     up to date
 @vendor-bsp-imx8                   v2.1.0     up to date
   └─ @hal-common                   v1.3.0     up to date (transitive)
   └─ @firmware-imx                 v5.4       up to date (transitive)
-@my-local-layer                    main       (local: ../my-layer)
+@my-local-module                   main       (local: ../my-module)
 ```
 
 ### `yoe repo`
@@ -675,10 +675,10 @@ a command, it checks `commands/*.star` before printing "unknown command".
 | `ctx.log(msg, ...)`   | Print a message                          |
 | `ctx.project_root`    | Path to the project root                 |
 
-**Commands from layers:**
+**Commands from modules:**
 
-Vendor BSP layers can ship custom commands (e.g., `flash-emmc`, `enter-dfu`)
-that become available when the layer is added to the project.
+Vendor BSP modules can ship custom commands (e.g., `flash-emmc`, `enter-dfu`)
+that become available when the module is added to the project.
 
 **Key difference from unit evaluation:** Unit `.star` files are sandboxed — no
 I/O, deterministic. Command `.star` files have full I/O access via `ctx.shell()`
