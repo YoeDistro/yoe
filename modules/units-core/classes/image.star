@@ -32,11 +32,10 @@ def image(name, artifacts=[], hostname="", timezone="", locale="",
 def _assemble_rootfs(packages, hostname, timezone, locale, services):
     run("mkdir -p $DESTDIR/rootfs")
     for pkg in packages:
-        result = run("ls $REPO/%s-*.apk 2>/dev/null | head -1" % pkg, check=False)
-        if result.exit_code != 0 or str(result.stdout).strip() == "":
+        apk = _find_apk(pkg)
+        if not apk:
             run("echo 'warning: package %s not found, skipping' >&2" % pkg)
             continue
-        apk = str(result.stdout).strip()
         run("tar xzf %s -C $DESTDIR/rootfs --exclude=.PKGINFO" % apk)
 
     if hostname:
@@ -179,6 +178,17 @@ def _resolve_runtime_deps(packages):
     for name in remaining:
         ordered.append(name)
     return ordered
+
+def _find_apk(pkg):
+    """Find the APK file for a package, searching by scope priority:
+    machine-specific first, then arch-specific, then noarch.
+    Uses $MACHINE and $ARCH env vars (always correct at build time).
+    """
+    for scope in ["$MACHINE", "$ARCH", "noarch"]:
+        result = run("ls $REPO/%s-*.%s.apk 2>/dev/null | head -1" % (pkg, scope), check=False)
+        if result.exit_code == 0 and str(result.stdout).strip() != "":
+            return str(result.stdout).strip()
+    return ""
 
 def _parse_size_mb(size_str, default=256):
     """Parse a size string like '64M', '1G', or 'fill' into megabytes."""
