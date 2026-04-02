@@ -118,9 +118,10 @@ func RunQEMU(proj *yoestar.Project, unitName, machineName, projectDir string, op
 
 // findKernelImage locates the kernel image (vmlinuz) from a kernel unit's
 // build output.
-func findKernelImage(projectDir, arch, kernelUnit string) string {
+func findKernelImage(projectDir, scopeDir, kernelUnit string) string {
 	// Check the unit's destdir for /boot/vmlinuz
-	destDir := filepath.Join(projectDir, "build", arch, kernelUnit, "destdir")
+	// Uses the new flat layout: build/<name>.<scope>/destdir/
+	destDir := filepath.Join(projectDir, "build", kernelUnit+"."+scopeDir, "destdir")
 	vmlinuz := filepath.Join(destDir, "boot", "vmlinuz")
 	if _, err := os.Stat(vmlinuz); err == nil {
 		return vmlinuz
