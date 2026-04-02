@@ -24,14 +24,26 @@ import (
 
 var version = "dev"
 
+var globalProjectFile string
+
 func main() {
-	if len(os.Args) < 2 {
+	// Parse global flags before command dispatch
+	args := os.Args[1:]
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--project" && i+1 < len(args) {
+			globalProjectFile = args[i+1]
+			args = append(args[:i], args[i+2:]...)
+			break
+		}
+	}
+
+	if len(args) < 1 {
 		cmdTUI(nil)
 		return
 	}
 
-	command := os.Args[1]
-	args := os.Args[2:]
+	command := args[0]
+	cmdArgs := args[1:]
 
 	switch command {
 	case "version":
@@ -39,41 +51,41 @@ func main() {
 	case "update":
 		cmdUpdate()
 	case "init":
-		cmdInit(args)
+		cmdInit(cmdArgs)
 	case "container":
-		cmdContainer(args)
+		cmdContainer(cmdArgs)
 	case "module":
-		cmdModule(args)
+		cmdModule(cmdArgs)
 	case "build":
-		cmdBuild(args)
+		cmdBuild(cmdArgs)
 	case "bootstrap":
-		cmdBootstrap(args)
+		cmdBootstrap(cmdArgs)
 	case "flash":
-		cmdFlash(args)
+		cmdFlash(cmdArgs)
 	case "run":
-		cmdRun(args)
+		cmdRun(cmdArgs)
 	case "config":
-		cmdConfig(args)
+		cmdConfig(cmdArgs)
 	case "repo":
-		cmdRepo(args)
+		cmdRepo(cmdArgs)
 	case "source":
-		cmdSource(args)
+		cmdSource(cmdArgs)
 	case "dev":
-		cmdDev(args)
+		cmdDev(cmdArgs)
 	case "desc":
-		cmdDesc(args)
+		cmdDesc(cmdArgs)
 	case "refs":
-		cmdRefs(args)
+		cmdRefs(cmdArgs)
 	case "graph":
-		cmdGraph(args)
+		cmdGraph(cmdArgs)
 	case "log":
-		cmdLog(args)
+		cmdLog(cmdArgs)
 	case "diagnose":
-		cmdDiagnose(args)
+		cmdDiagnose(cmdArgs)
 	case "clean":
-		cmdClean(args)
+		cmdClean(cmdArgs)
 	default:
-		if !tryCustomCommand(command, args) {
+		if !tryCustomCommand(command, cmdArgs) {
 			fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
 			printUsage()
 			os.Exit(1)
@@ -448,6 +460,9 @@ func loadProjectWithMachine(machineName string) *yoestar.Project {
 	}
 	if machineName != "" {
 		opts = append(opts, yoestar.WithMachine(machineName))
+	}
+	if globalProjectFile != "" {
+		opts = append(opts, yoestar.WithProjectFile(globalProjectFile))
 	}
 	proj, err := yoestar.LoadProject(dir, opts...)
 	if err != nil {

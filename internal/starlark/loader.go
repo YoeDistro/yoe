@@ -15,8 +15,9 @@ import (
 type LoadOption func(*loadConfig)
 
 type loadConfig struct {
-	moduleSync func([]ModuleRef, io.Writer) error
-	machine   string // override default machine before evaluating units/images
+	moduleSync  func([]ModuleRef, io.Writer) error
+	machine     string // override default machine before evaluating units/images
+	projectFile string // alternative project file (instead of PROJECT.star)
 }
 
 // WithModuleSync provides a callback that is invoked after PROJECT.star is
@@ -31,6 +32,12 @@ func WithModuleSync(fn func([]ModuleRef, io.Writer) error) LoadOption {
 // the correct architecture for the specified machine.
 func WithMachine(name string) LoadOption {
 	return func(c *loadConfig) { c.machine = name }
+}
+
+// WithProjectFile specifies an alternative project file to evaluate instead
+// of PROJECT.star at the project root.
+func WithProjectFile(path string) LoadOption {
+	return func(c *loadConfig) { c.projectFile = path }
 }
 
 // LoadProject finds the project root, evaluates all .star files, and returns
@@ -79,10 +86,16 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	eng := NewEngine()
 	eng.SetProjectRoot(root)
 
-	// Evaluate PROJECT.star first
+	// Evaluate project file (PROJECT.star or --project override)
 	projFile := filepath.Join(root, "PROJECT.star")
+	if cfg.projectFile != "" {
+		projFile = cfg.projectFile
+		if !filepath.IsAbs(projFile) {
+			projFile = filepath.Join(root, projFile)
+		}
+	}
 	if err := eng.ExecFile(projFile); err != nil {
-		return nil, fmt.Errorf("evaluating PROJECT.star: %w", err)
+		return nil, fmt.Errorf("evaluating %s: %w", projFile, err)
 	}
 
 	// Sync modules if a sync callback was provided (auto-clone missing modules).
