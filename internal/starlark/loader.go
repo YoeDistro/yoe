@@ -134,13 +134,21 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	// Phase 1: Evaluate all machine definitions (project + modules).
 	// Machines must be loaded before units/images so that target_arch()
 	// returns the correct value during Starlark evaluation.
+	eng.SetCurrentModule("", 0)
 	if err := evalDir(eng, root, "machines"); err != nil {
 		return nil, err
 	}
-	if eng.moduleRoots != nil {
-		for _, modulePath := range eng.moduleRoots {
-			if err := evalDir(eng, modulePath, "machines"); err != nil {
-				return nil, err
+	if proj := eng.Project(); proj != nil {
+		for i, m := range proj.Modules {
+			name := filepath.Base(strings.TrimSuffix(m.URL, ".git"))
+			if m.Path != "" {
+				name = filepath.Base(m.Path)
+			}
+			if modulePath, ok := eng.moduleRoots[name]; ok {
+				eng.SetCurrentModule(name, i+1)
+				if err := evalDir(eng, modulePath, "machines"); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -230,13 +238,21 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	eng.SetVar("PROVIDES", provides)
 
 	// Phase 2a: Evaluate all unit definitions (project + modules).
+	eng.SetCurrentModule("", 0)
 	if err := evalDir(eng, root, "units"); err != nil {
 		return nil, err
 	}
-	if eng.moduleRoots != nil {
-		for _, modulePath := range eng.moduleRoots {
-			if err := evalDir(eng, modulePath, "units"); err != nil {
-				return nil, err
+	if proj := eng.Project(); proj != nil {
+		for i, m := range proj.Modules {
+			name := filepath.Base(strings.TrimSuffix(m.URL, ".git"))
+			if m.Path != "" {
+				name = filepath.Base(m.Path)
+			}
+			if modulePath, ok := eng.moduleRoots[name]; ok {
+				eng.SetCurrentModule(name, i+1)
+				if err := evalDir(eng, modulePath, "units"); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -263,10 +279,21 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	eng.SetVar("RUNTIME_DEPS", runtimeDeps)
 
 	// Phase 2b: Evaluate image definitions (project + modules).
-	if eng.moduleRoots != nil {
-		for _, modulePath := range eng.moduleRoots {
-			if err := evalDir(eng, modulePath, "images"); err != nil {
-				return nil, err
+	eng.SetCurrentModule("", 0)
+	if err := evalDir(eng, root, "images"); err != nil {
+		return nil, err
+	}
+	if proj := eng.Project(); proj != nil {
+		for i, m := range proj.Modules {
+			name := filepath.Base(strings.TrimSuffix(m.URL, ".git"))
+			if m.Path != "" {
+				name = filepath.Base(m.Path)
+			}
+			if modulePath, ok := eng.moduleRoots[name]; ok {
+				eng.SetCurrentModule(name, i+1)
+				if err := evalDir(eng, modulePath, "images"); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
