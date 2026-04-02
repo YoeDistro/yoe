@@ -54,7 +54,13 @@ func Flash(proj *yoestar.Project, unitName, devicePath, projectDir string, dryRu
 		return nil
 	}
 
+	// Check if we have write access to the device
+	if err := checkDeviceAccess(devicePath, w); err != nil {
+		return err
+	}
+
 	// Use dd to write the image
+	fmt.Fprintf(w, "Writing %s to %s...\n", filepath.Base(imgPath), devicePath)
 	cmd := exec.Command("dd",
 		"if="+imgPath,
 		"of="+devicePath,
@@ -70,6 +76,40 @@ func Flash(proj *yoestar.Project, unitName, devicePath, projectDir string, dryRu
 	}
 
 	fmt.Fprintln(w, "Flash complete")
+	return nil
+}
+
+// checkDeviceAccess verifies write access to a block device. If permission
+// is denied, offers to fix it with sudo chmod.
+func checkDeviceAccess(devicePath string, w io.Writer) error {
+	f, err := os.OpenFile(devicePath, os.O_WRONLY, 0)
+	if err == nil {
+		f.Close()
+		return nil
+	}
+
+	if !os.IsPermission(err) {
+		return fmt.Errorf("cannot open %s: %w", devicePath, err)
+	}
+
+	fmt.Fprintf(w, "Permission denied writing to %s\n", devicePath)
+	fmt.Fprint(w, "Set write permissions with sudo? [y/N] ")
+
+	var answer string
+	fmt.Scanln(&answer)
+	if strings.ToLower(answer) != "y" {
+		return fmt.Errorf("no write permission on %s — run: sudo chmod 666 %s", devicePath, devicePath)
+	}
+
+	chmod := exec.Command("sudo", "chmod", "666", devicePath)
+	chmod.Stdin = os.Stdin
+	chmod.Stdout = w
+	chmod.Stderr = os.Stderr
+	if err := chmod.Run(); err != nil {
+		return fmt.Errorf("failed to set permissions: %w", err)
+	}
+
+	fmt.Fprintf(w, "Permissions set on %s\n", devicePath)
 	return nil
 }
 
