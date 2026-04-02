@@ -8,7 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
-## [0.5.0] - 2026-03-31
+## [0.5.1] - 2026-04-02
+
+- Remove version from release binary name to fix stable download URL.
+
+## [0.5.0] - 2026-04-02
 
 **BASE-IMAGE boots on RPI4**
 
