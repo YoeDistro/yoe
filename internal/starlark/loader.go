@@ -260,12 +260,29 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	// Now that all units are loaded, update predeclared variables before
 	// evaluating images (phase 2b).
 
-	// Add unit provides to PROVIDES dict
+	// Add unit provides to PROVIDES dict, checking for conflicts.
 	if prov, ok := eng.vars["PROVIDES"].(*starlark.Dict); ok {
 		for _, u := range eng.Units() {
-			if u.Provides != "" {
-				_ = prov.SetKey(starlark.String(u.Provides), starlark.String(u.Name))
+			if u.Provides == "" {
+				continue
 			}
+			if existing, found, _ := prov.Get(starlark.String(u.Provides)); found {
+				existingName := string(existing.(starlark.String))
+				// Look up the existing unit to compare module priority.
+				existingUnit := eng.Units()[existingName]
+				if existingUnit == nil || u.ModuleIndex == existingUnit.ModuleIndex {
+					return nil, fmt.Errorf("virtual package %q provided by both %q and %q",
+						u.Provides, existingName, u.Name)
+				}
+				if u.ModuleIndex > existingUnit.ModuleIndex {
+					fmt.Fprintf(os.Stderr, "notice: %q from module %q overrides %q via provides %q\n",
+						u.Name, u.Module, existingName, u.Provides)
+					_ = prov.SetKey(starlark.String(u.Provides), starlark.String(u.Name))
+				}
+				// If u.ModuleIndex < existingUnit.ModuleIndex, skip — higher priority already won.
+				continue
+			}
+			_ = prov.SetKey(starlark.String(u.Provides), starlark.String(u.Name))
 		}
 	}
 
