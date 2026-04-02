@@ -1207,9 +1207,22 @@ func (m model) unitScopeDir(name string) string {
 	return m.arch
 }
 
-// recomputeStatuses recomputes hashes and cache statuses for the current arch.
-// Called when the machine (and thus arch) changes.
+// recomputeStatuses reloads the project for the new machine and recomputes
+// hashes and cache statuses. Required because image definitions depend on
+// MACHINE_CONFIG which changes per machine.
 func (m *model) recomputeStatuses() {
+	// Reload project with the new machine so MACHINE_CONFIG/PROVIDES/ARCH
+	// are correct for image definitions.
+	freshProj, err := yoestar.LoadProject(m.projectDir,
+		yoestar.WithMachine(m.proj.Defaults.Machine))
+	if err == nil {
+		m.proj = freshProj
+		// Rebuild DAG from fresh project
+		if dag, err := resolve.BuildDAG(freshProj); err == nil {
+			m.dag = dag
+		}
+	}
+
 	hashes, err := resolve.ComputeAllHashes(m.dag, m.arch, m.proj.Defaults.Machine)
 	if err != nil {
 		return
