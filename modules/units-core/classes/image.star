@@ -180,8 +180,11 @@ def _resolve_runtime_deps(packages):
         ordered.append(name)
     return ordered
 
-def _parse_size_mb(size_str):
+def _parse_size_mb(size_str, default=256):
+    """Parse a size string like '64M', '1G', or 'fill' into megabytes."""
     s = str(size_str)
+    if s == "fill" or s == "":
+        return default
     if s.endswith("M"):
         return int(s[:-1])
     if s.endswith("G"):
