@@ -2,6 +2,7 @@ package starlark
 
 import (
 	"fmt"
+	"path/filepath"
 	"sync"
 
 	"go.starlark.net/starlark"
@@ -77,6 +78,9 @@ func (e *Engine) ExecString(filename, src string) error {
 }
 
 // ExecFile evaluates a .star file from disk.
+// Results are added to the load cache so that a subsequent load() of the
+// same file returns the cached globals instead of re-executing (which would
+// cause duplicate unit registrations).
 func (e *Engine) ExecFile(path string) error {
 	thread := &starlark.Thread{Name: path}
 	thread.Load = e.makeLoadFunc(path)
@@ -87,5 +91,17 @@ func (e *Engine) ExecFile(path string) error {
 		return fmt.Errorf("evaluating %s: %w", path, err)
 	}
 	e.globals = globals
+
+	// Populate load cache so load() of this file won't re-execute it.
+	absPath, _ := filepath.Abs(path)
+	if absPath != "" {
+		if e.loadCache == nil {
+			e.loadCache = newLoadCache()
+		}
+		e.loadCache.mu.Lock()
+		e.loadCache.entries[absPath] = &loadResult{globals: globals}
+		e.loadCache.mu.Unlock()
+	}
+
 	return nil
 }
