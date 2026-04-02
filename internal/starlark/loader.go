@@ -147,6 +147,9 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 
 	// Apply machine override before evaluating units/images.
 	if cfg.machine != "" {
+		if _, ok := eng.Machines()[cfg.machine]; !ok {
+			return nil, fmt.Errorf("machine %q not found", cfg.machine)
+		}
 		if proj := eng.Project(); proj != nil {
 			proj.Defaults.Machine = cfg.machine
 		}
