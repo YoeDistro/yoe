@@ -1080,7 +1080,8 @@ func (m *model) startBuild(name string) tea.Cmd {
 
 		// Reload project from .star files so we pick up any changes
 		// made since the TUI started (e.g., edited build steps).
-		freshProj, err := yoestar.LoadProject(projectDir)
+		freshProj, err := yoestar.LoadProject(projectDir,
+			yoestar.WithMachine(machine))
 		if err != nil {
 			fmt.Fprintf(f, "warning: could not reload project: %v, using cached config\n", err)
 			freshProj = proj
