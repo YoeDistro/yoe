@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-03-31
+
+**BASE-IMAGE boots on RPI4**
+
 - **Tasks replace build steps** — `build = [...]` replaced by `tasks = [...]`
   with named build phases. Each task has `run` (shell string), `fn` (Starlark
   function), or `steps` (mixed list). Classes (autotools, cmake, go) are now
@@ -34,7 +38,8 @@ and this project adheres to
   units, GPU firmware, and boot config for Raspberry Pi 4 and 5.
 - **Runtime dependency resolution** — image assembly now resolves transitive
   runtime dependencies automatically. `RUNTIME_DEPS` predeclared variable
-  available after unit evaluation. Three-phase loader: machines → units → images.
+  available after unit evaluation. Three-phase loader: machines → units →
+  images.
 - **Layers renamed to modules** — `layer()` → `module()`, `LAYER.star` →
   `MODULE.star`, `yoe layer` → `yoe module`, `layers/` → `modules/`. Aligns
   terminology with Go modules model used for dependency resolution.
