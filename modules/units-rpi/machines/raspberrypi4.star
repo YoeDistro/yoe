@@ -8,7 +8,7 @@ machine(
         defconfig = "bcm2711_defconfig",
         cmdline = "console=ttyS0,115200 root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw",
     ),
-    packages = ["raspberrypi-firmware"],
+    packages = ["rpi-firmware", "rpi4-config"],
     partitions = [
         partition(label = "boot", type = "vfat", size = "64M", contents = ["kernel", "dtbs", "firmware"]),
         partition(label = "rootfs", type = "ext4", size = "fill", root = True),
