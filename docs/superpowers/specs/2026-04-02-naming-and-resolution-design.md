@@ -28,8 +28,8 @@ Changes:
   }
   ```
 
-Error message when module is empty string: `"unit %q already defined (first
-defined in project root)"`.
+Error message when module is empty string:
+`"unit %q already defined (first defined in project root)"`.
 
 ## 2. PROVIDES duplicate detection
 
@@ -94,10 +94,10 @@ through.
 
 Changes:
 
-- Add `WithProjectFile(path string) LoadOption` to `internal/starlark/loader.go`.
-  When set, `LoadProjectFromRoot` evaluates the specified file instead of
-  `PROJECT.star` at root. The project root remains the repo root — only the
-  project definition file changes.
+- Add `WithProjectFile(path string) LoadOption` to
+  `internal/starlark/loader.go`. When set, `LoadProjectFromRoot` evaluates the
+  specified file instead of `PROJECT.star` at root. The project root remains the
+  repo root — only the project definition file changes.
 - In `main.go`, parse `--project` from `os.Args` before the command switch.
   Strip it from `args` passed to subcommands.
 - `findProjectRoot` behavior unchanged — it still finds the repo root by walking

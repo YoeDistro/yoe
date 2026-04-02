@@ -9,10 +9,10 @@ dependencies.
 
 ```sh
 # From source
-go install github.com/yoe/yoe-ng/cmd/yoe@latest
+go install github.com/YoeDistro/yoe-ng/cmd/yoe@latest
 
 # Or download a prebuilt binary
-curl -L https://github.com/yoe/yoe-ng/releases/latest/download/yoe-$(uname -s)-$(uname -m) -o yoe
+curl -L https://github.com/YoeDistro/yoe/releases/latest/download/yoe-$(uname -s)-$(uname -m) -o yoe
 chmod +x yoe
 ```
 

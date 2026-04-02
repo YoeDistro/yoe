@@ -113,7 +113,8 @@ Add `"strings"` to the import block in `engine_test.go`.
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /scratch4/yoe/yoe-ng && go test ./internal/starlark/ -run TestEvalUnitDuplicate -v`
+Run:
+`cd /scratch4/yoe/yoe-ng && go test ./internal/starlark/ -run TestEvalUnitDuplicate -v`
 Expected: FAIL — no duplicate check yet, second unit silently overwrites.
 
 - [ ] **Step 3: Implement duplicate detection in registerUnit**
@@ -147,13 +148,14 @@ With:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /scratch4/yoe/yoe-ng && go test ./internal/starlark/ -run TestEvalUnitDuplicate -v`
+Run:
+`cd /scratch4/yoe/yoe-ng && go test ./internal/starlark/ -run TestEvalUnitDuplicate -v`
 Expected: PASS
 
 - [ ] **Step 5: Run all starlark tests to check for regressions**
 
-Run: `cd /scratch4/yoe/yoe-ng && go test ./internal/starlark/ -v`
-Expected: All PASS
+Run: `cd /scratch4/yoe/yoe-ng && go test ./internal/starlark/ -v` Expected: All
+PASS
 
 - [ ] **Step 6: Commit**
 
@@ -252,9 +254,8 @@ For phase 2b (images), replace the existing image evaluation (lines 266-275):
 
 - [ ] **Step 2: Run all starlark tests**
 
-Run: `cd /scratch4/yoe/yoe-ng && go test ./internal/starlark/ -v`
-Expected: All PASS (existing tests still work, units now have Module/ModuleIndex
-set)
+Run: `cd /scratch4/yoe/yoe-ng && go test ./internal/starlark/ -v` Expected: All
+PASS (existing tests still work, units now have Module/ModuleIndex set)
 
 - [ ] **Step 3: Commit**
 
@@ -269,8 +270,8 @@ git commit -m "set module context before evaluating module directories"
 
 **Files:**
 
-- Modify: `internal/starlark/loader.go:247-253` (PROVIDES population after
-  phase 2a)
+- Modify: `internal/starlark/loader.go:247-253` (PROVIDES population after phase
+  2a)
 - Test: `internal/starlark/engine_test.go`
 
 - [ ] **Step 1: Write test for same-module provides conflict**
@@ -367,7 +368,8 @@ Add `"strings"` to the import block in `loader_test.go`.
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `cd /scratch4/yoe/yoe-ng && go test ./internal/starlark/ -run TestLoadProject_ProvidesDuplicate -v`
+Run:
+`cd /scratch4/yoe/yoe-ng && go test ./internal/starlark/ -run TestLoadProject_ProvidesDuplicate -v`
 Expected: FAIL — no conflict detection yet.
 
 - [ ] **Step 4: Implement provides conflict detection in loader**
@@ -407,13 +409,14 @@ Add `"os"` to the import block in `loader.go` if not already present.
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `cd /scratch4/yoe/yoe-ng && go test ./internal/starlark/ -run TestLoadProject_ProvidesDuplicate -v`
+Run:
+`cd /scratch4/yoe/yoe-ng && go test ./internal/starlark/ -run TestLoadProject_ProvidesDuplicate -v`
 Expected: PASS
 
 - [ ] **Step 6: Run all starlark tests**
 
-Run: `cd /scratch4/yoe/yoe-ng && go test ./internal/starlark/ -v`
-Expected: All PASS
+Run: `cd /scratch4/yoe/yoe-ng && go test ./internal/starlark/ -v` Expected: All
+PASS
 
 - [ ] **Step 7: Commit**
 
@@ -469,7 +472,8 @@ Create `testdata/provides-override/modules/override/MODULE.star`:
 module_info(name = "override")
 ```
 
-Create `testdata/provides-override/modules/override/units/base-files-custom.star`:
+Create
+`testdata/provides-override/modules/override/units/base-files-custom.star`:
 
 ```python
 unit(name = "base-files-custom", version = "1.0.0", provides = "base-files")
@@ -505,7 +509,8 @@ func TestLoadProject_ProvidesOverride(t *testing.T) {
 
 - [ ] **Step 3: Run test**
 
-Run: `cd /scratch4/yoe/yoe-ng && go test ./internal/starlark/ -run TestLoadProject_ProvidesOverride -v`
+Run:
+`cd /scratch4/yoe/yoe-ng && go test ./internal/starlark/ -run TestLoadProject_ProvidesOverride -v`
 Expected: PASS (notice printed to stderr about the override)
 
 - [ ] **Step 4: Commit**
@@ -654,8 +659,8 @@ func loadProjectWithMachine(machineName string) *yoestar.Project {
 
 - [ ] **Step 5: Run all tests**
 
-Run: `cd /scratch4/yoe/yoe-ng && go test ./... 2>&1 | tail -20`
-Expected: All PASS
+Run: `cd /scratch4/yoe/yoe-ng && go test ./... 2>&1 | tail -20` Expected: All
+PASS
 
 - [ ] **Step 6: Commit**
 
@@ -748,10 +753,10 @@ Expected: All PASS
 
 - [ ] **Step 5: Fix callers that pass nil**
 
-There is one caller that passes `nil` for proj:
-`internal/build/executor.go:322` — `repo.RepoDir(nil, opts.ProjectDir)`. This
-is in the build executor where proj isn't available. This call should be updated
-to pass the project. Check the context:
+There is one caller that passes `nil` for proj: `internal/build/executor.go:322`
+— `repo.RepoDir(nil, opts.ProjectDir)`. This is in the build executor where proj
+isn't available. This call should be updated to pass the project. Check the
+context:
 
 Read `internal/build/executor.go` around line 322 to understand what project is
 available. If a project is available in the function scope, pass it. If not, the
@@ -760,8 +765,8 @@ only used in a context where the project-scoped path isn't critical.
 
 - [ ] **Step 6: Run all tests**
 
-Run: `cd /scratch4/yoe/yoe-ng && go test ./... 2>&1 | tail -20`
-Expected: All PASS
+Run: `cd /scratch4/yoe/yoe-ng && go test ./... 2>&1 | tail -20` Expected: All
+PASS
 
 - [ ] **Step 7: Commit**
 
@@ -812,8 +817,8 @@ Add under `## [Unreleased]`:
 - **Unit name collision detection** — duplicate unit names now error at
   evaluation time with a clear message showing which module first defined the
   unit.
-- **PROVIDES collision detection** — two units providing the same virtual name in
-  the same module now error. Units from higher-priority modules (later in the
+- **PROVIDES collision detection** — two units providing the same virtual name
+  in the same module now error. Units from higher-priority modules (later in the
   module list) override lower-priority ones with a notice.
 - **`--project` flag** — `yoe build --project projects/customer-a.star` selects
   an alternate project file. Available on all subcommands.
