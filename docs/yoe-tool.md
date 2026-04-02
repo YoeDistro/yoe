@@ -131,8 +131,8 @@ model. The entire dependency graph is resolved and validated _before_ any build
 work starts. This catches missing dependencies, cycles, and configuration errors
 up front rather than mid-build.
 
-1. **Sync modules** — fetch or update external modules declared in `PROJECT.star`
-   (skipped if already up to date). See `yoe module sync`.
+1. **Sync modules** — fetch or update external modules declared in
+   `PROJECT.star` (skipped if already up to date). See `yoe module sync`.
 2. **Evaluate Starlark** — load and evaluate all `.star` unit files (including
    those from modules) to produce the set of build targets. Each class function
    call (`unit()`, `autotools()`, `image()`, etc.) registers a target.

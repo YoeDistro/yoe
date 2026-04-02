@@ -17,8 +17,8 @@ build isolation, and packaging can:
   configurations.
 - **Reduce debugging time.** Build failures in embedded systems often involve
   subtle interactions between toolchain flags, dependency ordering, and
-  cross-module overrides. An AI that can read the full dependency graph and build
-  logs can diagnose issues faster than manual investigation.
+  cross-module overrides. An AI that can read the full dependency graph and
+  build logs can diagnose issues faster than manual investigation.
 - **Automate routine maintenance.** Version bumps, security patches, license
   audits, and dependency updates are tedious but critical. AI skills can
   automate these with human review.

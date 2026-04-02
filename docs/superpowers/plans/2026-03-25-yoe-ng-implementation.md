@@ -1785,12 +1785,14 @@ changes needed.
 
 **Key components:**
 
-- `internal/module/fetch.go` — Git clone/fetch modules into `$YOE_CACHE/modules/`
-- `internal/module/resolve.go` — resolve transitive deps from MODULE.star, version
-  conflict resolution (PROJECT.star wins, then highest semver)
+- `internal/module/fetch.go` — Git clone/fetch modules into
+  `$YOE_CACHE/modules/`
+- `internal/module/resolve.go` — resolve transitive deps from MODULE.star,
+  version conflict resolution (PROJECT.star wins, then highest semver)
 - `internal/module/cache.go` — bare Git repo caching with worktree checkouts at
   pinned refs
-- `internal/module/local.go` — local override support (skip fetch, use local dir)
+- `internal/module/local.go` — local override support (skip fetch, use local
+  dir)
 - `cmd/yoe/main.go` — `yoe module sync`, `yoe module list --tree`,
   `yoe module info`, `yoe module check-updates`
 - Update `internal/starlark/loader.go` — resolve `@module-name//...` load()
@@ -1800,8 +1802,8 @@ changes needed.
 
 - Remove Go builtins for classes (`autotools()`, `cmake()`, `go_binary()`) —
   these become Starlark functions in module `.star` files loaded via `load()`
-- Implement `load()` resolution: `//path` relative to current file's module root,
-  `@module-name//path` relative to named module's root
+- Implement `load()` resolution: `//path` relative to current file's module
+  root, `@module-name//path` relative to named module's root
 - Add `package_extend()` primitive for modifier classes like `systemd_service()`
 - Add `bootstrap` flag to `unit()` for stage 0/1 toolchain units
 - Change unit discovery from `units/*.star` to `units/**/*.star` for categorized
@@ -1810,8 +1812,9 @@ changes needed.
 **Depends on:** Phase 1 (ModuleRef/ModuleInfo types, Starlark engine, project
 loader)
 
-**v1 behavior:** `yoe module sync` reads MODULE.star from each module and errors if
-transitive deps are missing from PROJECT.star. This is explicit and debuggable.
+**v1 behavior:** `yoe module sync` reads MODULE.star from each module and errors
+if transitive deps are missing from PROJECT.star. This is explicit and
+debuggable.
 
 **v2 behavior (future):** Transitive deps are fetched automatically when not
 overridden by PROJECT.star. Diamond dependencies resolve to the highest semver.
@@ -1963,9 +1966,9 @@ user namespaces (bubblewrap), mkfs.ext4, mkfs.vfat, systemd-repart
 
 ## Phase 2.6: units-core Module Phase 1 — Skeleton + Classes + Toolchain (detailed plan TBD)
 
-**Goal:** Create the `modules/units-core/` directory with the module manifest, all
-Starlark class files, and the toolchain/build-tool units. This is the foundation
-that all other units build on.
+**Goal:** Create the `modules/units-core/` directory with the module manifest,
+all Starlark class files, and the toolchain/build-tool units. This is the
+foundation that all other units build on.
 
 See [units-core Module Design](../specs/2026-03-26-recipes-core-layer-design.md)
 for the full specification.

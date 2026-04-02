@@ -10,7 +10,8 @@ isolation and caching work.
 ## Modules
 
 A **module** is a Git repository (or subdirectory of one) that provides units,
-classes, machine definitions, and images. Modules are declared in `PROJECT.star`:
+classes, machine definitions, and images. Modules are declared in
+`PROJECT.star`:
 
 ```python
 project(
@@ -111,11 +112,11 @@ Runtime deps are resolved transitively by `apk` at install time.
 
 Starlark `load()` statements use three forms:
 
-| Form             | Resolves to                         | Example                                                    |
-| ---------------- | ----------------------------------- | ---------------------------------------------------------- |
-| `@module//path`  | Named module root                   | `load("@units-core//classes/autotools.star", "autotools")` |
-| `//path`         | Current module root (context-aware) | `load("//classes/cmake.star", "cmake")`                    |
-| `relative/path`  | Relative to current file            | `load("../utils.star", "helper")`                          |
+| Form            | Resolves to                         | Example                                                    |
+| --------------- | ----------------------------------- | ---------------------------------------------------------- |
+| `@module//path` | Named module root                   | `load("@units-core//classes/autotools.star", "autotools")` |
+| `//path`        | Current module root (context-aware) | `load("//classes/cmake.star", "cmake")`                    |
+| `relative/path` | Relative to current file            | `load("../utils.star", "helper")`                          |
 
 The `//` form is context-aware: if the file is inside a module, `//` resolves to
 that module's root. Otherwise it resolves to the project root. This means a unit
@@ -156,7 +157,8 @@ unit(name = "systemd", ..., provides = "init")
 unit(name = "busybox-init", ..., provides = "init")
 ```
 
-The project selects which init system to use by including the appropriate module:
+The project selects which init system to use by including the appropriate
+module:
 
 ```python
 # projects/product-a.star
@@ -212,10 +214,10 @@ traceable — `grep` for the function call to find all extensions. See
 
 ### Unit name duplicates
 
-Unit names are flat strings. If two modules define a unit with the same name, the
-build errors at evaluation time. Modules must coordinate names or use the
-[module composition](#module-composition) pattern to explicitly extend an upstream
-unit.
+Unit names are flat strings. If two modules define a unit with the same name,
+the build errors at evaluation time. Modules must coordinate names or use the
+[module composition](#module-composition) pattern to explicitly extend an
+upstream unit.
 
 ### PROVIDES duplicates
 
@@ -300,10 +302,10 @@ dependencies should reference the overridden unit by its actual name (e.g.,
 see exactly which unit is being used.
 
 **When a core package must be overridden transparently**, `provides` combined
-with module priority resolves the ambiguity. Modules in the project's module list
-are ordered from lowest to highest priority (last module wins). When a unit in a
-later module declares `provides = "base-files"`, it takes precedence over the
-real unit named `base-files` from an earlier module:
+with module priority resolves the ambiguity. Modules in the project's module
+list are ordered from lowest to highest priority (last module wins). When a unit
+in a later module declares `provides = "base-files"`, it takes precedence over
+the real unit named `base-files` from an earlier module:
 
 ```python
 project(name = "product", modules = [

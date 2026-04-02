@@ -32,8 +32,8 @@ patches, and known pitfalls:
   closest to Yoe's packaging model (apk, musl/glibc, minimal). Pay attention to
   `makedepends`, `depends`, and `configure` flags.
 - **Yocto/OpenEmbedded (bitbake units)** — search
-  `https://layers.openembedded.org` or the OE-Core module. Yocto units often have
-  well-tested configure flags and patch sets for embedded use.
+  `https://layers.openembedded.org` or the OE-Core module. Yocto units often
+  have well-tested configure flags and patch sets for embedded use.
 - **Buildroot** — search
   `https://github.com/buildroot/buildroot/tree/master/package` for the package.
   Buildroot units are simple and often reveal minimal configure flags needed for

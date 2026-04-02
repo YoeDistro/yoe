@@ -127,13 +127,13 @@ fixing a missing header reveals a missing library).
 
 ## Key Paths
 
-| Path                             | Contents                            |
-| -------------------------------- | ----------------------------------- |
-| `build/<unit>/build.log`         | Full build output                   |
-| `build/<unit>/src/`              | Extracted source tree               |
-| `build/<unit>/destdir/`          | Install staging directory           |
-| `build/sysroot/`                 | Shared sysroot (deps' headers/libs) |
-| `modules/**/units/**/<unit>.star` | Unit definition                    |
+| Path                              | Contents                            |
+| --------------------------------- | ----------------------------------- |
+| `build/<unit>/build.log`          | Full build output                   |
+| `build/<unit>/src/`               | Extracted source tree               |
+| `build/<unit>/destdir/`           | Install staging directory           |
+| `build/sysroot/`                  | Shared sysroot (deps' headers/libs) |
+| `modules/**/units/**/<unit>.star` | Unit definition                     |
 
 ## What NOT to Do
 

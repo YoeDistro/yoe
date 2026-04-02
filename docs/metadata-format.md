@@ -677,8 +677,8 @@ my-project/
 
 Modules are external Git repositories that provide units, classes, and machine
 definitions. They are the primary mechanism for reusing and sharing build
-definitions across projects — BSP vendors ship modules, and product teams compose
-them.
+definitions across projects — BSP vendors ship modules, and product teams
+compose them.
 
 ### Declaring Modules in PROJECT.star
 
@@ -699,11 +699,11 @@ project(
 
 Each `module()` call declares a Git repository URL and a ref (tag, branch, or
 commit SHA). The optional `path` field specifies a subdirectory within the repo
-where `MODULE.star` lives — this allows a single repo to contain multiple modules
-or a module to be part of a larger project. The `yoe` tool fetches and caches
-these repositories, making them available as `@module-name` in `load()`
-statements. The module name is derived from the last component of `path` (if set)
-or the URL.
+where `MODULE.star` lives — this allows a single repo to contain multiple
+modules or a module to be part of a larger project. The `yoe` tool fetches and
+caches these repositories, making them available as `@module-name` in `load()`
+statements. The module name is derived from the last component of `path` (if
+set) or the URL.
 
 ### Module Manifests (MODULE.star)
 
@@ -728,9 +728,9 @@ module_info(
 Module dependencies follow the **Go modules model** — the root project has final
 authority over versions:
 
-1. **PROJECT.star always wins.** If PROJECT.star and a MODULE.star both reference
-   the same repository, the version in PROJECT.star takes precedence. This gives
-   the project owner full control over the dependency tree.
+1. **PROJECT.star always wins.** If PROJECT.star and a MODULE.star both
+   reference the same repository, the version in PROJECT.star takes precedence.
+   This gives the project owner full control over the dependency tree.
 
 2. **Transitive deps are checked, not silently fetched (v1).** In the initial
    implementation, `yoe` reads each module's `MODULE.star` and **errors** if a
@@ -743,8 +743,8 @@ authority over versions:
    overridden by PROJECT.star. `yoe module list` shows the full resolved tree so
    nothing is hidden.
 
-4. **Diamond dependencies resolve to the highest version.** If two modules depend
-   on different versions of the same repository, `yoe` selects the higher
+4. **Diamond dependencies resolve to the highest version.** If two modules
+   depend on different versions of the same repository, `yoe` selects the higher
    version (semver comparison) unless PROJECT.star pins a specific version.
 
 **Example — v1 behavior (missing transitive dep):**

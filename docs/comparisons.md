@@ -42,12 +42,12 @@ resolved to).
 Yoe-NG's model is function-based, which covers the same use cases more
 explicitly:
 
-| Yocto override                     | Yoe-NG equivalent                                        |
-| ---------------------------------- | -------------------------------------------------------- |
-| `DEPENDS:append:raspberrypi4`      | `if MACHINE == "raspberrypi4": extra_deps = [...]`       |
-| `SRC_URI:append:aarch64`           | `if ARCH == "aarch64": ...` in the unit                  |
+| Yocto override                     | Yoe-NG equivalent                                         |
+| ---------------------------------- | --------------------------------------------------------- |
+| `DEPENDS:append:raspberrypi4`      | `if MACHINE == "raspberrypi4": extra_deps = [...]`        |
+| `SRC_URI:append:aarch64`           | `if ARCH == "aarch64": ...` in the unit                   |
 | `PACKAGECONFIG:remove:musl`        | Module scoping — musl project doesn't include that module |
-| `FILESEXTRAPATHS:prepend` + append | `load()` the upstream function, call with different args |
+| `FILESEXTRAPATHS:prepend` + append | `load()` the upstream function, call with different args  |
 
 Starlark has `if` with predeclared variables (`MACHINE`, `ARCH`), and the
 function composition pattern handles the "extend from downstream" case. When

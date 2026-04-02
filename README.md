@@ -124,9 +124,9 @@ managers, structured Starlark metadata, and AI as a first-class interface.
 
 Embedded Linux is hard not because the concepts are complex, but because there
 are _many_ concepts that interact in non-obvious ways: toolchain flags,
-dependency ordering, kernel configuration, package splitting, module composition,
-image assembly, device trees, bootloaders. Traditional build systems manage this
-complexity through complexity.
+dependency ordering, kernel configuration, package splitting, module
+composition, image assembly, device trees, bootloaders. Traditional build
+systems manage this complexity through complexity.
 
 Yoe-NG takes a different approach: **Simplify things as much as possible.**
 Starlark units are readable by both humans and AI. The dependency graph is

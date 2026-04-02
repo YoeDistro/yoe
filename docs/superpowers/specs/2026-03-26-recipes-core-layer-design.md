@@ -6,9 +6,9 @@ Yoe-NG project depends on.
 
 ## Location
 
-`modules/units-core/` in the main yoe-ng repository. Will be extracted to its own
-Git repo (`github.com/yoe/units-core`) once stable. During development, projects
-reference it as a local module override:
+`modules/units-core/` in the main yoe-ng repository. Will be extracted to its
+own Git repo (`github.com/yoe/units-core`) once stable. During development,
+projects reference it as a local module override:
 
 ```python
 # PROJECT.star
@@ -234,10 +234,10 @@ def systemd_service(name, unit, conffiles = [], wants = [], after = []):
 
 `image()` and `sdk()` are Go primitives because they have fundamentally
 different build paths (rootfs assembly vs. source compilation). The
-`classes/image.star` and `classes/sdk.star` files in the module are thin wrappers
-that re-export the primitive with module-specific defaults (e.g., default
-partition layouts, default base packages). Units can use the primitive directly
-or use the class wrapper.
+`classes/image.star` and `classes/sdk.star` files in the module are thin
+wrappers that re-export the primitive with module-specific defaults (e.g.,
+default partition layouts, default base packages). Units can use the primitive
+directly or use the class wrapper.
 
 ## Unit Conventions
 
@@ -605,8 +605,8 @@ Moving classes from Go builtins to Starlark files requires these changes to the
      not in a module)
    - `@module-name//path` — relative to the named module's root
 
-3. **Evaluate modules before project units.** The loader must fetch/cache modules
-   (per `yoe module sync`), then make their files available for `load()`
+3. **Evaluate modules before project units.** The loader must fetch/cache
+   modules (per `yoe module sync`), then make their files available for `load()`
    resolution before evaluating project units.
 
 4. **Add `package_extend()` primitive.** Needed for `systemd_service()` and
