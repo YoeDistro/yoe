@@ -339,6 +339,9 @@ into a root filesystem, just as Alpine does.
 
 ### 🧱 Base System
 
+_Currently running musl busybox/init for simplicity, but hope to eventually move
+to glibc/systemd._
+
 The base userspace is **glibc + busybox + systemd**:
 
 - **glibc** — the standard C library. Maximizes compatibility with pre-built
