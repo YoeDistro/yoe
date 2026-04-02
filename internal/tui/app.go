@@ -379,7 +379,7 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "l":
 		if m.cursor < len(m.units) {
 			name := m.units[m.cursor]
-			logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.arch, name), "build.log")
+			logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.unitScopeDir(name), name), "build.log")
 			if _, err := os.Stat(logPath); err == nil {
 				return m, m.execEditor(logPath)
 			}
@@ -390,7 +390,7 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "d":
 		if m.cursor < len(m.units) {
 			name := m.units[m.cursor]
-			logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.arch, name), "build.log")
+			logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.unitScopeDir(name), name), "build.log")
 			c := exec.Command("claude", fmt.Sprintf("diagnose %s", logPath))
 			c.Dir = m.projectDir
 			return m, tea.ExecProcess(c, func(err error) tea.Msg {
@@ -555,7 +555,7 @@ func (m model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		} else if strings.HasPrefix(action, "clean:") {
 			name := strings.TrimPrefix(action, "clean:")
-			buildDir := build.UnitBuildDir(m.projectDir, m.arch, name)
+			buildDir := build.UnitBuildDir(m.projectDir, m.unitScopeDir(name), name)
 			if err := os.RemoveAll(buildDir); err != nil {
 				m.message = fmt.Sprintf("Clean failed: %v", err)
 			} else {
@@ -724,7 +724,7 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.startBuild(m.detailUnit)
 
 	case "d":
-		logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.arch, m.detailUnit), "build.log")
+		logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.unitScopeDir(m.detailUnit), m.detailUnit), "build.log")
 		c := exec.Command("claude", fmt.Sprintf("diagnose %s", logPath))
 		c.Dir = m.projectDir
 		return m, tea.ExecProcess(c, func(err error) tea.Msg {
@@ -743,7 +743,7 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "l":
-		logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.arch, m.detailUnit), "build.log")
+		logPath := filepath.Join(build.UnitBuildDir(m.projectDir, m.unitScopeDir(m.detailUnit), m.detailUnit), "build.log")
 		if _, err := os.Stat(logPath); err == nil {
 			return m, m.execEditor(logPath)
 		}
@@ -1117,7 +1117,7 @@ func (m model) execEditor(path string) tea.Cmd {
 }
 
 func (m *model) refreshDetail() {
-	unitDir := build.UnitBuildDir(m.projectDir, m.arch, m.detailUnit)
+	unitDir := build.UnitBuildDir(m.projectDir, m.unitScopeDir(m.detailUnit), m.detailUnit)
 	outputPath := filepath.Join(unitDir, ".output.log")
 	m.outputLines = readFileAll(outputPath)
 	logPath := filepath.Join(unitDir, "build.log")
@@ -1196,6 +1196,14 @@ func (m *model) adjustListOffset() {
 	if m.listOffset < 0 {
 		m.listOffset = 0
 	}
+}
+
+// unitScopeDir returns the scope directory for a unit (arch, machine name, or noarch).
+func (m model) unitScopeDir(name string) string {
+	if u, ok := m.proj.Units[name]; ok {
+		return build.ScopeDir(u, m.arch, m.proj.Defaults.Machine)
+	}
+	return m.arch
 }
 
 // recomputeStatuses recomputes hashes and cache statuses for the current arch.
