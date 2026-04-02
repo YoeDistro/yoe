@@ -9,6 +9,7 @@ Status of design specs and their corresponding implementation plans.
 | Container as build worker (2026-03-27) | container-as-build-worker (2026-03-27) | Done        |
 | Units-core module design (2026-03-26)  | yoe-ng implementation (2026-03-25)     | In progress |
 | TUI redesign (2026-03-30)              | tui-redesign (2026-03-30)              | In progress |
+| Naming and resolution (2026-04-02)     | —                                      | Spec done   |
 
 ## Plans
 
