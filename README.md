@@ -3,24 +3,26 @@
 **For teams building edge products in Go, Rust, Zig, Python, etc. who need Linux
 on ARM/RISC-V without the complexity of Yocto.**
 
-Yoe-NG is an embedded Linux distribution builder designed for modern edge
-development. Your application is written in Go or Rust. Your target is an ARM
-board. You need a minimal Linux image with your app, the right kernel, and
-nothing else. You shouldn't need to learn BitBake, manage cross-toolchains, or
-read a thousand-page manual to get there.
+We have maintained the [Yoe Distribution](https://yoedistro.org/) for many years
+which is a Yocto based Embedded Linux distribution designed for product
+development. Yoe-NG is a fresh take on building software for edge devices. Your
+application is written in modern language. Your target is embedded/edge
+hardware. You need a minimal Linux image with your app, the right kernel, and
+nothing else. You shouldn't need to learn complex build systems, manage
+cross-toolchains, or read a thousand-page manual to get there.
 
-One Go binary. Readable Starlark config files. AI that understands your
-dependency graph. Build ARM images on your x86 laptop, on native hardware, or in
+One Go binary. Readable config files. AI that understands the system and how to
+modify/debug it. Build ARM images on your x86 laptop, on native hardware, or in
 cloud CI — same tool, same config, same results.
 
-Note: much of what is in the docs has not been implemented yet, and is mostly
-vision.
+Note: Not everything in the documentation has been implemented yet as this
+project is in the early stages.
 
 ## 🚀 Getting Started
 
 Prerequisites: Linux or macOS with Git and Docker (or Podman) installed. Windows
-users: install WSL2 and use the Linux binary. (Linux x86_64/Docker is the most
-tested configuration)
+users: install WSL2 and use the Linux binary (Linux x86_64/Docker is the most
+tested configuration). Claude Code is highly recommended, but not required.
 
 ```sh
 # Download the yoe binary
