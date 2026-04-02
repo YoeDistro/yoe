@@ -36,15 +36,9 @@ def base_files(name = "base-files", users = None):
                 + " $DESTDIR/dev $DESTDIR/tmp $DESTDIR/run",
             ] + users_commands(users) + [
                 # Busybox inittab: mount filesystems, getty on serial console.
-                # CONSOLE env var is set from the machine's kernel cmdline.
-                # Fall back to arch-based default if not set.
+                # CONSOLE env var is set by the build system from the machine's
+                # kernel cmdline (e.g., ttyS0, ttyAMA0, ttyAMA10).
                 """
-if [ -z "$CONSOLE" ]; then
-    case $ARCH in
-        arm64)   CONSOLE=ttyAMA0 ;;
-        *)       CONSOLE=ttyS0 ;;
-    esac
-fi
 cat > $DESTDIR/etc/inittab << INITTAB
 ::sysinit:/bin/mount -t proc proc /proc
 ::sysinit:/bin/mount -t sysfs sys /sys
