@@ -225,11 +225,28 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	if err := AssembleSysroot(sysroot, dag, unit.Name, opts.ProjectDir, opts.Arch); err != nil {
 		return fmt.Errorf("assembling sysroot: %w", err)
 	}
+	// Extract console device from machine kernel cmdline (e.g., "console=ttyS0,115200" → "ttyS0")
+	console := ""
+	if m, ok := proj.Machines[opts.Machine]; ok && m.Kernel.Cmdline != "" {
+		for _, part := range strings.Split(m.Kernel.Cmdline, " ") {
+			if strings.HasPrefix(part, "console=") {
+				c := strings.TrimPrefix(part, "console=")
+				if idx := strings.Index(c, ","); idx > 0 {
+					c = c[:idx]
+				}
+				console = c
+				break
+			}
+		}
+	}
+
 	env := map[string]string{
 		"PREFIX":          "/usr",
 		"DESTDIR":         "/build/destdir",
 		"NPROC":           NProc(),
 		"ARCH":            opts.Arch,
+		"MACHINE":         opts.Machine,
+		"CONSOLE":         console,
 		"HOME":            "/tmp",
 		"PATH":            "/build/sysroot/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 		"PKG_CONFIG_PATH": "/build/sysroot/usr/lib/pkgconfig:/usr/lib/pkgconfig",
