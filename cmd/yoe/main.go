@@ -737,20 +737,26 @@ func cmdTUI(_ []string) {
 
 func cmdFlash(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s flash <image-unit> <device> [--dry-run]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s flash <image-unit> <device> [--machine <name>] [--dry-run]\n", os.Args[0])
 		os.Exit(1)
 	}
 
 	unitName := args[0]
 	devicePath := ""
+	machineName := ""
 	dryRun := false
 
-	for _, a := range args[1:] {
-		switch a {
+	for i := 1; i < len(args); i++ {
+		switch args[i] {
 		case "--dry-run":
 			dryRun = true
+		case "--machine":
+			if i+1 < len(args) {
+				machineName = args[i+1]
+				i++
+			}
 		default:
-			devicePath = a
+			devicePath = args[i]
 		}
 	}
 
@@ -759,7 +765,7 @@ func cmdFlash(args []string) {
 		os.Exit(1)
 	}
 
-	proj := loadProject()
+	proj := loadProjectWithMachine(machineName)
 	if err := device.Flash(proj, unitName, devicePath, projectDir(), dryRun, os.Stdout); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
