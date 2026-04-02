@@ -129,7 +129,7 @@ func Run(proj *yoestar.Project, projectDir string) error {
 		return fmt.Errorf("computing hashes: %w", err)
 	}
 
-	units := sortedKeys(proj.Units)
+	units := reachableUnits(proj, dag)
 	statuses := make(map[string]unitStatus, len(units))
 	for _, name := range units {
 		hash := hashes[name]
@@ -1217,9 +1217,12 @@ func (m *model) recomputeStatuses() {
 		yoestar.WithMachine(m.proj.Defaults.Machine))
 	if err == nil {
 		m.proj = freshProj
-		// Rebuild DAG from fresh project
+		// Rebuild DAG and unit list from fresh project
 		if dag, err := resolve.BuildDAG(freshProj); err == nil {
 			m.dag = dag
+			m.units = reachableUnits(freshProj, dag)
+			m.cursor = 0
+			m.listOffset = 0
 		}
 	}
 
@@ -1361,6 +1364,27 @@ func readFileAll(path string) []string {
 		lines = append(lines, scanner.Text())
 	}
 	return lines
+}
+
+// reachableUnits returns sorted unit names reachable from any image unit
+// in the DAG. Only shows units that would actually be built for the
+// current machine.
+func reachableUnits(proj *yoestar.Project, dag *resolve.DAG) []string {
+	seen := map[string]bool{}
+	for name, unit := range proj.Units {
+		if unit.Class == "image" {
+			seen[name] = true
+			for _, dep := range dag.TransitiveDeps(name) {
+				seen[dep] = true
+			}
+		}
+	}
+	result := make([]string, 0, len(seen))
+	for name := range seen {
+		result = append(result, name)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func sortedKeys[V any](m map[string]V) []string {
