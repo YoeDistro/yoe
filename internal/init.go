@@ -35,6 +35,9 @@ func RunInit(projectDir string, machine string) error {
         module("https://github.com/YoeDistro/yoe-ng.git",
                ref = "main",
                path = "modules/units-core"),
+        module("https://github.com/YoeDistro/yoe-ng.git",
+               ref = "main",
+               path = "modules/units-rpi"),
     ],
 )
 `, name, defaultMachine)
