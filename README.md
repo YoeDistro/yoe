@@ -18,6 +18,19 @@ cloud CI — same tool, same config, same results.
 Note: Not everything in the documentation has been implemented yet as this
 project is in the early stages.
 
+## Is Yoe-NG Right for You?
+
+Yoe-NG is not for everyone. If you are building a mission-critical system that
+requires bit-for-bit reproducible builds, long-term release freezes, or
+extensive compliance certification, use [Yocto](https://www.yoctoproject.org/) —
+it is battle-tested for those requirements.
+
+Yoe-NG is designed for edge systems that behave more like cloud systems: AI
+workloads, applications written in modern languages, systems that track upstream
+closely, and teams that prioritize fast iteration over strict reproducibility.
+If your product ships frequent updates, runs containerized services, or depends
+heavily on Go/Rust/Python ecosystems, Yoe-NG may be a better fit.
+
 ## 🚀 Getting Started
 
 Prerequisites: Linux or macOS with Git and Docker (or Podman) installed. Windows
@@ -281,7 +294,10 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
   sub-packages (`-dev`, `-doc`, `-dbg`, custom splits)
 - **Composable modules** — pull in units/packages using GitHub URLs; vendor BSP,
   product, and core modules compose through Starlark `load()` function calls
-- **Image-based device management** — full image updates, OSTree, BDiff
+- **Image-based device management** — full image updates, OSTree, BDiff.
+  Container workloads on the target device are on the roadmap — running
+  application containers on edge hardware is a natural fit for systems that
+  already track upstream closely.
 - **Parallel** — no global lock or global resource, support running concurrent
   versions of `yoe` concurrently. This is essential for rapid development using
   AI.

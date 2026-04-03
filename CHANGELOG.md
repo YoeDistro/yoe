@@ -8,6 +8,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **TUI: show all units** — removed the filter that only showed units reachable
+  from image definitions. The TUI now lists all units in the project.
+- **README: "Is Yoe-NG Right for You?"** — new section clarifying when to use
+  Yocto vs Yoe-NG. Added container workloads on the target device to the
+  roadmap in Design Priorities.
+- **Fix `yoe update` download URL** — binary name now matches goreleaser's
+  naming convention (`yoe-Linux-x86_64`) instead of incorrectly including the
+  version (`yoe-v0.1.0-Linux-x86_64`), which caused 404 errors.
 - **Unit name collision detection** — duplicate unit names now error at
   evaluation time with a clear message showing which module first defined the
   unit.
