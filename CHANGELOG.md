@@ -8,15 +8,25 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-04-03
+
+- **TUI: ctrl+f/ctrl+b page scrolling** — added vim-style page-forward and
+  page-back keybindings in both the unit list and detail views, alongside the
+  existing PgUp/PgDn keys.
+- **Heavy development notice** — GitHub releases and `yoe update` now remind
+  users to clean their build directory and re-create projects with each new
+  release.
+- **Updated plan/spec indexes** — all specs and plans marked with current
+  implementation status; added plans INDEX.
 - **Remove `repository()` builtin** — the `repository(path = "...")` config in
-  `PROJECT.star` is removed. APK repos are now always at
-  `repo/<project-name>/`, derived from the project name. This eliminates a
-  confusing override that defeated per-project repo scoping.
+  `PROJECT.star` is removed. APK repos are now always at `repo/<project-name>/`,
+  derived from the project name. This eliminates a confusing override that
+  defeated per-project repo scoping.
 - **TUI: show all units** — removed the filter that only showed units reachable
   from image definitions. The TUI now lists all units in the project.
 - **README: "Is Yoe-NG Right for You?"** — new section clarifying when to use
-  Yocto vs Yoe-NG. Added container workloads on the target device to the
-  roadmap in Design Priorities.
+  Yocto vs Yoe-NG. Added container workloads on the target device to the roadmap
+  in Design Priorities.
 - **Fix `yoe update` download URL** — binary name now matches goreleaser's
   naming convention (`yoe-Linux-x86_64`) instead of incorrectly including the
   version (`yoe-v0.1.0-Linux-x86_64`), which caused 404 errors.
