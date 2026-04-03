@@ -52,7 +52,7 @@ func Update(currentVersion string) error {
 	}
 
 	// Download and install the latest version
-	if err := downloadAndInstall(latestVersion); err != nil {
+	if err := downloadAndInstall(); err != nil {
 		return fmt.Errorf("failed to update: %w", err)
 	}
 
@@ -81,8 +81,8 @@ func getLatestVersion() (string, error) {
 }
 
 // downloadAndInstall downloads and installs the latest version
-func downloadAndInstall(version string) error {
-	binaryName := getBinaryName(version)
+func downloadAndInstall() error {
+	binaryName := getBinaryName()
 	downloadURL := fmt.Sprintf("%s/%s", githubRelURL, binaryName)
 
 	fmt.Printf("Downloading %s...\n", downloadURL)
@@ -137,8 +137,8 @@ func downloadAndInstall(version string) error {
 }
 
 // getBinaryName returns the binary name for the current platform,
-// matching the goreleaser naming convention.
-func getBinaryName(version string) string {
+// matching the goreleaser naming convention: yoe-{Os}-{arch}
+func getBinaryName() string {
 	osName := cases.Title(language.English).String(runtime.GOOS)
 
 	archName := runtime.GOARCH
@@ -146,6 +146,5 @@ func getBinaryName(version string) string {
 		archName = "x86_64"
 	}
 
-	// yoe-{version}-{Os}-{arch}
-	return fmt.Sprintf("yoe-%s-%s-%s", version, osName, archName)
+	return fmt.Sprintf("yoe-%s-%s", osName, archName)
 }

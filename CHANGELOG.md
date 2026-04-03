@@ -18,6 +18,24 @@ and this project adheres to
   an alternate project file. Available on all subcommands.
 - **Per-project APK repo** — package repositories are now scoped per project
   name (`repo/<project>/`) to prevent stale packages across project switches.
+- **README: Principles section** — added six core design principles covering
+  leveraging existing infrastructure, aggressive caching, custom containers per
+  unit, no intermediate formats, one tool for all levels, and tracking upstream
+  closely.
+- **README: Build dependencies and caching** — new section explaining the three
+  kinds of build dependencies (host tools via containers, library deps via
+  sysroot/apk, language-native deps via their own package managers), symmetric
+  caching at the unit level, and how native builds unlock existing package
+  ecosystems (e.g., PyPI wheels on ARM).
+- **README: Cross-compilation is optional** — updated from "no cross
+  compilation" to "cross compilation is optional," acknowledging that Go and
+  some C/C++ packages cross-compile easily while fussy packages can avoid it.
+- **Raspberry Pi in yoe init** — rpi machine added to the project initialization
+  template.
+- **Fix false "old build layout" warning** — `warnOldLayout` was written for the
+  old `build/<arch>/<unit>/` directory structure but the current layout is
+  `build/<unit>.<scope>/`, causing every build directory to trigger a spurious
+  warning.
 
 ## [0.5.1] - 2026-04-02
 
