@@ -119,6 +119,25 @@ developers configured everything by hand. Three things have changed:
 Yoe-NG is built for this new world: native builds, language-native package
 managers, structured Starlark metadata, and AI as a first-class interface.
 
+## 🧭 Principles
+
+1. **Leverage existing infrastructure.** Docker containers already provide
+   working toolchains, libraries, and host tools — there is no need to rebuild
+   the world. When is the last time you had to patch a toolchain to get your
+   product built?
+2. **Aggressive caching.** Cache at the developer, team, and global levels to
+   avoid rebuilds whenever possible.
+3. **Custom containers per unit and task.** There is no one-size-fits-all
+   container for an entire build. Units can specify the container environment
+   they need.
+4. **No intermediate formats.** Avoid generating shell scripts or other
+   intermediate artifacts when possible. Intermediate formats complicate
+   debugging — when something fails, you should be looking at the code you
+   wrote, not machine-generated output.
+5. **One tool for all levels.** The tool should be fast and simple enough to be
+   used for both system software development and application development.
+   Generating SDKs is a waste of time if everyone can use the same tool.
+
 ## 🤖 Why AI-Native
 
 Embedded Linux is hard not because the concepts are complex, but because there
@@ -162,7 +181,6 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
 - **Build dependencies isolated with bubblewrap** — no host dependency pollution
 - **Easy BSP support** — support for many boards, inclusive of hardware
   ecosystem
-- **Global cache of pre-built assets** — minimize time building from source
 - **Multiple images/targets in a single build tree** (like Yocto)
 - **Rebuilding from source is first class, but not required** — fully traceable,
   no golden images
@@ -173,15 +191,12 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
   runs in its own isolated container.
 - **Starlark for units and build rules** — Python-like, deterministic, sandboxed
   (see [Build Languages](docs/build-languages.md))
-- **Leverage existing ecosystems** — integrate with language-native build
-  systems rather than reimplementing them
 - **64-bit only** — x86, ARM, RISC-V
 - **Granular packaging** (like Yocto/Debian) — one unit can produce multiple
   sub-packages (`-dev`, `-doc`, `-dbg`, custom splits)
 - **Composable modules** — pull in units/packages using GitHub URLs; vendor BSP,
   product, and core modules compose through Starlark `load()` function calls
 - **Image-based device management** — full image updates, OSTree, BDiff
-- **Good SDK story** — binary SDKs, pre-built packages like Chromium
 - **Parallel** — no global lock or global resource, support running concurrent
   versions of `yoe` concurrently. This is essential for rapid development using
   AI.
