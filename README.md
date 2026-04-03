@@ -122,9 +122,9 @@ managers, structured Starlark metadata, and AI as a first-class interface.
 ## 🧭 Principles
 
 1. **Leverage existing infrastructure.** Docker containers already provide
-   working toolchains, and many host tools — there is no need to rebuild the
-   world. When is the last time you had to patch a toolchain to get your product
-   built?
+   working toolchains, and language-native package managers (Go modules, pip,
+   npm, Cargo) already solve dependency resolution and caching — there is no
+   need to rebuild the world or reimplement what these ecosystems provide.
 2. **Aggressive caching.** Cache at the developer, team, and global levels to
    avoid rebuilds whenever possible.
 3. **Custom containers per unit and task.** There is no one-size-fits-all
