@@ -57,6 +57,9 @@ func Update(currentVersion string) error {
 	}
 
 	fmt.Printf("Successfully updated to version %s\n", latestVersion)
+	fmt.Println()
+	fmt.Println("Note: Yoe-NG is in heavy development. We recommend cleaning your")
+	fmt.Println("build directory and re-creating projects (yoe init) with each new release")
 	return nil
 }
 
