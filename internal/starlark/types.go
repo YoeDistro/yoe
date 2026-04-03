@@ -4,24 +4,19 @@ import "go.starlark.net/starlark"
 
 // Project represents an evaluated PROJECT.star.
 type Project struct {
-	Name       string
-	Version    string
-	Defaults   Defaults
-	Repository RepositoryConfig
-	Cache      CacheConfig
-	Sources    SourcesConfig
-	Modules    []ModuleRef
-	Machines   map[string]*Machine
-	Units      map[string]*Unit
+	Name     string
+	Version  string
+	Defaults Defaults
+	Cache    CacheConfig
+	Sources  SourcesConfig
+	Modules  []ModuleRef
+	Machines map[string]*Machine
+	Units    map[string]*Unit
 }
 
 type Defaults struct {
 	Machine string
 	Image   string
-}
-
-type RepositoryConfig struct {
-	Path string
 }
 
 type CacheConfig struct {

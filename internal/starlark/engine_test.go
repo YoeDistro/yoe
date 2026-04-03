@@ -11,7 +11,6 @@ project(
     name = "test-project",
     version = "0.1.0",
     defaults = defaults(machine = "qemu-arm64", image = "base-image"),
-    repository = repository(path = "/var/cache/yoe-ng/repo"),
     cache = cache(path = "/var/cache/yoe-ng/build"),
 )
 `
@@ -31,9 +30,6 @@ project(
 	}
 	if proj.Defaults.Image != "base-image" {
 		t.Errorf("Defaults.Image = %q, want %q", proj.Defaults.Image, "base-image")
-	}
-	if proj.Repository.Path != "/var/cache/yoe-ng/repo" {
-		t.Errorf("Repository.Path = %q, want %q", proj.Repository.Path, "/var/cache/yoe-ng/repo")
 	}
 	if proj.Cache.Path != "/var/cache/yoe-ng/build" {
 		t.Errorf("Cache.Path = %q, want %q", proj.Cache.Path, "/var/cache/yoe-ng/build")

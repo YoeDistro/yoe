@@ -464,9 +464,6 @@ project(
         machine = "qemu-arm64",
         image = "base-image",
     ),
-    repository = repository(
-        path = "/var/cache/yoe-ng/repo",
-    ),
     cache = cache(
         path = "/var/cache/yoe-ng/build",
         remote = [

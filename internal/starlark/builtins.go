@@ -12,7 +12,6 @@ func (e *Engine) builtins() starlark.StringDict {
 	d := starlark.StringDict{
 		"project":     starlark.NewBuiltin("project", e.fnProject),
 		"defaults":    starlark.NewBuiltin("defaults", fnDefaults),
-		"repository":  starlark.NewBuiltin("repository", fnRepository),
 		"cache":       starlark.NewBuiltin("cache", fnCache),
 		"s3_cache":    starlark.NewBuiltin("s3_cache", fnS3Cache),
 		"sources":     starlark.NewBuiltin("sources", fnSources),
@@ -155,10 +154,6 @@ func fnDefaults(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwarg
 	return makeStruct("defaults", kwargs), nil
 }
 
-func fnRepository(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	return makeStruct("repository", kwargs), nil
-}
-
 func fnCache(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	return makeStruct("cache", kwargs), nil
 }
@@ -252,7 +247,6 @@ func (e *Engine) fnProject(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 	}
 
 	defs := kwStruct(kwargs, "defaults")
-	repo := kwStruct(kwargs, "repository")
 	cacheS := kwStruct(kwargs, "cache")
 
 	p := &Project{
@@ -261,9 +255,6 @@ func (e *Engine) fnProject(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 		Defaults: Defaults{
 			Machine: structString(defs, "machine"),
 			Image:   structString(defs, "image"),
-		},
-		Repository: RepositoryConfig{
-			Path: structString(repo, "path"),
 		},
 		Cache: CacheConfig{
 			Path: structString(cacheS, "path"),

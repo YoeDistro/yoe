@@ -13,12 +13,9 @@ import (
 )
 
 // RepoDir returns the local package repository path for a project.
-// Repos are scoped per project: repo/<project-name>/. This prevents stale
-// packages from one project contaminating another's APKINDEX.
+// Repos are scoped per project: repo/<project-name>/.
+// This prevents stale packages from one project contaminating another's APKINDEX.
 func RepoDir(proj *yoestar.Project, projectDir string) string {
-	if proj != nil && proj.Repository.Path != "" {
-		return proj.Repository.Path
-	}
 	if proj != nil && proj.Name != "" {
 		return filepath.Join(projectDir, "repo", proj.Name)
 	}

@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Remove `repository()` builtin** — the `repository(path = "...")` config in
+  `PROJECT.star` is removed. APK repos are now always at
+  `repo/<project-name>/`, derived from the project name. This eliminates a
+  confusing override that defeated per-project repo scoping.
 - **TUI: show all units** — removed the filter that only showed units reachable
   from image definitions. The TUI now lists all units in the project.
 - **README: "Is Yoe-NG Right for You?"** — new section clarifying when to use
