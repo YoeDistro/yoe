@@ -1,7 +1,7 @@
 # Naming and Resolution
 
 How modules, units, and dependencies are named, referenced, and resolved in
-Yoe-NG. This document covers the current model and open design questions.
+Yoe-NG.
 
 See [metadata-format.md](metadata-format.md) for the full unit/class/module
 Starlark API. See [build-environment.md](build-environment.md) for how build
@@ -182,8 +182,62 @@ product uses systemd or busybox init.
 1. After phase 1 (machines) — `kernel.provides` entries are added
 2. After phase 2 (units) — unit `provides` fields are added
 
-If two active units provide the same virtual name, the build errors. See
-[Collision Detection](#collision-detection) for scoping rules.
+See [Collision Detection](#collision-detection) for scoping and priority rules.
+
+### Unit replacement via provides
+
+A downstream module may transparently replace an upstream unit by declaring
+`provides` equal to the upstream unit's name. Module priority follows
+declaration order in `project()` — later modules have higher priority (last
+wins):
+
+```python
+project(name = "product", modules = [
+    module("...", path = "modules/units-core"),    # lowest priority
+    module("...", path = "modules/soc-module"),     # overrides units-core
+    module("...", path = "modules/som-module"),     # highest priority
+])
+```
+
+When a unit in a higher-priority module declares `provides = "base-files"`, it
+takes precedence over the real unit named `base-files` from a lower-priority
+module. A notice is emitted to stderr. The shadowed unit remains registered but
+is unreachable via the virtual name — it will not be pulled into the DAG.
+
+This pattern handles multi-level override chains. A common embedded pattern is
+base → SOC → SOM, where each module extends the previous:
+
+```python
+# @units-core//units/base-files.star
+def base_files(name="base-files", extra_deps=[], **overrides):
+    unit(name = name, deps = ["busybox"] + extra_deps, **overrides)
+
+base_files()
+
+# @soc-module//units/base-files-soc.star
+load("@units-core//units/base-files.star", "base_files")
+
+def base_files_soc(name="base-files-soc", extra_deps=[], **overrides):
+    base_files(name = name, extra_deps = ["soc-firmware"] + extra_deps, **overrides)
+
+base_files_soc()
+
+# @som-module//units/base-files-som.star
+load("@soc-module//units/base-files-soc.star", "base_files_soc")
+
+base_files_soc(name = "base-files-som", extra_deps = ["som-wifi-config"],
+               provides = "base-files")
+```
+
+All three units (`base-files`, `base-files-soc`, `base-files-som`) are
+registered, but only `base-files-som` is reachable via the `base-files` virtual
+name. Images reference `base-files` and automatically get the most-derived
+variant.
+
+**When possible, prefer explicit names.** Images and dependencies that reference
+the specific name (e.g., `base-files-som`) are clearer and more traceable. Use
+transparent replacement only when a core package must be overridden without
+changing image definitions.
 
 ## Module composition
 
@@ -215,16 +269,19 @@ traceable — `grep` for the function call to find all extensions. See
 ### Unit name duplicates
 
 Unit names are flat strings. If two modules define a unit with the same name,
-the build errors at evaluation time. Modules must coordinate names or use the
+the build errors at evaluation time with a message showing which module first
+defined the unit. Modules must coordinate names or use the
 [module composition](#module-composition) pattern to explicitly extend an
 upstream unit.
 
 ### PROVIDES duplicates
 
-If two **active** units provide the same virtual name, the build errors. The
-active set is scoped to the selected machine — units from unselected machines do
-not participate. This allows multiple machines to each provide `linux` via
-different kernel units without conflict:
+If two units from the **same module** provide the same virtual name, the build
+errors. If two units from **different modules** provide the same virtual name,
+the higher-priority module (later in the module list) wins and a notice is
+emitted to stderr. The active set is scoped to the selected machine — units from
+unselected machines do not participate. This allows multiple machines to each
+provide `linux` via different kernel units without conflict:
 
 ```python
 # machine/raspberrypi4.star — only active when this machine is selected
@@ -244,83 +301,7 @@ declares _what_ should be installed; resolution handles _where_ it comes from.
 
 ---
 
-## Open Issues
-
-### Unit replacement via provides
-
-A downstream module may want to replace an upstream unit transparently — e.g.,
-`openssh-vendor` replaces `openssh` in all images without changing image
-definitions. The natural mechanism is `provides = "openssh"` on the downstream
-unit:
-
-```python
-# @vendor-bsp extends openssh and provides the same virtual name
-load("@units-core//units/openssh.star", "openssh")
-openssh(name = "openssh-vendor", extra_deps = ["vendor-crypto"], provides = "openssh")
-```
-
-The problem: the upstream module already registered a real unit named `openssh`
-(via the top-level `openssh()` call). Now both `openssh` (the unit) and
-`openssh-vendor` (via provides) map to the name `openssh`. The DAG needs a rule
-for which one wins.
-
-This becomes more important with multi-level override chains. A common embedded
-pattern is base → SOC → SOM, where each module extends the previous:
-
-```python
-# @units-core//units/base-files.star
-def base_files(name="base-files", extra_deps=[], **overrides):
-    unit(name = name, deps = ["busybox"] + extra_deps, **overrides)
-
-base_files()
-
-# @soc-module//units/base-files-soc.star
-load("@units-core//units/base-files.star", "base_files")
-
-def base_files_soc(name="base-files-soc", extra_deps=[], **overrides):
-    base_files(name = name, extra_deps = ["soc-firmware"] + extra_deps, **overrides)
-
-base_files_soc()
-
-# @som-module//units/base-files-som.star
-load("@soc-module//units/base-files-soc.star", "base_files_soc")
-
-base_files_soc(name = "base-files-som", extra_deps = ["som-wifi-config"],
-               provides = "base-files")
-```
-
-The build chain works — each module extends the previous and produces a distinct
-unit name. But images want to reference `base-files`, not `base-files-som`. The
-final unit declares `provides = "base-files"`, yet `units-core` already
-registered a real unit with that name. All three units (`base-files`,
-`base-files-soc`, `base-files-som`) are registered, but only `base-files-som`
-should be reachable.
-
-**Preferred approach: use the specific name.** When possible, images and
-dependencies should reference the overridden unit by its actual name (e.g.,
-`base-files-som` rather than `base-files`). This is clear and explicit — you can
-see exactly which unit is being used.
-
-**When a core package must be overridden transparently**, `provides` combined
-with module priority resolves the ambiguity. Modules in the project's module
-list are ordered from lowest to highest priority (last module wins). When a unit
-in a later module declares `provides = "base-files"`, it takes precedence over
-the real unit named `base-files` from an earlier module:
-
-```python
-project(name = "product", modules = [
-    module("...", path = "modules/units-core"),    # lowest priority
-    module("...", path = "modules/soc-module"),     # overrides units-core
-    module("...", path = "modules/som-module"),     # highest priority
-])
-```
-
-With this ordering, `som-module`'s `base-files-som` (which declares
-`provides = "base-files"`) wins over `units-core`'s real `base-files` unit. The
-earlier unit becomes unreachable — it is still registered but never pulled into
-the DAG because provides from a higher-priority module takes precedence.
-
-### Projects as module scoping
+## Projects as module scoping
 
 A project defines which modules are active for a build. Only units from included
 modules participate in the DAG. This is the primary mechanism for controlling
@@ -357,7 +338,9 @@ project(
 )
 ```
 
-The CLI selects a project: `yoe build --project projects/customer-a.star`.
+The `--project` flag selects a project file:
+`yoe --project projects/customer-a.star build`. It is available on all
+subcommands. When omitted, `yoe` uses `PROJECT.star` at the repo root.
 
 A default project (`PROJECT.star` at the repo root) can delegate to another
 project using standard Starlark `load()`. Two cases:
@@ -398,12 +381,12 @@ This lets a developer run `yoe build` without specifying `--project` while
 keeping per-product project definitions separate. No new concepts needed —
 Starlark's `load()` handles composition naturally.
 
-### APK repo scoping per project
+## Per-project APK repo
 
-The APK repo must be scoped per project. If two projects share a single repo
-(e.g., one uses systemd, the other busybox-init), switching projects leaves
-stale packages in the APKINDEX. Since `apk` resolves runtime dependencies from
-the index, it could transitively pull in packages from the wrong project.
+The APK repo is scoped per project. If two projects share a single repo (e.g.,
+one uses systemd, the other busybox-init), switching projects would leave stale
+packages in the APKINDEX. Since `apk` resolves runtime dependencies from the
+index, it could transitively pull in packages from the wrong project.
 
 Build output is scoped as:
 

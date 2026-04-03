@@ -1,6 +1,7 @@
 package starlark
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -10,7 +11,6 @@ project(
     name = "test-project",
     version = "0.1.0",
     defaults = defaults(machine = "qemu-arm64", image = "base-image"),
-    repository = repository(path = "/var/cache/yoe-ng/repo"),
     cache = cache(path = "/var/cache/yoe-ng/build"),
 )
 `
@@ -30,9 +30,6 @@ project(
 	}
 	if proj.Defaults.Image != "base-image" {
 		t.Errorf("Defaults.Image = %q, want %q", proj.Defaults.Image, "base-image")
-	}
-	if proj.Repository.Path != "/var/cache/yoe-ng/repo" {
-		t.Errorf("Repository.Path = %q, want %q", proj.Repository.Path, "/var/cache/yoe-ng/repo")
 	}
 	if proj.Cache.Path != "/var/cache/yoe-ng/build" {
 		t.Errorf("Cache.Path = %q, want %q", proj.Cache.Path, "/var/cache/yoe-ng/build")
@@ -326,5 +323,20 @@ project(name = "second", version = "2.0.0")
 	err := eng.ExecString("PROJECT.star", src)
 	if err == nil {
 		t.Fatal("expected error for duplicate project(), got nil")
+	}
+}
+
+func TestEvalUnitDuplicate(t *testing.T) {
+	src := `
+unit(name = "foo", version = "1.0.0")
+unit(name = "foo", version = "2.0.0")
+`
+	eng := NewEngine()
+	err := eng.ExecString("units/foo.star", src)
+	if err == nil {
+		t.Fatal("expected error for duplicate unit name, got nil")
+	}
+	if !strings.Contains(err.Error(), "already defined") {
+		t.Errorf("error = %q, want it to contain 'already defined'", err)
 	}
 }

@@ -15,8 +15,9 @@ func TestAssemble(t *testing.T) {
 	projectDir := t.TempDir()
 	outputDir := filepath.Join(projectDir, "build", "output")
 
-	// Create a fake local repo with minimal .apk files (flat, scope in filename)
-	repoDir := filepath.Join(projectDir, "repo")
+	// Create a fake local repo with minimal .apk files (flat, scope in filename).
+	// RepoDir scopes by project name, so use repo/<project-name>/.
+	repoDir := filepath.Join(projectDir, "repo", "test")
 	os.MkdirAll(repoDir, 0755)
 	for _, pkg := range []string{"openssh-9.0-r0.x86_64.apk", "myapp-1.0-r0.x86_64.apk"} {
 		createFakeAPK(t, repoDir, pkg)

@@ -52,7 +52,7 @@ func ScopeDir(unit *yoestar.Unit, arch, machine string) string {
 // BuildUnits builds the specified units (or all if names is empty).
 func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer) error {
 	// Warn if old-style build directories exist (no arch subdirectory)
-	warnOldLayout(opts.ProjectDir, opts.Arch, w)
+
 
 	dag, err := resolve.BuildDAG(proj)
 	if err != nil {
@@ -319,7 +319,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		}
 		fmt.Fprintf(w, "  → %s\n", filepath.Base(apkPath))
 
-		repoDir := repo.RepoDir(nil, opts.ProjectDir)
+		repoDir := repo.RepoDir(proj, opts.ProjectDir)
 		if err := repo.Publish(apkPath, repoDir); err != nil {
 			return fmt.Errorf("publishing to repo: %w", err)
 		}
@@ -434,28 +434,6 @@ func writeCacheMarker(projectDir, arch, name, hash string) {
 	os.WriteFile(path, []byte(hash), 0644)
 }
 
-// warnOldLayout checks for old-style build directories (build/<unit>/ instead
-// of build/<arch>/<unit>/) and prints a warning if found.
-func warnOldLayout(projectDir, arch string, w io.Writer) {
-	entries, err := os.ReadDir(filepath.Join(projectDir, "build"))
-	if err != nil {
-		return
-	}
-	for _, e := range entries {
-		if !e.IsDir() || e.Name() == "repo" || e.Name() == "shell" || e.Name() == "sysroot" || e.Name() == arch {
-			continue
-		}
-		old := filepath.Join(projectDir, "build", e.Name())
-		if _, err := os.Stat(filepath.Join(old, ".yoe-hash")); err == nil {
-			fmt.Fprintf(w, "[yoe] warning: old build layout detected. Run 'yoe clean --all' to remove stale artifacts.\n")
-			return
-		}
-		if _, err := os.Stat(filepath.Join(old, "build.log")); err == nil {
-			fmt.Fprintf(w, "[yoe] warning: old build layout detected. Run 'yoe clean --all' to remove stale artifacts.\n")
-			return
-		}
-	}
-}
 
 // repoRelPath returns the repo directory path relative to the project root.
 func repoRelPath(proj *yoestar.Project, projectDir string) string {

@@ -15,8 +15,9 @@ import (
 type LoadOption func(*loadConfig)
 
 type loadConfig struct {
-	moduleSync func([]ModuleRef, io.Writer) error
-	machine   string // override default machine before evaluating units/images
+	moduleSync  func([]ModuleRef, io.Writer) error
+	machine     string // override default machine before evaluating units/images
+	projectFile string // alternative project file (instead of PROJECT.star)
 }
 
 // WithModuleSync provides a callback that is invoked after PROJECT.star is
@@ -31,6 +32,12 @@ func WithModuleSync(fn func([]ModuleRef, io.Writer) error) LoadOption {
 // the correct architecture for the specified machine.
 func WithMachine(name string) LoadOption {
 	return func(c *loadConfig) { c.machine = name }
+}
+
+// WithProjectFile specifies an alternative project file to evaluate instead
+// of PROJECT.star at the project root.
+func WithProjectFile(path string) LoadOption {
+	return func(c *loadConfig) { c.projectFile = path }
 }
 
 // LoadProject finds the project root, evaluates all .star files, and returns
@@ -79,10 +86,16 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	eng := NewEngine()
 	eng.SetProjectRoot(root)
 
-	// Evaluate PROJECT.star first
+	// Evaluate project file (PROJECT.star or --project override)
 	projFile := filepath.Join(root, "PROJECT.star")
+	if cfg.projectFile != "" {
+		projFile = cfg.projectFile
+		if !filepath.IsAbs(projFile) {
+			projFile = filepath.Join(root, projFile)
+		}
+	}
 	if err := eng.ExecFile(projFile); err != nil {
-		return nil, fmt.Errorf("evaluating PROJECT.star: %w", err)
+		return nil, fmt.Errorf("evaluating %s: %w", projFile, err)
 	}
 
 	// Sync modules if a sync callback was provided (auto-clone missing modules).
@@ -134,13 +147,21 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	// Phase 1: Evaluate all machine definitions (project + modules).
 	// Machines must be loaded before units/images so that target_arch()
 	// returns the correct value during Starlark evaluation.
+	eng.SetCurrentModule("", 0)
 	if err := evalDir(eng, root, "machines"); err != nil {
 		return nil, err
 	}
-	if eng.moduleRoots != nil {
-		for _, modulePath := range eng.moduleRoots {
-			if err := evalDir(eng, modulePath, "machines"); err != nil {
-				return nil, err
+	if proj := eng.Project(); proj != nil {
+		for i, m := range proj.Modules {
+			name := filepath.Base(strings.TrimSuffix(m.URL, ".git"))
+			if m.Path != "" {
+				name = filepath.Base(m.Path)
+			}
+			if modulePath, ok := eng.moduleRoots[name]; ok {
+				eng.SetCurrentModule(name, i+1)
+				if err := evalDir(eng, modulePath, "machines"); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -230,13 +251,21 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	eng.SetVar("PROVIDES", provides)
 
 	// Phase 2a: Evaluate all unit definitions (project + modules).
+	eng.SetCurrentModule("", 0)
 	if err := evalDir(eng, root, "units"); err != nil {
 		return nil, err
 	}
-	if eng.moduleRoots != nil {
-		for _, modulePath := range eng.moduleRoots {
-			if err := evalDir(eng, modulePath, "units"); err != nil {
-				return nil, err
+	if proj := eng.Project(); proj != nil {
+		for i, m := range proj.Modules {
+			name := filepath.Base(strings.TrimSuffix(m.URL, ".git"))
+			if m.Path != "" {
+				name = filepath.Base(m.Path)
+			}
+			if modulePath, ok := eng.moduleRoots[name]; ok {
+				eng.SetCurrentModule(name, i+1)
+				if err := evalDir(eng, modulePath, "units"); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -244,12 +273,29 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	// Now that all units are loaded, update predeclared variables before
 	// evaluating images (phase 2b).
 
-	// Add unit provides to PROVIDES dict
+	// Add unit provides to PROVIDES dict, checking for conflicts.
 	if prov, ok := eng.vars["PROVIDES"].(*starlark.Dict); ok {
 		for _, u := range eng.Units() {
-			if u.Provides != "" {
-				_ = prov.SetKey(starlark.String(u.Provides), starlark.String(u.Name))
+			if u.Provides == "" {
+				continue
 			}
+			if existing, found, _ := prov.Get(starlark.String(u.Provides)); found {
+				existingName := string(existing.(starlark.String))
+				// Look up the existing unit to compare module priority.
+				existingUnit := eng.Units()[existingName]
+				if existingUnit == nil || u.ModuleIndex == existingUnit.ModuleIndex {
+					return nil, fmt.Errorf("virtual package %q provided by both %q and %q",
+						u.Provides, existingName, u.Name)
+				}
+				if u.ModuleIndex > existingUnit.ModuleIndex {
+					fmt.Fprintf(os.Stderr, "notice: %q from module %q overrides %q via provides %q\n",
+						u.Name, u.Module, existingName, u.Provides)
+					_ = prov.SetKey(starlark.String(u.Provides), starlark.String(u.Name))
+				}
+				// If u.ModuleIndex < existingUnit.ModuleIndex, skip — higher priority already won.
+				continue
+			}
+			_ = prov.SetKey(starlark.String(u.Provides), starlark.String(u.Name))
 		}
 	}
 
@@ -263,10 +309,21 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	eng.SetVar("RUNTIME_DEPS", runtimeDeps)
 
 	// Phase 2b: Evaluate image definitions (project + modules).
-	if eng.moduleRoots != nil {
-		for _, modulePath := range eng.moduleRoots {
-			if err := evalDir(eng, modulePath, "images"); err != nil {
-				return nil, err
+	eng.SetCurrentModule("", 0)
+	if err := evalDir(eng, root, "images"); err != nil {
+		return nil, err
+	}
+	if proj := eng.Project(); proj != nil {
+		for i, m := range proj.Modules {
+			name := filepath.Base(strings.TrimSuffix(m.URL, ".git"))
+			if m.Path != "" {
+				name = filepath.Base(m.Path)
+			}
+			if modulePath, ok := eng.moduleRoots[name]; ok {
+				eng.SetCurrentModule(name, i+1)
+				if err := evalDir(eng, modulePath, "images"); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}

@@ -2,6 +2,7 @@ package starlark
 
 import (
 	"fmt"
+	"path/filepath"
 	"sync"
 
 	"go.starlark.net/starlark"
@@ -15,6 +16,11 @@ type Engine struct {
 	units     map[string]*Unit
 	commands  map[string]*Command
 	moduleInfo *ModuleInfo
+
+	// Current module context — set by the loader before evaluating each
+	// module's directories so registerUnit can tag units.
+	currentModule      string
+	currentModuleIndex int
 
 	// globals stores the top-level bindings from the last ExecFile/ExecString,
 	// used to retrieve the run() function for custom commands.
@@ -51,6 +57,12 @@ func (e *Engine) Commands() map[string]*Command   { return e.commands }
 func (e *Engine) ModuleInfo() *ModuleInfo         { return e.moduleInfo }
 func (e *Engine) Globals() starlark.StringDict    { return e.globals }
 
+// SetCurrentModule sets the module context for subsequent unit registrations.
+func (e *Engine) SetCurrentModule(name string, index int) {
+	e.currentModule = name
+	e.currentModuleIndex = index
+}
+
 // ExecString evaluates Starlark source code with built-in functions available.
 func (e *Engine) ExecString(filename, src string) error {
 	thread := &starlark.Thread{Name: filename}
@@ -66,6 +78,9 @@ func (e *Engine) ExecString(filename, src string) error {
 }
 
 // ExecFile evaluates a .star file from disk.
+// Results are added to the load cache so that a subsequent load() of the
+// same file returns the cached globals instead of re-executing (which would
+// cause duplicate unit registrations).
 func (e *Engine) ExecFile(path string) error {
 	thread := &starlark.Thread{Name: path}
 	thread.Load = e.makeLoadFunc(path)
@@ -76,5 +91,17 @@ func (e *Engine) ExecFile(path string) error {
 		return fmt.Errorf("evaluating %s: %w", path, err)
 	}
 	e.globals = globals
+
+	// Populate load cache so load() of this file won't re-execute it.
+	absPath, _ := filepath.Abs(path)
+	if absPath != "" {
+		if e.loadCache == nil {
+			e.loadCache = newLoadCache()
+		}
+		e.loadCache.mu.Lock()
+		e.loadCache.entries[absPath] = &loadResult{globals: globals}
+		e.loadCache.mu.Unlock()
+	}
+
 	return nil
 }

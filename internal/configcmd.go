@@ -16,7 +16,6 @@ func ShowConfig(dir string, w io.Writer) error {
 	fmt.Fprintf(w, "Project:    %s %s\n", proj.Name, proj.Version)
 	fmt.Fprintf(w, "Machine:    %s (default)\n", proj.Defaults.Machine)
 	fmt.Fprintf(w, "Image:      %s (default)\n", proj.Defaults.Image)
-	fmt.Fprintf(w, "Repository: %s\n", proj.Repository.Path)
 	fmt.Fprintf(w, "Cache:      %s\n", proj.Cache.Path)
 	fmt.Fprintf(w, "Machines:   %d defined\n", len(proj.Machines))
 	fmt.Fprintf(w, "Units:    %d defined\n", len(proj.Units))

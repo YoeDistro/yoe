@@ -13,11 +13,11 @@ import (
 )
 
 // RepoDir returns the local package repository path for a project.
-// All packages live in a single flat directory with scope in the filename
-// (e.g., busybox-1.36.1-r0.arm64.apk, linux-rpi4-6.12-r0.raspberrypi4.apk).
+// Repos are scoped per project: repo/<project-name>/.
+// This prevents stale packages from one project contaminating another's APKINDEX.
 func RepoDir(proj *yoestar.Project, projectDir string) string {
-	if proj != nil && proj.Repository.Path != "" {
-		return proj.Repository.Path
+	if proj != nil && proj.Name != "" {
+		return filepath.Join(projectDir, "repo", proj.Name)
 	}
 	return filepath.Join(projectDir, "repo")
 }

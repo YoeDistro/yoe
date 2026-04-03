@@ -2,6 +2,7 @@ package starlark
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -78,5 +79,38 @@ func TestLoadProject_NotFound(t *testing.T) {
 	_, err := LoadProject("/tmp")
 	if err == nil {
 		t.Fatal("expected error when no PROJECT.star found, got nil")
+	}
+}
+
+func TestLoadProject_ProvidesDuplicate(t *testing.T) {
+	dir := filepath.Join("..", "..", "testdata", "provides-conflict")
+	_, err := LoadProject(dir)
+	if err == nil {
+		t.Fatal("expected error for duplicate provides in same module, got nil")
+	}
+	if !strings.Contains(err.Error(), "virtual package") {
+		t.Errorf("error = %q, want it to contain 'virtual package'", err)
+	}
+}
+
+func TestLoadProject_ProvidesOverride(t *testing.T) {
+	dir := filepath.Join("..", "..", "testdata", "provides-override")
+	proj, err := LoadProject(dir)
+	if err != nil {
+		t.Fatalf("LoadProject: %v", err)
+	}
+	// Both units should exist
+	if _, ok := proj.Units["base-files"]; !ok {
+		t.Error("expected unit 'base-files'")
+	}
+	if _, ok := proj.Units["base-files-custom"]; !ok {
+		t.Error("expected unit 'base-files-custom'")
+	}
+	// base-files-custom should have higher module index than base-files
+	bf := proj.Units["base-files"]
+	bfc := proj.Units["base-files-custom"]
+	if bfc.ModuleIndex <= bf.ModuleIndex {
+		t.Errorf("base-files-custom ModuleIndex=%d should be > base-files ModuleIndex=%d",
+			bfc.ModuleIndex, bf.ModuleIndex)
 	}
 }

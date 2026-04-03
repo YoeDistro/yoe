@@ -9,10 +9,10 @@ dependencies.
 
 ```sh
 # From source
-go install github.com/yoe/yoe-ng/cmd/yoe@latest
+go install github.com/YoeDistro/yoe-ng/cmd/yoe@latest
 
 # Or download a prebuilt binary
-curl -L https://github.com/yoe/yoe-ng/releases/latest/download/yoe-$(uname -s)-$(uname -m) -o yoe
+curl -L https://github.com/YoeDistro/yoe/releases/latest/download/yoe-$(uname -s)-$(uname -m) -o yoe
 chmod +x yoe
 ```
 
@@ -361,9 +361,9 @@ yoe repo push
 yoe repo pull
 ```
 
-The local repository lives at the path configured in `PROJECT.star`
-(`repository(path=...)`). It's a standard apk-compatible repository — you can
-point `apk` on a running device at it directly.
+The local repository lives at `repo/<project-name>/` within the project
+directory. It's a standard apk-compatible repository — you can point `apk` on a
+running device at it directly.
 
 ### `yoe cache`
 

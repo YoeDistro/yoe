@@ -8,6 +8,57 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-04-03
+
+- **TUI: ctrl+f/ctrl+b page scrolling** — added vim-style page-forward and
+  page-back keybindings in both the unit list and detail views, alongside the
+  existing PgUp/PgDn keys.
+- **Heavy development notice** — GitHub releases and `yoe update` now remind
+  users to clean their build directory and re-create projects with each new
+  release.
+- **Updated plan/spec indexes** — all specs and plans marked with current
+  implementation status; added plans INDEX.
+- **Remove `repository()` builtin** — the `repository(path = "...")` config in
+  `PROJECT.star` is removed. APK repos are now always at `repo/<project-name>/`,
+  derived from the project name. This eliminates a confusing override that
+  defeated per-project repo scoping.
+- **TUI: show all units** — removed the filter that only showed units reachable
+  from image definitions. The TUI now lists all units in the project.
+- **README: "Is Yoe-NG Right for You?"** — new section clarifying when to use
+  Yocto vs Yoe-NG. Added container workloads on the target device to the roadmap
+  in Design Priorities.
+- **Fix `yoe update` download URL** — binary name now matches goreleaser's
+  naming convention (`yoe-Linux-x86_64`) instead of incorrectly including the
+  version (`yoe-v0.1.0-Linux-x86_64`), which caused 404 errors.
+- **Unit name collision detection** — duplicate unit names now error at
+  evaluation time with a clear message showing which module first defined the
+  unit.
+- **PROVIDES collision detection** — two units providing the same virtual name
+  in the same module now error. Units from higher-priority modules (later in the
+  module list) override lower-priority ones with a notice.
+- **`--project` flag** — `yoe --project projects/customer-a.star build` selects
+  an alternate project file. Available on all subcommands.
+- **Per-project APK repo** — package repositories are now scoped per project
+  name (`repo/<project>/`) to prevent stale packages across project switches.
+- **README: Principles section** — added six core design principles covering
+  leveraging existing infrastructure, aggressive caching, custom containers per
+  unit, no intermediate formats, one tool for all levels, and tracking upstream
+  closely.
+- **README: Build dependencies and caching** — new section explaining the three
+  kinds of build dependencies (host tools via containers, library deps via
+  sysroot/apk, language-native deps via their own package managers), symmetric
+  caching at the unit level, and how native builds unlock existing package
+  ecosystems (e.g., PyPI wheels on ARM).
+- **README: Cross-compilation is optional** — updated from "no cross
+  compilation" to "cross compilation is optional," acknowledging that Go and
+  some C/C++ packages cross-compile easily while fussy packages can avoid it.
+- **Raspberry Pi in yoe init** — rpi machine added to the project initialization
+  template.
+- **Fix false "old build layout" warning** — `warnOldLayout` was written for the
+  old `build/<arch>/<unit>/` directory structure but the current layout is
+  `build/<unit>.<scope>/`, causing every build directory to trigger a spurious
+  warning.
+
 ## [0.5.1] - 2026-04-02
 
 - Remove version from release binary name to fix stable download URL.

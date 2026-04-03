@@ -4,24 +4,19 @@ import "go.starlark.net/starlark"
 
 // Project represents an evaluated PROJECT.star.
 type Project struct {
-	Name       string
-	Version    string
-	Defaults   Defaults
-	Repository RepositoryConfig
-	Cache      CacheConfig
-	Sources    SourcesConfig
-	Modules    []ModuleRef
-	Machines   map[string]*Machine
-	Units      map[string]*Unit
+	Name     string
+	Version  string
+	Defaults Defaults
+	Cache    CacheConfig
+	Sources  SourcesConfig
+	Modules  []ModuleRef
+	Machines map[string]*Machine
+	Units    map[string]*Unit
 }
 
 type Defaults struct {
 	Machine string
 	Image   string
-}
-
-type RepositoryConfig struct {
-	Path string
 }
 
 type CacheConfig struct {
@@ -121,7 +116,9 @@ type Unit struct {
 	// Build
 	Container string // default container for all tasks
 	Tasks     []Task
-	Provides  string // virtual package name
+	Provides    string // virtual package name
+	Module      string // module that registered this unit (empty = project root)
+	ModuleIndex int    // module priority (0 = project root, 1+ = declaration order)
 
 	// Artifact metadata
 	Services    []string
