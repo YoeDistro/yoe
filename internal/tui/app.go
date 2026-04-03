@@ -284,7 +284,7 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.adjustListOffset()
 		return m, nil
 
-	case "pgup":
+	case "pgup", "ctrl+b":
 		vis := m.visibleIndices()
 		page := m.listViewportHeight()
 		cursorPos := 0
@@ -304,7 +304,7 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.adjustListOffset()
 		return m, nil
 
-	case "pgdown":
+	case "pgdown", "ctrl+f":
 		vis := m.visibleIndices()
 		page := m.listViewportHeight()
 		cursorPos := 0
@@ -688,7 +688,7 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "pgup":
+	case "pgup", "ctrl+b":
 		m.autoFollow = false
 		page := m.detailViewportHeight()
 		m.detailScroll -= page
@@ -697,7 +697,7 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "pgdown":
+	case "pgdown", "ctrl+f":
 		page := m.detailViewportHeight()
 		maxScroll := m.detailMaxScroll()
 		m.detailScroll += page
