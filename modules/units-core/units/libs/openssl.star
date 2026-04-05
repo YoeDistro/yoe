@@ -5,8 +5,10 @@ unit(
     tag = "openssl-3.4.1",
     license = "Apache-2.0",
     description = "TLS/SSL and crypto library",
-    deps = ["zlib"],
+    deps = ["zlib", "toolchain-musl"],
     runtime_deps = ["zlib"],
+    container = "toolchain-musl",
+    container_arch = "target",
     tasks = [
         task("build", steps=[
             "./Configure --prefix=$PREFIX --libdir=lib --openssldir=/etc/ssl shared zlib",

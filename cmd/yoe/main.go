@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -265,20 +264,11 @@ func cmdContainer(args []string) {
 
 	switch args[0] {
 	case "build":
-		if err := yoe.EnsureImage("", os.Stderr); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("Container image yoe-ng:%s built successfully\n", yoe.ContainerVersion())
+		fmt.Println("Containers are now units. Use: yoe build toolchain-musl")
 	case "shell":
 		cmdContainerShell()
 	case "status":
-		fmt.Printf("Container version: %s (image: yoe-ng:%s)\n", yoe.ContainerVersion(), yoe.ContainerVersion())
-		if err := yoe.EnsureImage("", io.Discard); err != nil {
-			fmt.Println("Container image: not built")
-		} else {
-			fmt.Println("Container image: ready")
-		}
+		fmt.Println("Containers are now units. Use: yoe describe toolchain-musl")
 	case "binfmt":
 		fmt.Println("This will register QEMU user-mode emulation for foreign architectures")
 		fmt.Println("by running a privileged Docker container (tonistiigi/binfmt).")
@@ -341,7 +331,11 @@ func cmdContainerShell() {
 		{Host: sysroot, Container: "/build/sysroot", ReadOnly: true},
 	}
 
+	// Resolve container image from project
+	proj := loadProject()
+
 	if err := yoe.RunInContainer(yoe.ContainerRunConfig{
+		Image:       yoe.DefaultContainerImage(proj.Units),
 		Command:     bwrapCmd,
 		ProjectDir:  projectDir,
 		Mounts:      mounts,

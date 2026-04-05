@@ -28,7 +28,8 @@ needed.**
   executor, image assembly, and bootstrap
 - The container runs with `--privileged` for bwrap namespaces and disk tools
 - Build output uses `--user uid:gid` so files are owned by the host user
-- The container image is built lazily on first build command
+- Container images are built by container units (e.g., `toolchain-musl`) as
+  part of the DAG — no embedded Dockerfile
 - Developers need only Git, Docker/Podman, and the `yoe` binary
 
 ## Repository Structure
@@ -36,9 +37,8 @@ needed.**
 - `cmd/yoe/main.go` — CLI entry point with command dispatch
 - `internal/` — core Go packages (starlark, build, resolve, source, image,
   artifact, repo, device, tui, bootstrap, module, config)
-- `containers/Dockerfile.build` — the build container (Tier 0), embedded in the
-  binary via `containers/embed.go`
-- `modules/units-core/` — base module with classes, units, machines, images
+- `modules/units-core/` — base module with classes, units, machines, images,
+  containers
 - `testdata/` — test fixtures including e2e-project
 - `envsetup.sh` — shell functions (source it, don't execute)
 - `docs/` — design documents (README.md, yoe-tool.md, metadata-format.md,
@@ -88,9 +88,11 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
 
 ## Key Design Decisions
 
-- **Container versioning** — when modifying `containers/Dockerfile.build`,
-  always bump both the `# Version:` comment in the Dockerfile and the
-  `containerVersion` constant in `internal/container.go` to match
+- **Container units** — build containers are Starlark units (e.g.,
+  `toolchain-musl`) that produce Docker images via `run(host = True)`. The
+  Dockerfile lives in the module at `containers/toolchain-musl/Dockerfile`.
+  Classes set `container` and `container_arch` explicitly; units inherit these
+  from their class.
 - **Container-only builds** — host provides only `yoe` + Git + Docker; all tools
   live in the container
 - **No installing packages in the container** — if a build fails because a tool
@@ -146,6 +148,11 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
 - **Machine-portable images** — images list abstract requirements ("linux",
   "base-files"). Machines provide concrete implementations via `provides` and
   inject hardware-specific packages/partitions via `MACHINE_CONFIG`.
+- **Explicit over implicit.** Values in Starlark units and configuration should
+  not have hidden defaults. Require fields to be set explicitly — this makes it
+  easier for AI to reason about the system and for humans to understand what a
+  unit does without reading class internals. If a value is required, error when
+  it is missing rather than silently defaulting.
 - **No backward compatibility concerns.** The project is pre-1.0. Do not add
   compatibility shims, legacy conversion paths, or deprecated-but-still-working
   code. When a design changes, update everything to the new design and delete

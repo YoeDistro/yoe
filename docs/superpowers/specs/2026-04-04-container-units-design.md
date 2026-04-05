@@ -45,6 +45,32 @@ The `container()` function defaults `dockerfile = "Dockerfile"`. The path is
 resolved relative to the `<unit-name>/` directory next to the `.star` file. The
 `dockerfile` parameter can be overridden for non-standard names.
 
+### Class implementation
+
+The `container()` class registers a unit and provides tasks that run
+`docker build` on the host via `run(host = True)`:
+
+```python
+def container(name, version, dockerfile = "Dockerfile"):
+    unit(
+        name = name,
+        version = version,
+        class = "container",
+        tasks = [
+            task("build",
+                fn = lambda: run(
+                    "docker build -t yoe-ng/%s:%s -f %s/%s %s" % (
+                        name, version, name, dockerfile, name),
+                    host = True,
+                ),
+            ),
+        ],
+    )
+```
+
+The `host = True` flag on `run()` executes the command on the host instead of
+inside a container. This is a new extension to the `run()` builtin.
+
 ## Container Usage by Units
 
 Classes like `autotools()`, `cmake()`, and `go()` set the container internally.
@@ -151,8 +177,8 @@ go(
 
 ## Container Resolution
 
-A unit's container is set explicitly, either by the class function or directly on
-the unit. There is no project-level default or fallback chain.
+A unit's container is set explicitly, either by the class function or directly
+on the unit. There is no project-level default or fallback chain.
 
 If a unit with tasks has no `container`, it errors at evaluation time:
 
@@ -163,8 +189,8 @@ error: unit "zlib" has no container — set container in the unit or class
 Container units themselves (`class = "container"`) are exempt — they build via
 `docker build` on the host, outside any container.
 
-Units with no tasks (metadata-only units like machine definitions) do not require
-a container.
+Units with no tasks (metadata-only units like machine definitions) do not
+require a container.
 
 ## DAG Integration
 
@@ -179,17 +205,19 @@ dependency.
 
 ### Container unit builds
 
-Container units run `docker build` on the host — no sandbox, no
-container-inside-container:
+Container unit builds are driven by Starlark, not special Go code. The
+`container()` class provides tasks that use `run(host = True)` to execute
+`docker build` on the host — no sandbox, no container-inside-container.
 
-1. Resolve Dockerfile path: `<unit-name>/Dockerfile` relative to `.star` file
-2. Run `docker build` (host arch) or `docker buildx build` (cross-arch) with the
-   unit directory as build context
-3. Tag the image as `yoe-ng/<unit-name>:<version>` or
-   `yoe-ng/<unit-name>:<version>-<arch>` for cross-arch
-4. Cache check: input hash (includes Dockerfile content and all files in the unit
-   directory) determines rebuild. If hash matches `.yoe-hash` marker and the
-   Docker image exists, skip the build.
+The build flow:
+
+1. Cache check: input hash (includes Dockerfile content and all files in the
+   unit directory) determines rebuild. If hash matches `.yoe-hash` marker and
+   the Docker image exists, skip the build.
+2. The class's Starlark task runs `docker build` (host arch) or
+   `docker buildx build` (cross-arch) with the unit directory as build context.
+3. The image is tagged as `yoe-ng/<unit-name>:<version>` or
+   `yoe-ng/<unit-name>:<version>-<arch>` for cross-arch.
 
 ### Regular unit builds
 
@@ -223,7 +251,8 @@ gets overwritten and downstream units rebuild due to hash change.
 - `containers/Dockerfile.build` — the embedded Dockerfile
 - `containers/embed.go` — the Go embed directive
 - `containerVersion` constant in `internal/container.go`
-- `EnsureImage()` lazy-build logic — replaced by container unit builds in the DAG
+- `EnsureImage()` lazy-build logic — replaced by container unit builds in the
+  DAG
 
 ## What Changes
 
@@ -236,10 +265,9 @@ gets overwritten and downstream units rebuild due to hash change.
   resolved image tag). `RunInSandbox` uses it instead of hardcoded
   `containerTag(arch)`.
 - `internal/build/executor.go` — resolves the unit's container and
-  `container_arch` before calling `RunInSandbox`. Container units use a separate
-  build path that runs `docker build`.
-- `internal/starlark/builtins.go` — register `container()` as a top-level
-  Starlark function (via the class).
+  `container_arch` before calling `RunInSandbox`.
+- `internal/starlark/builtins.go` — extend `run()` builtin with `host = True`
+  flag to execute commands on the host instead of inside a container.
 - `internal/starlark/loader.go` — validate that units with tasks have a
   `container` and `container_arch`. Container deps merging in class functions.
 - `internal/resolve/hash.go` — include container hash in unit hash computation.
@@ -261,15 +289,15 @@ The Starlark loader's recursive file discovery currently scans `units/`,
 
 ## Breaking Change
 
-Existing external projects must use the updated `units-core` module that includes
-`toolchain-musl`. Older module versions without the container unit will fail at
-evaluation time.
+Existing external projects must use the updated `units-core` module that
+includes `toolchain-musl`. Older module versions without the container unit will
+fail at evaluation time.
 
 ## Future Work
 
 - **Deployable containers** — container units that produce OCI tarballs packaged
-  as `.apk` for installation on the target device (running application containers
-  on edge hardware).
+  as `.apk` for installation on the target device (running application
+  containers on edge hardware).
 - **Registry caching** — push container images to a registry for team sharing.
 - **Toolchain variants** — `toolchain-glibc-gcc`, `toolchain-musl-clang`, etc.
   Default container derived from machine/distro configuration.

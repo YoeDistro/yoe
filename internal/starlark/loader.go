@@ -250,6 +250,27 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	}
 	eng.SetVar("PROVIDES", provides)
 
+	// Phase 1b: Evaluate container definitions (project + modules).
+	// Containers must be loaded before units so that units can reference them.
+	eng.SetCurrentModule("", 0)
+	if err := evalDir(eng, root, "containers"); err != nil {
+		return nil, err
+	}
+	if proj := eng.Project(); proj != nil {
+		for i, m := range proj.Modules {
+			name := filepath.Base(strings.TrimSuffix(m.URL, ".git"))
+			if m.Path != "" {
+				name = filepath.Base(m.Path)
+			}
+			if modulePath, ok := eng.moduleRoots[name]; ok {
+				eng.SetCurrentModule(name, i+1)
+				if err := evalDir(eng, modulePath, "containers"); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
 	// Phase 2a: Evaluate all unit definitions (project + modules).
 	eng.SetCurrentModule("", 0)
 	if err := evalDir(eng, root, "units"); err != nil {
@@ -335,6 +356,22 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 
 	proj.Machines = eng.Machines()
 	proj.Units = eng.Units()
+
+	// Validate: units with tasks must have container and container_arch.
+	for name, u := range proj.Units {
+		if len(u.Tasks) == 0 {
+			continue // metadata-only units
+		}
+		if u.Class == "container" {
+			continue // container units build on host
+		}
+		if u.Container == "" {
+			return nil, fmt.Errorf("unit %q has tasks but no container — set container in the unit or class", name)
+		}
+		if u.ContainerArch == "" {
+			return nil, fmt.Errorf("unit %q has tasks but no container_arch — set container_arch in the unit or class", name)
+		}
+	}
 
 	return proj, nil
 }

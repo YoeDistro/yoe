@@ -6,6 +6,9 @@ unit(
     # No source — copy the musl dynamic linker/libc from the container.
     # All dynamically linked packages in the image need this.
     # The dynamic linker name varies by arch (ld-musl-<arch>.so.1).
+    deps = ["toolchain-musl"],
+    container = "toolchain-musl",
+    container_arch = "target",
     tasks = [
         task("build", steps=[
             """

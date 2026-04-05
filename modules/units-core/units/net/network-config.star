@@ -4,6 +4,9 @@ unit(
     license = "MIT",
     description = "DHCP networking via busybox udhcpc on eth0",
     runtime_deps = ["busybox"],
+    deps = ["toolchain-musl"],
+    container = "toolchain-musl",
+    container_arch = "target",
     tasks = [
         task("build", steps=[
             # udhcpc default script — busybox udhcpc calls this to apply leases

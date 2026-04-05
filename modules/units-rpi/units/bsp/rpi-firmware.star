@@ -5,6 +5,9 @@ unit(
     tag = "1.20250305",
     license = "Broadcom-RPi",
     description = "Raspberry Pi GPU firmware blobs (boot partition)",
+    deps = ["toolchain-musl"],
+    container = "toolchain-musl",
+    container_arch = "target",
     tasks = [
         task("build", steps=[
             # No compilation — install prebuilt firmware blobs

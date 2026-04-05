@@ -33,6 +33,9 @@ type Engine struct {
 	projectRoot string
 	moduleRoots map[string]string
 	loadCache   *loadCache
+
+	// Tracks the directory of the currently executing .star file
+	currentFile string
 }
 
 func NewEngine() *Engine {
@@ -82,6 +85,9 @@ func (e *Engine) ExecString(filename, src string) error {
 // same file returns the cached globals instead of re-executing (which would
 // cause duplicate unit registrations).
 func (e *Engine) ExecFile(path string) error {
+	prev := e.currentFile
+	e.currentFile = path
+	defer func() { e.currentFile = prev }()
 	thread := &starlark.Thread{Name: path}
 	thread.Load = e.makeLoadFunc(path)
 	predeclared := e.builtins()

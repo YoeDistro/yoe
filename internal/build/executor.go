@@ -258,6 +258,16 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		"REPO":            filepath.Join("/project", repoRelPath(proj, opts.ProjectDir)),
 	}
 
+	// Resolve container image for this unit
+	containerImage := resolveContainerImage(proj, unit, opts.Arch)
+
+	// For container units, set the host working directory to the .star file's
+	// directory so docker build can find the Dockerfile.
+	hostDir := ""
+	if unit.Class == "container" && unit.DefinedIn != "" {
+		hostDir = unit.DefinedIn
+	}
+
 	// Execute tasks
 	for ti, t := range unit.Tasks {
 		fmt.Fprintf(w, "  [%d/%d] task: %s\n", ti+1, len(unit.Tasks), t.Name)
@@ -273,11 +283,13 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 				cfg := &SandboxConfig{
 					Ctx:        ctx,
 					Arch:       opts.Arch,
+					Container:  containerImage,
 					SrcDir:     srcDir,
 					DestDir:    destDir,
 					Sysroot:    sysroot,
 					Env:        env,
 					ProjectDir: opts.ProjectDir,
+					HostDir:    hostDir,
 					Stdout:     logW,
 					Stderr:     logW,
 				}
@@ -292,11 +304,13 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 				cfg := &SandboxConfig{
 					Ctx:        ctx,
 					Arch:       opts.Arch,
+					Container:  containerImage,
 					SrcDir:     srcDir,
 					DestDir:    destDir,
 					Sysroot:    sysroot,
 					Env:        env,
 					ProjectDir: opts.ProjectDir,
+					HostDir:    hostDir,
 					Stdout:     logW,
 					Stderr:     logW,
 				}
@@ -312,7 +326,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	}
 
 	// Package the output into an .apk and publish to the local repo
-	if unit.Class != "image" {
+	if unit.Class != "image" && unit.Class != "container" {
 		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), sd)
 		if err != nil {
 			return fmt.Errorf("creating apk: %w", err)
@@ -389,6 +403,32 @@ func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[strin
 		fmt.Fprintf(w, "  %-20s [%s] %s%s\n", name, unit.Class, hashes[name][:12], cached)
 	}
 	return nil
+}
+
+// resolveContainerImage returns the Docker image tag for a unit's container.
+// For container units (referenced by name), the tag is yoe-ng/<name>:<version>[-<arch>].
+// For external images (containing ":" or "/"), the value is used directly.
+func resolveContainerImage(proj *yoestar.Project, unit *yoestar.Unit, arch string) string {
+	container := unit.Container
+	if container == "" {
+		return ""
+	}
+
+	// External image reference (e.g., "golang:1.23")
+	if strings.Contains(container, ":") || strings.Contains(container, "/") {
+		return container
+	}
+
+	// Container unit — look up version and build tag
+	if cu, ok := proj.Units[container]; ok {
+		tag := fmt.Sprintf("yoe-ng/%s:%s", container, cu.Version)
+		if unit.ContainerArch != "host" && arch != "" && arch != Arch() {
+			tag += "-" + arch
+		}
+		return tag
+	}
+
+	return container
 }
 
 // --- Simple file-based cache ---

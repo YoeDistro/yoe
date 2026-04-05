@@ -106,10 +106,18 @@ func TestBuildUnits_WithDeps(t *testing.T) {
 	if os.Getenv("CI") != "" {
 		t.Skip("requires --privileged container with user namespace support")
 	}
+	runtime := "docker"
 	if _, err := exec.LookPath("docker"); err != nil {
 		if _, err := exec.LookPath("podman"); err != nil {
 			t.Skip("docker/podman not available")
 		}
+		runtime = "podman"
+	}
+
+	// Check if the toolchain container image exists
+	containerImage := "yoe-ng/toolchain-musl:15"
+	if err := exec.Command(runtime, "image", "inspect", containerImage).Run(); err != nil {
+		t.Skipf("container image %s not available", containerImage)
 	}
 
 	// Create a project with units that have trivial build steps
@@ -119,10 +127,12 @@ func TestBuildUnits_WithDeps(t *testing.T) {
 		Name: "test",
 		Units: map[string]*yoestar.Unit{
 			"hello": {
-				Name:    "hello",
-				Version: "1.0",
-				Class:   "package",
-				Tasks: []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "echo built > built.txt"}}}},
+				Name:          "hello",
+				Version:       "1.0",
+				Class:         "package",
+				Container:     containerImage,
+				ContainerArch: "target",
+				Tasks:         []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "echo built > built.txt"}}}},
 			},
 		},
 	}

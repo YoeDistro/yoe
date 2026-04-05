@@ -2,6 +2,7 @@ package starlark
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
@@ -407,7 +408,8 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 		Patches:     kwStringList(kwargs, "patches"),
 		Deps:        kwStringList(kwargs, "deps"),
 		RuntimeDeps: kwStringList(kwargs, "runtime_deps"),
-		Container:   kwString(kwargs, "container"),
+		Container:     kwString(kwargs, "container"),
+		ContainerArch: kwString(kwargs, "container_arch"),
 		Provides:    kwString(kwargs, "provides"),
 		Services:    kwStringList(kwargs, "services"),
 		Conffiles:   kwStringList(kwargs, "conffiles"),
@@ -496,6 +498,9 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 
 	r.Module = e.currentModule
 	r.ModuleIndex = e.currentModuleIndex
+	if e.currentFile != "" {
+		r.DefinedIn = filepath.Dir(e.currentFile)
+	}
 
 	e.mu.Lock()
 	if existing, ok := e.units[name]; ok {

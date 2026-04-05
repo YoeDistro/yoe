@@ -91,6 +91,7 @@ func GenerateDiskImage(rootfs, imgPath string, unit *yoestar.Unit, projectDir, a
 			ddCmd := fmt.Sprintf("dd if=%s of=%s bs=1M seek=%d conv=notrunc",
 				cPartImg, cImgPath, offsetMB)
 			if err := yoe.RunInContainer(yoe.ContainerRunConfig{
+				Image:      "yoe-ng/toolchain-musl:15",
 				Command:    ddCmd,
 				ProjectDir: projectDir,
 				Stdout:     w,
@@ -156,6 +157,7 @@ func partitionImage(imgPath string, partitions []yoestar.Partition, projectDir s
 	// Use printf to pipe the sfdisk script via stdin inside the container
 	cmd := fmt.Sprintf("printf '%s' | sfdisk --quiet %s", strings.ReplaceAll(script, "'", "'\\''"), cImgPath)
 	return yoe.RunInContainer(yoe.ContainerRunConfig{
+		Image:      "yoe-ng/toolchain-musl:15",
 		Command:    cmd,
 		ProjectDir: projectDir,
 		Stdout:     w,
@@ -179,6 +181,7 @@ func createVfatPartition(partImg string, sizeMB int, rootfs string, p yoestar.Pa
 	// Format as FAT32 via container
 	mkfsCmd := fmt.Sprintf("mkfs.vfat -n %s %s", strings.ToUpper(p.Label), cPartImg)
 	if err := yoe.RunInContainer(yoe.ContainerRunConfig{
+		Image:      "yoe-ng/toolchain-musl:15",
 		Command:    mkfsCmd,
 		ProjectDir: projectDir,
 		Stdout:     w,
@@ -198,6 +201,7 @@ func createVfatPartition(partImg string, sizeMB int, rootfs string, p yoestar.Pa
 			}
 			mcopyCmd := fmt.Sprintf("mcopy -i %s %s ::/%s", cPartImg, cFile, filepath.Base(f))
 			if err := yoe.RunInContainer(yoe.ContainerRunConfig{
+				Image:      "yoe-ng/toolchain-musl:15",
 				Command:    mcopyCmd,
 				ProjectDir: projectDir,
 				Stdout:     w,
@@ -230,6 +234,7 @@ func createExt4Partition(partImg string, sizeMB int, rootfs string, p yoestar.Pa
 		// Non-root ext4 partition — just format empty
 		mkfsCmd := fmt.Sprintf("mkfs.ext4 -q -L %s %s", p.Label, cPartImg)
 		if err := yoe.RunInContainer(yoe.ContainerRunConfig{
+			Image:      "yoe-ng/toolchain-musl:15",
 			Command:    mkfsCmd,
 			ProjectDir: projectDir,
 			Stdout:     w,
@@ -250,6 +255,7 @@ func createExt4Partition(partImg string, sizeMB int, rootfs string, p yoestar.Pa
 	// 64bit, metadata_csum, extent tree. Use classic indirect blocks.
 	mkfsCmd := fmt.Sprintf("mkfs.ext4 -q -L %s -O ^64bit,^metadata_csum,^extent -d %s %s", p.Label, cRootfs, cPartImg)
 	if err := yoe.RunInContainer(yoe.ContainerRunConfig{
+		Image:      "yoe-ng/toolchain-musl:15",
 		Command:    mkfsCmd,
 		ProjectDir: projectDir,
 		Stdout:     w,
@@ -326,6 +332,7 @@ extlinux --install /mnt/extlinux/boot/extlinux`,
 		offsetBytes, int64(rootSizeMB)*1024*1024, cImgPath)
 
 	if err := yoe.RunInContainer(yoe.ContainerRunConfig{
+		Image:      "yoe-ng/toolchain-musl:15",
 		Command:    extlinuxScript,
 		ProjectDir: projectDir,
 		NoUser:     true,

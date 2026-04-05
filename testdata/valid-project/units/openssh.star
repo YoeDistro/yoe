@@ -5,8 +5,10 @@ unit(
     license = "BSD",
     source = "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.6p1.tar.gz",
     sha256 = "aaaa1111bbbb2222",
-    deps = ["zlib", "openssl"],
+    deps = ["zlib", "openssl", "toolchain-musl"],
     runtime_deps = ["zlib", "openssl"],
+    container = "toolchain-musl",
+    container_arch = "target",
     tasks = [
         task("build", steps = [
             "./configure --prefix=$PREFIX --sysconfdir=/etc/ssh",

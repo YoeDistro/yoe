@@ -14,3 +14,4 @@ Status of implementation plans.
 | Content-addressed cache                | In progress | Hash-based cache markers working; full object store not yet        |
 | Host image building with bwrap         | Not started | Image assembly still runs in container                             |
 | Per-unit sysroots                      | Done        | AssembleSysroot/StageSysroot implemented and wired into build path |
+| Container units (2026-04-04)           | Done        | Container class, toolchain-musl unit, run(host=True), per-unit container |
