@@ -203,9 +203,9 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		WriteMeta(buildDir, meta)
 	}()
 
-	// Write executor output to .output.log so TUI detail view can show it
+	// Write executor output to executor.log so TUI detail view can show it
 	// even for CLI builds.
-	outputPath := filepath.Join(buildDir, ".output.log")
+	outputPath := filepath.Join(buildDir, "executor.log")
 	outputFile, err := os.Create(outputPath)
 	if err != nil {
 		return fmt.Errorf("creating output log: %w", err)

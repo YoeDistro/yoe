@@ -95,7 +95,7 @@ type model struct {
 	cursor     int
 	view       viewKind
 	detailUnit   string
-	outputLines  []string // executor output (.output.log)
+	outputLines  []string // executor output (executor.log)
 	logLines     []string // build log (build.log)
 	detailScroll int      // scroll offset from top in detail view
 	autoFollow   bool     // auto-scroll to bottom during builds
@@ -1275,7 +1275,7 @@ func (m *model) startBuild(name string) tea.Cmd {
 	if u, ok := m.proj.Units[name]; ok {
 		sd = build.ScopeDir(u, arch, machine)
 	}
-	outputPath := filepath.Join(build.UnitBuildDir(projectDir, sd, unitName), ".output.log")
+	outputPath := filepath.Join(build.UnitBuildDir(projectDir, sd, unitName), "executor.log")
 	build.EnsureDir(filepath.Dir(outputPath))
 
 	return func() tea.Msg {
@@ -1327,7 +1327,7 @@ func (m model) execEditor(path string) tea.Cmd {
 
 func (m *model) refreshDetail() {
 	unitDir := build.UnitBuildDir(m.projectDir, m.unitScopeDir(m.detailUnit), m.detailUnit)
-	outputPath := filepath.Join(unitDir, ".output.log")
+	outputPath := filepath.Join(unitDir, "executor.log")
 	m.outputLines = readFileAll(outputPath)
 	logPath := filepath.Join(unitDir, "build.log")
 	m.logLines = readFileAll(logPath)
