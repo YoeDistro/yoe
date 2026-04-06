@@ -114,11 +114,13 @@ type Unit struct {
 	RuntimeDeps []string
 
 	// Build
-	Container string // default container for all tasks
+	Container     string // default container for all tasks
+	ContainerArch string // "target" or "host"
 	Tasks     []Task
 	Provides    string // virtual package name
 	Module      string // module that registered this unit (empty = project root)
 	ModuleIndex int    // module priority (0 = project root, 1+ = declaration order)
+	DefinedIn   string // directory containing the .star file that defined this unit
 
 	// Artifact metadata
 	Services    []string

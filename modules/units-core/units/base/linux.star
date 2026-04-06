@@ -5,6 +5,9 @@ unit(
     tag = "v6.6.87",
     license = "GPL-2.0",
     description = "Linux kernel",
+    deps = ["toolchain-musl"],
+    container = "toolchain-musl",
+    container_arch = "target",
     tasks = [
         task("build", steps=[
             # Use arch-appropriate defconfig and kernel image target.

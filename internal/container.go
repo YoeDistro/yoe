@@ -10,14 +10,8 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
-	"sync"
 
-	"github.com/YoeDistro/yoe-ng/containers"
-)
-
-const (
-	containerVersion = "14"
-	containerImage   = "yoe-ng"
+	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
 // hostArch returns the host machine architecture in Yoe-NG format.
@@ -40,13 +34,6 @@ func hostArch() string {
 	}
 }
 
-func containerTag(arch string) string {
-	host := hostArch()
-	if arch == "" || arch == host {
-		return containerImage + ":" + containerVersion
-	}
-	return containerImage + ":" + containerVersion + "-" + arch
-}
 
 // Mount describes a bind mount for the container.
 type Mount struct {
@@ -59,6 +46,7 @@ type Mount struct {
 type ContainerRunConfig struct {
 	Ctx         context.Context   // optional; nil means background
 	Arch        string            // target architecture (empty = host arch)
+	Image       string            // Docker image tag (overrides default containerTag)
 	Command     string            // shell command to run
 	ProjectDir  string            // mounted as /project
 	Mounts      []Mount           // additional bind mounts
@@ -73,30 +61,23 @@ type ContainerRunConfig struct {
 // Non-empty string = show notification, empty string = clear it.
 var OnNotify func(string)
 
-var ensureMu sync.Mutex
-var ensuredArches = map[string]error{}
+// DefaultContainerImage returns the Docker image tag for the toolchain-musl
+// container unit using the host architecture. Used by callers outside the build
+// executor (QEMU, shell, etc.) that need a container but don't have a per-unit
+// resolution context.
+func DefaultContainerImage(units map[string]*yoestar.Unit) string {
+	arch := HostArch()
+	if cu, ok := units["toolchain-musl"]; ok {
+		return fmt.Sprintf("yoe/toolchain-musl:%s-%s", cu.Version, arch)
+	}
+	return fmt.Sprintf("yoe/toolchain-musl:15-%s", arch)
+}
 
-// RunInContainer executes a shell command inside the build container.
-// The container image is built lazily on first invocation per arch.
+// RunInContainer executes a shell command inside a container.
+// cfg.Image must be set to the Docker image tag to use.
 func RunInContainer(cfg ContainerRunConfig) error {
-	arch := cfg.Arch
-	if arch == "" {
-		arch = hostArch()
-	}
-
-	ensureMu.Lock()
-	err, ok := ensuredArches[arch]
-	if !ok {
-		w := cfg.Stderr
-		if w == nil {
-			w = os.Stderr
-		}
-		err = EnsureImage(arch, w)
-		ensuredArches[arch] = err
-	}
-	ensureMu.Unlock()
-	if err != nil {
-		return fmt.Errorf("container image: %w", err)
+	if cfg.Image == "" {
+		return fmt.Errorf("no container image specified")
 	}
 
 	runtime, err := detectRuntime()
@@ -210,74 +191,12 @@ func containerRunArgs(cfg ContainerRunConfig) ([]string, error) {
 	}
 
 	args = append(args, "-w", "/project")
-	args = append(args, containerTag(arch))
+	args = append(args, cfg.Image)
 	args = append(args, "bash", "-c")
 
 	return args, nil
 }
 
-// EnsureImage checks if the versioned container image exists and builds it
-// if not. The arch parameter selects the target architecture (empty = host).
-// The optional writer receives build progress; if nil, output is discarded
-// (safe for TUI mode).
-func EnsureImage(arch string, w io.Writer) error {
-	runtime, err := detectRuntime()
-	if err != nil {
-		return err
-	}
-
-	tag := containerTag(arch)
-	cmd := exec.Command(runtime, "image", "inspect", tag)
-	if err := cmd.Run(); err == nil {
-		return nil
-	}
-
-	// Cross-arch: check binfmt_misc first
-	host := hostArch()
-	if arch != "" && arch != host {
-		if err := checkBinfmt(arch); err != nil {
-			return err
-		}
-	}
-
-	if w == nil {
-		w = io.Discard
-	}
-	fmt.Fprintf(w, "[yoe] building container image %s...\n", tag)
-
-	if OnNotify != nil {
-		OnNotify(fmt.Sprintf("Building container image %s...", tag))
-		defer func() { OnNotify("") }()
-	}
-
-	tmpDir, err := os.MkdirTemp("", "yoe-container-build-*")
-	if err != nil {
-		return fmt.Errorf("creating temp dir: %w", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	dockerfilePath := filepath.Join(tmpDir, "Dockerfile")
-	if err := os.WriteFile(dockerfilePath, []byte(containers.Dockerfile), 0644); err != nil {
-		return fmt.Errorf("writing Dockerfile: %w", err)
-	}
-
-	if arch != "" && arch != host {
-		platform := "linux/" + arch
-		cmd = exec.Command(runtime, "buildx", "build",
-			"--platform", platform,
-			"--load",
-			"-t", tag, tmpDir)
-	} else {
-		cmd = exec.Command(runtime, "build", "-t", tag, tmpDir)
-	}
-	cmd.Stdout = w
-	cmd.Stderr = w
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("building container image: %w", err)
-	}
-
-	return nil
-}
 
 // checkBinfmt verifies that binfmt_misc is registered for the given arch.
 // CheckBinfmt verifies that binfmt_misc is registered for the given
@@ -332,10 +251,6 @@ func RegisterBinfmt(w io.Writer) error {
 	return nil
 }
 
-// ContainerVersion returns the container version embedded in this binary.
-func ContainerVersion() string {
-	return containerVersion
-}
 
 func detectRuntime() (string, error) {
 	for _, rt := range []string{"docker", "podman"} {

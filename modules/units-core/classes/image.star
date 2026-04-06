@@ -1,5 +1,6 @@
 def image(name, artifacts=[], hostname="", timezone="", locale="",
-          services=[], partitions=[], scope="machine", **kwargs):
+          services=[], partitions=[], scope="machine",
+          container="toolchain-musl", container_arch="target", deps=[], **kwargs):
     """Create a bootable disk image from packages."""
     # Merge machine packages
     all_artifacts = list(artifacts) + list(MACHINE_CONFIG.packages)
@@ -16,12 +17,20 @@ def image(name, artifacts=[], hostname="", timezone="", locale="",
     # Use machine partitions if image doesn't specify its own
     all_partitions = partitions if partitions else list(MACHINE_CONFIG.partitions)
 
+    # Merge class deps with user deps
+    all_deps = list(deps)
+    if container and container not in all_deps:
+        all_deps.append(container)
+
     unit(
         name = name,
         scope = scope,
         unit_class = "image",
         artifacts = resolved,
         partitions = all_partitions,
+        container = container,
+        container_arch = container_arch,
+        deps = all_deps,
         tasks = [
             task("rootfs", fn=lambda: _assemble_rootfs(resolved, hostname, timezone, locale, services)),
             task("disk", fn=lambda: _create_disk_image(name, all_partitions)),

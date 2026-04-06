@@ -6,6 +6,9 @@ unit(
     branch = "rpi-6.12.y",
     license = "GPL-2.0",
     description = "Raspberry Pi 5 kernel (BCM2712)",
+    deps = ["toolchain-musl"],
+    container = "toolchain-musl",
+    container_arch = "target",
     tasks = [
         task("build", steps=[
             "make ARCH=arm64 bcm2712_defconfig",

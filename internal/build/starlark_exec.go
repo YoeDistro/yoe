@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os/exec"
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
@@ -13,6 +14,7 @@ import (
 // Execer abstracts command execution for testability.
 type Execer interface {
 	Run(ctx context.Context, cfg *SandboxConfig, command string, privileged bool) (ExecResult, error)
+	RunHost(ctx context.Context, command string, dir string) (ExecResult, error)
 }
 
 // ExecResult holds the outcome of a sandboxed command execution.
@@ -62,6 +64,26 @@ func (RealExecer) Run(ctx context.Context, cfg *SandboxConfig, command string, p
 	return ExecResult{ExitCode: 0, Stdout: stdoutBuf.String(), Stderr: stderrBuf.String()}, nil
 }
 
+func (RealExecer) RunHost(ctx context.Context, command string, dir string) (ExecResult, error) {
+	cmd := exec.CommandContext(ctx, "bash", "-c", command)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	var stdoutBuf, stderrBuf bytes.Buffer
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = &stderrBuf
+	err := cmd.Run()
+	exitCode := 0
+	if err != nil {
+		exitCode = 1
+	}
+	return ExecResult{
+		ExitCode: exitCode,
+		Stdout:   stdoutBuf.String(),
+		Stderr:   stderrBuf.String(),
+	}, err
+}
+
 // Thread-local keys for build-time Starlark threads.
 const sandboxKey = "yoe.sandbox"
 const execerKey = "yoe.execer"
@@ -90,6 +112,7 @@ func fnRun(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kw
 
 	check := true
 	privileged := false
+	host := false
 	for _, kv := range kwargs {
 		key := string(kv[0].(starlark.String))
 		if key == "check" {
@@ -102,6 +125,31 @@ func fnRun(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kw
 				privileged = bool(b)
 			}
 		}
+		if key == "host" {
+			if b, ok := kv[1].(starlark.Bool); ok {
+				host = bool(b)
+			}
+		}
+	}
+
+	if host {
+		ctx := thread.Local(contextKey).(context.Context)
+		execer := thread.Local(execerKey).(Execer)
+		cfg := thread.Local(sandboxKey).(*SandboxConfig)
+		result, err := execer.RunHost(ctx, string(command), cfg.HostDir)
+
+		resultStruct := starlarkstruct.FromStringDict(starlark.String("result"), starlark.StringDict{
+			"exit_code": starlark.MakeInt(result.ExitCode),
+			"stdout":    starlark.String(result.Stdout),
+			"stderr":    starlark.String(result.Stderr),
+		})
+
+		if err != nil && check {
+			return nil, fmt.Errorf("run(%q, host=True) failed: exit code %d\n%s",
+				string(command), result.ExitCode, result.Stderr)
+		}
+
+		return resultStruct, nil
 	}
 
 	cfg := thread.Local(sandboxKey).(*SandboxConfig)

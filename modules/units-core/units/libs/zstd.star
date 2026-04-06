@@ -5,6 +5,9 @@ unit(
     tag = "v1.5.7",
     license = "BSD-3-Clause",
     description = "Zstandard fast real-time compression algorithm",
+    deps = ["toolchain-musl"],
+    container = "toolchain-musl",
+    container_arch = "target",
     tasks = [
         task("build", steps=[
             "cmake -B build -S build/cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -DZSTD_BUILD_PROGRAMS=OFF -DZSTD_BUILD_TESTS=OFF",

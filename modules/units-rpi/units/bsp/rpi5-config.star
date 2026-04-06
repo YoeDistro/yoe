@@ -4,6 +4,9 @@ unit(
     scope = "machine",
     license = "MIT",
     description = "Raspberry Pi 5 boot configuration (config.txt, cmdline.txt)",
+    deps = ["toolchain-musl"],
+    container = "toolchain-musl",
+    container_arch = "target",
     tasks = [
         task("build", steps=[
             """

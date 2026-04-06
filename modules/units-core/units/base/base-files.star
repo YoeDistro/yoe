@@ -23,6 +23,9 @@ def base_files(name = "base-files", users = None):
             deps.append("openssl")
             break
 
+    if "toolchain-musl" not in deps:
+        deps.append("toolchain-musl")
+
     unit(
         name = name,
         version = "1.0.0",
@@ -30,6 +33,8 @@ def base_files(name = "base-files", users = None):
         license = "MIT",
         description = "Base filesystem skeleton: users, groups, dirs, inittab, boot config",
         deps = deps,
+        container = "toolchain-musl",
+        container_arch = "target",
         tasks = [
             task("build", steps=[
                 # Essential directories

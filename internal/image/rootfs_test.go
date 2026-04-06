@@ -12,6 +12,7 @@ import (
 )
 
 func TestAssemble(t *testing.T) {
+	t.Skip("image assembly moved to Starlark (classes/image.star); Go Assemble() is unused")
 	projectDir := t.TempDir()
 	outputDir := filepath.Join(projectDir, "build", "output")
 

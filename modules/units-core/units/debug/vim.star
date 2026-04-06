@@ -5,8 +5,10 @@ unit(
     tag = "v9.1.0",
     license = "Vim",
     description = "Vi IMproved text editor",
-    deps = ["ncurses"],
+    deps = ["ncurses", "toolchain-musl"],
     runtime_deps = ["ncurses"],
+    container = "toolchain-musl",
+    container_arch = "target",
     tasks = [
         task("build", steps=[
             # Point directly at the sysroot ncurses and use static linking

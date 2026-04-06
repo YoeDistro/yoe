@@ -36,8 +36,8 @@ func TestLoadProject(t *testing.T) {
 	}
 
 	// Units
-	if len(proj.Units) != 6 {
-		t.Errorf("got %d units, want 6", len(proj.Units))
+	if len(proj.Units) != 7 {
+		t.Errorf("got %d units, want 7", len(proj.Units))
 	}
 	if _, ok := proj.Units["testlib"]; !ok {
 		t.Error("expected unit 'testlib' from units/libs/ subdirectory")

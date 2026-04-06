@@ -46,6 +46,7 @@ func UnitHash(unit *yoestar.Unit, arch string, depHashes map[string]string) stri
 		}
 	}
 	fmt.Fprintf(h, "container:%s\n", unit.Container)
+	fmt.Fprintf(h, "container_arch:%s\n", unit.ContainerArch)
 	fmt.Fprintf(h, "provides:%s\n", unit.Provides)
 
 	// Dependencies — include their hashes for transitivity

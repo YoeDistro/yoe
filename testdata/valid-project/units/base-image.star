@@ -3,6 +3,8 @@ image(
     version = "1.0.0",
     description = "Minimal bootable system",
     artifacts = ["openssh", "myapp"],
+    container = "toolchain-musl",
+    container_arch = "target",
     hostname = "yoe",
     timezone = "UTC",
     services = ["sshd", "myapp"],

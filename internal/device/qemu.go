@@ -109,6 +109,7 @@ func RunQEMU(proj *yoestar.Project, unitName, machineName, projectDir string, op
 	fullCmd := qemuBin + " " + strings.Join(args, " ")
 
 	return yoe.RunInContainer(yoe.ContainerRunConfig{
+		Image:       yoe.DefaultContainerImage(proj.Units),
 		Command:     fullCmd,
 		ProjectDir:  projectDir,
 		Interactive: !opts.Daemon,

@@ -17,6 +17,7 @@ import (
 type SandboxConfig struct {
 	Ctx        context.Context
 	Arch       string // target architecture
+	Container  string // Docker image tag (e.g., "yoe/toolchain-musl:15")
 	BuildRoot  string
 	SrcDir     string
 	DestDir    string
@@ -24,6 +25,7 @@ type SandboxConfig struct {
 	Env        map[string]string
 	ProjectDir string
 	NoUser     bool      // run as root (for losetup/mount)
+	HostDir    string    // working directory for run(host=True) commands
 	Stdout     io.Writer // build output (nil = os.Stdout)
 	Stderr     io.Writer // build errors (nil = os.Stderr)
 }
@@ -43,6 +45,7 @@ func RunInSandbox(cfg *SandboxConfig, command string) error {
 	return yoe.RunInContainer(yoe.ContainerRunConfig{
 		Ctx:        cfg.Ctx,
 		Arch:       cfg.Arch,
+		Image:      cfg.Container,
 		Command:    bwrapCmd,
 		ProjectDir: cfg.ProjectDir,
 		Mounts:     mounts,
@@ -69,6 +72,7 @@ func RunSimple(cfg *SandboxConfig, command string) error {
 	return yoe.RunInContainer(yoe.ContainerRunConfig{
 		Ctx:        cfg.Ctx,
 		Arch:       cfg.Arch,
+		Image:      cfg.Container,
 		Command:    fullCmd,
 		ProjectDir: cfg.ProjectDir,
 		Mounts:     mounts,

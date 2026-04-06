@@ -20,6 +20,11 @@ func (f *fakeExecer) Run(_ context.Context, _ *SandboxConfig, command string, _ 
 	return f.result, f.err
 }
 
+func (f *fakeExecer) RunHost(_ context.Context, command string, _ string) (ExecResult, error) {
+	f.calls = append(f.calls, command)
+	return f.result, f.err
+}
+
 func TestFnRun_Success(t *testing.T) {
 	fake := &fakeExecer{result: ExecResult{ExitCode: 0}}
 	cfg := &SandboxConfig{Arch: "x86_64"}

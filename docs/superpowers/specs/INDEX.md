@@ -13,3 +13,4 @@ Status of design specs and their corresponding implementation plans.
 | Raspberry Pi BSP module (2026-03-31)   | —                                      | Done   |
 | Tasks and Starlark builds (2026-04-01) | tasks-and-starlark-builds (2026-04-01) | Done   |
 | Naming and resolution (2026-04-02)     | naming-and-resolution (2026-04-02)     | Done   |
+| Container units (2026-04-04)           | container-units (2026-04-04)           | Done   |

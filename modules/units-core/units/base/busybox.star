@@ -5,6 +5,9 @@ unit(
     tag = "1_36_1",
     license = "GPL-2.0",
     description = "Swiss army knife of embedded Linux",
+    deps = ["toolchain-musl"],
+    container = "toolchain-musl",
+    container_arch = "target",
     tasks = [
         task("build", steps=[
             "make defconfig",

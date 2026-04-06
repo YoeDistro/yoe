@@ -9,6 +9,7 @@ import (
 func TestContainerRunArgs_Basic(t *testing.T) {
 	cfg := ContainerRunConfig{
 		Command:    "echo hello",
+		Image:      "yoe/toolchain-musl:15-x86_64",
 		ProjectDir: "/home/user/myproject",
 	}
 
@@ -28,8 +29,8 @@ func TestContainerRunArgs_Basic(t *testing.T) {
 	assertContains(t, args, "/home/user/myproject:/project")
 
 	last3 := args[len(args)-3:]
-	if last3[0] != containerTag("") {
-		t.Errorf("expected image tag %q, got %q", containerTag(""), last3[0])
+	if last3[0] != "yoe/toolchain-musl:15-x86_64" {
+		t.Errorf("expected image tag %q, got %q", "yoe/toolchain-musl:15-x86_64", last3[0])
 	}
 	if last3[1] != "bash" || last3[2] != "-c" {
 		t.Errorf("expected 'bash -c', got %v", last3)
@@ -39,6 +40,7 @@ func TestContainerRunArgs_Basic(t *testing.T) {
 func TestContainerRunArgs_Mounts(t *testing.T) {
 	cfg := ContainerRunConfig{
 		Command:    "make",
+		Image:      "yoe/toolchain-musl:15-x86_64",
 		ProjectDir: "/project",
 		Mounts: []Mount{
 			{Host: "/tmp/src", Container: "/build/src", ReadOnly: false},
@@ -58,6 +60,7 @@ func TestContainerRunArgs_Mounts(t *testing.T) {
 func TestContainerRunArgs_Env(t *testing.T) {
 	cfg := ContainerRunConfig{
 		Command:    "make",
+		Image:      "yoe/toolchain-musl:15-x86_64",
 		ProjectDir: "/project",
 		Env:        map[string]string{"PREFIX": "/usr", "NPROC": "4"},
 	}
@@ -82,6 +85,7 @@ func TestContainerRunArgs_Env(t *testing.T) {
 func TestContainerRunArgs_Interactive(t *testing.T) {
 	cfg := ContainerRunConfig{
 		Command:     "qemu-system-x86_64",
+		Image:       "yoe/toolchain-musl:15-x86_64",
 		ProjectDir:  "/project",
 		Interactive: true,
 	}
@@ -97,6 +101,7 @@ func TestContainerRunArgs_Interactive(t *testing.T) {
 func TestContainerRunArgs_NoUser(t *testing.T) {
 	cfg := ContainerRunConfig{
 		Command:    "losetup /dev/loop0 image.img",
+		Image:      "yoe/toolchain-musl:15-x86_64",
 		ProjectDir: "/project",
 		NoUser:     true,
 	}

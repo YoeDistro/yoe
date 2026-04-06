@@ -5,6 +5,9 @@ unit(
     tag = "v1.3.1",
     license = "Zlib",
     description = "Compression library",
+    deps = ["toolchain-musl"],
+    container = "toolchain-musl",
+    container_arch = "target",
     tasks = [
         task("build", steps=[
             # zlib has its own configure (not autoconf-based)

@@ -3,8 +3,10 @@ unit(
     version = "3.2.1",
     source = "https://www.openssl.org/source/openssl-3.2.1.tar.gz",
     sha256 = "abc123def456",
-    deps = ["zlib"],
+    deps = ["zlib", "toolchain-musl"],
     runtime_deps = ["zlib"],
+    container = "toolchain-musl",
+    container_arch = "target",
     tasks = [
         task("build", steps = [
             "./Configure --prefix=$PREFIX --openssldir=/etc/ssl",
