@@ -9,8 +9,12 @@ and this project adheres to
 ## [Unreleased]
 
 - **Build metadata** — each unit's build directory now contains a `build.json`
-  with status, start/finish times, duration, disk usage, and input hash. The TUI
-  detail view shows build time and disk usage alongside the unit name.
+  with status, start/finish times, duration, build disk usage, installed size
+  (destdir/apk), and input hash. The TUI detail view shows build time and sizes
+  alongside the unit name.
+- **Persistent build output** — executor output (`.output.log`) is now written
+  for both CLI and TUI builds, so the TUI detail view shows build output
+  regardless of how the build was triggered.
 
 ## [0.7.0] - 2026-04-06
 
