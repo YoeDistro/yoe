@@ -152,7 +152,7 @@ func Run(proj *yoestar.Project, projectDir string) error {
 			statuses[name] = statusCached
 		} else if build.IsBuildInProgress(projectDir, sd, name) {
 			statuses[name] = statusBuilding
-		} else if build.HasBuildLog(projectDir, sd, name) {
+		} else if meta := build.ReadMeta(build.UnitBuildDir(projectDir, sd, name)); meta != nil && meta.Hash == hash && meta.Status == "failed" {
 			statuses[name] = statusFailed
 		}
 	}
@@ -1106,7 +1106,8 @@ func (m model) viewDetail() string {
 	if u, ok := m.proj.Units[m.detailUnit]; ok {
 		sd := build.ScopeDir(u, m.arch, m.proj.Defaults.Machine)
 		buildDir := build.UnitBuildDir(m.projectDir, sd, m.detailUnit)
-		if meta := build.ReadMeta(buildDir); meta != nil {
+		currentHash := m.hashes[m.detailUnit]
+		if meta := build.ReadMeta(buildDir); meta != nil && meta.Hash == currentHash {
 			dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 			info := fmt.Sprintf("  %s", meta.Status)
 			if meta.Duration > 0 {
@@ -1451,7 +1452,7 @@ func (m *model) recomputeStatuses() {
 			m.statuses[name] = statusCached
 		} else if build.IsBuildInProgress(m.projectDir, sd, name) {
 			m.statuses[name] = statusBuilding
-		} else if build.HasBuildLog(m.projectDir, sd, name) {
+		} else if meta := build.ReadMeta(build.UnitBuildDir(m.projectDir, sd, name)); meta != nil && meta.Hash == hash && meta.Status == "failed" {
 			m.statuses[name] = statusFailed
 		} else {
 			m.statuses[name] = statusNone
