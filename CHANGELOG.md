@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-04-06
+
 - **Unit `release` field** — units can now specify `release = N` for packaging
   revisions (apk `-rN` suffix). Defaults to 0. Bump when the unit definition
   changes but the upstream version doesn't.
