@@ -8,6 +8,9 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **E2E build test scripts** — added `yoe_e2e`, `yoe_e2e_x86_64`, and
+  `yoe_e2e_arm64` shell functions in `envsetup.sh` that build `base-image` from
+  the e2e test project for x86_64 and arm64 (cross-build via QEMU user-mode).
 - **Container units** — build containers are now Starlark units
   (`toolchain-musl`) instead of an embedded Dockerfile. Containers participate
   in the DAG, caching, and versioning. Classes set `container` and

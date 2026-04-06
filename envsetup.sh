@@ -24,3 +24,24 @@ yoe_format_check() {
 yoe_sloc() {
   (cd "${OE_BASE}" && scc --count-as 'star:py') || return 1
 }
+
+yoe_e2e() {
+  yoe_build || return 1
+  echo "=== e2e: base-image (x86_64) ==="
+  (cd "${OE_BASE}/testdata/e2e-project" && "${OE_BASE}/yoe" build base-image --machine qemu-x86_64) || return 1
+  echo "=== e2e: base-image (arm64 cross) ==="
+  (cd "${OE_BASE}/testdata/e2e-project" && "${OE_BASE}/yoe" build base-image --machine qemu-arm64) || return 1
+  echo "=== e2e: all passed ==="
+}
+
+yoe_e2e_x86_64() {
+  yoe_build || return 1
+  echo "=== e2e: base-image (x86_64) ==="
+  (cd "${OE_BASE}/testdata/e2e-project" && "${OE_BASE}/yoe" build base-image --machine qemu-x86_64) || return 1
+}
+
+yoe_e2e_arm64() {
+  yoe_build || return 1
+  echo "=== e2e: base-image (arm64 cross) ==="
+  (cd "${OE_BASE}/testdata/e2e-project" && "${OE_BASE}/yoe" build base-image --machine qemu-arm64) || return 1
+}
