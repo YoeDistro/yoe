@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **TUI: color-coded unit types** — unselected units are now subtly colored by
+  class: white for regular units, magenta for images, cyan for containers.
+  Search (`/`) also matches unit class, so typing "image" or "container" filters
+  to units of that type.
 - **E2E build test scripts** — added `yoe_e2e`, `yoe_e2e_x86_64`, and
   `yoe_e2e_arm64` shell functions in `envsetup.sh` that build `base-image` from
   the e2e test project for x86_64 and arm64 (cross-build via QEMU user-mode).

@@ -32,6 +32,11 @@ var (
 	buildingStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
 	helpStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	waitingStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("11")) // yellow
+
+	// Subtle per-class colors for unselected units
+	classUnitStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))   // default white
+	classImageStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("13"))  // muted magenta
+	classContainerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))   // muted cyan
 )
 
 // Package-level program reference for sending messages from goroutines.
@@ -499,6 +504,12 @@ func (m *model) applyFilter() {
 	for i, name := range m.units {
 		if strings.Contains(strings.ToLower(name), query) {
 			m.filtered = append(m.filtered, i)
+			continue
+		}
+		if u, ok := m.proj.Units[name]; ok {
+			if strings.Contains(strings.ToLower(u.Class), query) {
+				m.filtered = append(m.filtered, i)
+			}
 		}
 	}
 	// Move cursor to first match
@@ -821,14 +832,29 @@ func (m model) viewUnits() string {
 		name := m.units[i]
 		cursor := "  "
 		nameStyle := dimStyle
+		classStyle := dimStyle
 		if i == m.cursor {
 			cursor = "→ "
 			nameStyle = selectedStyle
+			classStyle = selectedStyle
 		}
 
 		class := ""
 		if u, ok := m.proj.Units[name]; ok {
 			class = u.Class
+			if i != m.cursor {
+				switch class {
+				case "image":
+					nameStyle = classImageStyle
+					classStyle = classImageStyle
+				case "container":
+					nameStyle = classContainerStyle
+					classStyle = classContainerStyle
+				default:
+					nameStyle = classUnitStyle
+					classStyle = classUnitStyle
+				}
+			}
 		}
 
 		status := m.renderStatus(name)
@@ -838,7 +864,7 @@ func (m model) viewUnits() string {
 		b.WriteString(fmt.Sprintf("%s%s %s %s\n",
 			cursor,
 			nameStyle.Render(paddedName),
-			dimStyle.Render(paddedClass),
+			classStyle.Render(paddedClass),
 			status))
 	}
 
