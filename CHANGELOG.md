@@ -15,7 +15,7 @@ and this project adheres to
   with status, start/finish times, duration, build disk usage, installed size
   (destdir/apk), and input hash. The TUI detail view shows build time and sizes
   alongside the unit name.
-- **Persistent build output** — executor output (`.output.log`) is now written
+- **Persistent build output** — executor output (`executor.log`) is now written
   for both CLI and TUI builds, so the TUI detail view shows build output
   regardless of how the build was triggered.
 
