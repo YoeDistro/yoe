@@ -406,7 +406,7 @@ func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[strin
 }
 
 // resolveContainerImage returns the Docker image tag for a unit's container.
-// For container units (referenced by name), the tag is yoe-ng/<name>:<version>[-<arch>].
+// For container units (referenced by name), the tag is yoe-ng/<name>:<version>-<arch>.
 // For external images (containing ":" or "/"), the value is used directly.
 func resolveContainerImage(proj *yoestar.Project, unit *yoestar.Unit, arch string) string {
 	container := unit.Container
@@ -419,13 +419,14 @@ func resolveContainerImage(proj *yoestar.Project, unit *yoestar.Unit, arch strin
 		return container
 	}
 
-	// Container unit — look up version and build tag
+	// Container unit — look up version and build tag.
+	// Always include arch in tag for explicitness.
 	if cu, ok := proj.Units[container]; ok {
-		tag := fmt.Sprintf("yoe-ng/%s:%s", container, cu.Version)
-		if unit.ContainerArch != "host" && arch != "" && arch != Arch() {
-			tag += "-" + arch
+		imageArch := arch
+		if unit.ContainerArch == "host" {
+			imageArch = Arch()
 		}
-		return tag
+		return fmt.Sprintf("yoe-ng/%s:%s-%s", container, cu.Version, imageArch)
 	}
 
 	return container

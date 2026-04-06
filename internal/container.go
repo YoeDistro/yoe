@@ -62,13 +62,15 @@ type ContainerRunConfig struct {
 var OnNotify func(string)
 
 // DefaultContainerImage returns the Docker image tag for the toolchain-musl
-// container unit. Used by callers outside the build executor (QEMU, shell, etc.)
-// that need a container but don't have a per-unit resolution context.
+// container unit using the host architecture. Used by callers outside the build
+// executor (QEMU, shell, etc.) that need a container but don't have a per-unit
+// resolution context.
 func DefaultContainerImage(units map[string]*yoestar.Unit) string {
+	arch := HostArch()
 	if cu, ok := units["toolchain-musl"]; ok {
-		return fmt.Sprintf("yoe-ng/toolchain-musl:%s", cu.Version)
+		return fmt.Sprintf("yoe-ng/toolchain-musl:%s-%s", cu.Version, arch)
 	}
-	return "yoe-ng/toolchain-musl:15"
+	return fmt.Sprintf("yoe-ng/toolchain-musl:15-%s", arch)
 }
 
 // RunInContainer executes a shell command inside a container.

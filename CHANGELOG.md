@@ -13,6 +13,9 @@ and this project adheres to
   in the DAG, caching, and versioning. Classes set `container` and
   `container_arch` explicitly. `run(host = True)` enables host-side execution
   for container builds. The embedded Dockerfile and `EnsureImage()` are removed.
+  Container images are tagged with arch for explicitness
+  (`yoe-ng/toolchain-musl:15-x86_64`). Cross-arch containers use
+  `docker buildx` automatically.
 
 ## [0.6.0] - 2026-04-03
 
