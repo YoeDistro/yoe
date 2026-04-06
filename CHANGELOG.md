@@ -8,10 +8,20 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-04-06
+
+- **Container units** — build containers are now Starlark units
+  (`toolchain-musl`) instead of an embedded Dockerfile. Containers participate
+  in the DAG, caching, and versioning. Classes set `container` and
+  `container_arch` explicitly. `run(host = True)` enables host-side execution
+  for container builds. The embedded Dockerfile and `EnsureImage()` are removed.
+  Container images are tagged with arch for explicitness
+  (`yoe-ng/toolchain-musl:15-x86_64`). Cross-arch containers use `docker buildx`
+  automatically.
 - **Container image prefix renamed** — Docker image prefix changed from
   `yoe-ng/` to `yoe/` (e.g., `yoe/toolchain-musl:15-x86_64`). Arch is always
-  included in the tag for explicitness. Cross-arch containers use `docker buildx`
-  automatically.
+  included in the tag for explicitness. Cross-arch containers use
+  `docker buildx` automatically.
 - **TUI: detail view log search** — press `/` in the unit detail view to search
   build output and logs. Matching lines are highlighted in yellow; `n`/`N` jump
   to next/previous match. First `esc` clears the search, second returns to the
@@ -23,14 +33,6 @@ and this project adheres to
 - **E2E build test scripts** — added `yoe_e2e`, `yoe_e2e_x86_64`, and
   `yoe_e2e_arm64` shell functions in `envsetup.sh` that build `base-image` from
   the e2e test project for x86_64 and arm64 (cross-build via QEMU user-mode).
-- **Container units** — build containers are now Starlark units
-  (`toolchain-musl`) instead of an embedded Dockerfile. Containers participate
-  in the DAG, caching, and versioning. Classes set `container` and
-  `container_arch` explicitly. `run(host = True)` enables host-side execution
-  for container builds. The embedded Dockerfile and `EnsureImage()` are removed.
-  Container images are tagged with arch for explicitness
-  (`yoe-ng/toolchain-musl:15-x86_64`). Cross-arch containers use
-  `docker buildx` automatically.
 
 ## [0.6.0] - 2026-04-03
 
