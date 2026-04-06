@@ -25,7 +25,7 @@ import (
 var (
 	titleStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
 	headerStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14"))
-	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("10"))
+	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#5fff5f"))
 	dimStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	cachedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("12")) // blue
 	failedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
@@ -34,7 +34,7 @@ var (
 	waitingStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("11")) // yellow
 
 	// Subtle per-class colors for unselected units
-	classUnitStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))   // default white
+	classUnitStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("4"))   // muted blue
 	classImageStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("13"))  // muted magenta
 	classContainerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))   // muted cyan
 )
