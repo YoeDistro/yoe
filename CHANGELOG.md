@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Build metadata** — each unit's build directory now contains a `build.json`
+  with status, start/finish times, duration, disk usage, and input hash. The TUI
+  detail view shows build time and disk usage alongside the unit name.
+
 ## [0.7.0] - 2026-04-06
 
 - **Container units** — build containers are now Starlark units

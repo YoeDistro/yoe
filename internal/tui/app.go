@@ -1098,9 +1098,36 @@ func (m model) viewDetail() string {
 	var b strings.Builder
 
 	status := m.renderStatus(m.detailUnit)
-	b.WriteString(fmt.Sprintf("  ← %s %s\n\n",
+	b.WriteString(fmt.Sprintf("  ← %s %s\n",
 		titleStyle.Render(m.detailUnit),
 		status))
+
+	// Show build metadata if available
+	if u, ok := m.proj.Units[m.detailUnit]; ok {
+		sd := build.ScopeDir(u, m.arch, m.proj.Defaults.Machine)
+		buildDir := build.UnitBuildDir(m.projectDir, sd, m.detailUnit)
+		if meta := build.ReadMeta(buildDir); meta != nil {
+			dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+			info := fmt.Sprintf("  %s", meta.Status)
+			if meta.Duration > 0 {
+				if meta.Duration < 60 {
+					info += fmt.Sprintf("  %.1fs", meta.Duration)
+				} else {
+					info += fmt.Sprintf("  %dm%ds", int(meta.Duration)/60, int(meta.Duration)%60)
+				}
+			}
+			if meta.DiskBytes > 0 {
+				mb := float64(meta.DiskBytes) / (1024 * 1024)
+				if mb >= 1024 {
+					info += fmt.Sprintf("  %.1fGB", mb/1024)
+				} else {
+					info += fmt.Sprintf("  %.0fMB", mb)
+				}
+			}
+			b.WriteString(dimStyle.Render(info))
+		}
+	}
+	b.WriteString("\n")
 
 	allLines := m.detailAllLines()
 
