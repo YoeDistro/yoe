@@ -191,6 +191,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		meta.Finished = &now
 		meta.Duration = now.Sub(buildStart).Seconds()
 		meta.DiskBytes = DirSize(buildDir)
+		meta.InstalledBytes = DirSize(filepath.Join(buildDir, "destdir"))
 		if ctx.Err() != nil {
 			meta.Status = "cancelled"
 		} else if buildErr != nil {

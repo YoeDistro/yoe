@@ -1119,9 +1119,19 @@ func (m model) viewDetail() string {
 			if meta.DiskBytes > 0 {
 				mb := float64(meta.DiskBytes) / (1024 * 1024)
 				if mb >= 1024 {
-					info += fmt.Sprintf("  %.1fGB", mb/1024)
+					info += fmt.Sprintf("  build: %.1fGB", mb/1024)
 				} else {
-					info += fmt.Sprintf("  %.0fMB", mb)
+					info += fmt.Sprintf("  build: %.0fMB", mb)
+				}
+			}
+			if meta.InstalledBytes > 0 {
+				mb := float64(meta.InstalledBytes) / (1024 * 1024)
+				if mb >= 1024 {
+					info += fmt.Sprintf("  installed: %.1fGB", mb/1024)
+				} else if mb >= 1 {
+					info += fmt.Sprintf("  installed: %.0fMB", mb)
+				} else {
+					info += fmt.Sprintf("  installed: %.0fKB", mb*1024)
 				}
 			}
 			b.WriteString(dimStyle.Render(info))

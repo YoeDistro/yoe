@@ -14,7 +14,8 @@ type BuildMeta struct {
 	Started  *time.Time `json:"started,omitempty"`  // when the build started
 	Finished *time.Time `json:"finished,omitempty"` // when the build finished
 	Duration float64    `json:"duration_seconds"`   // wall-clock seconds
-	DiskBytes int64     `json:"disk_bytes"`         // total size of build directory
+	DiskBytes      int64 `json:"disk_bytes"`      // total size of build directory
+	InstalledBytes int64 `json:"installed_bytes"` // size of destdir (what goes into the apk)
 	Hash     string     `json:"hash"`               // input hash
 	Error    string     `json:"error,omitempty"`     // error message if failed
 }
