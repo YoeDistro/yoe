@@ -12,7 +12,7 @@ def container(name, version, dockerfile="Dockerfile", scope="arch", **kwargs):
 
 def _build_container(name, version, dockerfile):
     arch = ARCH
-    tag = "yoe-ng/%s:%s-%s" % (name, version, arch)
+    tag = "yoe/%s:%s-%s" % (name, version, arch)
     # Use buildx for cross-arch builds
     host_arch = run("uname -m", host=True).stdout.strip()
     if host_arch == "aarch64":

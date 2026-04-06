@@ -17,7 +17,7 @@ import (
 type SandboxConfig struct {
 	Ctx        context.Context
 	Arch       string // target architecture
-	Container  string // Docker image tag (e.g., "yoe-ng/toolchain-musl:15")
+	Container  string // Docker image tag (e.g., "yoe/toolchain-musl:15")
 	BuildRoot  string
 	SrcDir     string
 	DestDir    string

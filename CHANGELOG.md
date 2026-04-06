@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Container image prefix renamed** — Docker image prefix changed from
+  `yoe-ng/` to `yoe/` (e.g., `yoe/toolchain-musl:15-x86_64`). Arch is always
+  included in the tag for explicitness. Cross-arch containers use `docker buildx`
+  automatically.
 - **TUI: detail view log search** — press `/` in the unit detail view to search
   build output and logs. Matching lines are highlighted in yellow; `n`/`N` jump
   to next/previous match. First `esc` clears the search, second returns to the

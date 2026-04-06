@@ -68,9 +68,9 @@ var OnNotify func(string)
 func DefaultContainerImage(units map[string]*yoestar.Unit) string {
 	arch := HostArch()
 	if cu, ok := units["toolchain-musl"]; ok {
-		return fmt.Sprintf("yoe-ng/toolchain-musl:%s-%s", cu.Version, arch)
+		return fmt.Sprintf("yoe/toolchain-musl:%s-%s", cu.Version, arch)
 	}
-	return fmt.Sprintf("yoe-ng/toolchain-musl:15-%s", arch)
+	return fmt.Sprintf("yoe/toolchain-musl:15-%s", arch)
 }
 
 // RunInContainer executes a shell command inside a container.

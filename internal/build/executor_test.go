@@ -115,7 +115,7 @@ func TestBuildUnits_WithDeps(t *testing.T) {
 	}
 
 	// Check if the toolchain container image exists
-	containerImage := "yoe-ng/toolchain-musl:15-x86_64"
+	containerImage := "yoe/toolchain-musl:15-x86_64"
 	if err := exec.Command(runtime, "image", "inspect", containerImage).Run(); err != nil {
 		t.Skipf("container image %s not available", containerImage)
 	}

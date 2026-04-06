@@ -59,7 +59,7 @@ def container(name, version, dockerfile = "Dockerfile"):
         tasks = [
             task("build",
                 fn = lambda: run(
-                    "docker build -t yoe-ng/%s:%s -f %s/%s %s" % (
+                    "docker build -t yoe/%s:%s -f %s/%s %s" % (
                         name, version, name, dockerfile, name),
                     host = True,
                 ),
@@ -216,8 +216,8 @@ The build flow:
    the Docker image exists, skip the build.
 2. The class's Starlark task runs `docker build` (host arch) or
    `docker buildx build` (cross-arch) with the unit directory as build context.
-3. The image is tagged as `yoe-ng/<unit-name>:<version>` or
-   `yoe-ng/<unit-name>:<version>-<arch>` for cross-arch.
+3. The image is tagged as `yoe/<unit-name>:<version>` or
+   `yoe/<unit-name>:<version>-<arch>` for cross-arch.
 
 ### Regular unit builds
 
@@ -225,7 +225,7 @@ The execution path changes from the current hardcoded `containerTag(arch)`:
 
 1. Resolve the unit's `container` field
 2. Resolve `container_arch` to determine host or target arch
-3. If container is a unit name: use `yoe-ng/<name>:<version>[-<arch>]` as image
+3. If container is a unit name: use `yoe/<name>:<version>[-<arch>]` as image
    tag
 4. If container is an external reference: use it directly
 5. Pass the resolved image tag to `RunInContainer`

@@ -426,7 +426,7 @@ func resolveContainerImage(proj *yoestar.Project, unit *yoestar.Unit, arch strin
 		if unit.ContainerArch == "host" {
 			imageArch = Arch()
 		}
-		return fmt.Sprintf("yoe-ng/%s:%s-%s", container, cu.Version, imageArch)
+		return fmt.Sprintf("yoe/%s:%s-%s", container, cu.Version, imageArch)
 	}
 
 	return container

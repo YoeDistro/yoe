@@ -271,7 +271,7 @@ func createBuildRoot(buildRoot, repoDir, projectDir string, w io.Writer) error {
 	cmd := strings.Join(args, " ")
 
 	return yoe.RunInContainer(yoe.ContainerRunConfig{
-		Image:      "yoe-ng/toolchain-musl:15",
+		Image:      "yoe/toolchain-musl:15",
 		Command:    cmd,
 		ProjectDir: projectDir,
 		Mounts: []yoe.Mount{
