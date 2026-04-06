@@ -49,14 +49,14 @@ good CLI name): Kiln > Forge > Cairn > Loom > Anvil.
 
 ### Domain & GitHub availability (April 2026)
 
-| Name      | Software conflicts                                                                       | Domain availability                         | GitHub orgs                             |
-| --------- | ---------------------------------------------------------------------------------------- | ------------------------------------------- | --------------------------------------- |
-| **Cairn** | Moderate — cairn-dev/cairn AI coding agent (194 stars, codewithcairn.ai), google/cairn (P4 compiler), wabarc/cairn (npm CLI), cairn-lang orgs taken, Cairn Software (cairnsoftware.com) | cairn.dev, cairn.sh, cairn.io all taken; cairnbuild.dev possibly available | cairnproject, cairn-build available |
-| **Grove** | Many tiny projects, no dominant one                                                      | grove.sh possibly available                 | Unchecked                               |
-| **Kiln**  | Crowded — Kiln AI (4.7k stars), Fog Creek Kiln, pivotal-cf/kiln, kiln.sh secrets manager | kilnbuild.dev, usekiln.dev likely available | kilndev, getkiln, kilnproject available |
-| **Anvil** | Moderate — anvil.works (Python framework), Foundry `anvil` CLI                           | anvil.dev possibly available                | Unchecked                               |
-| **Forge** | Hard pass — `forge` CLI is Foundry/Ethereum (17k stars)                                  | All taken                                   | All taken                               |
-| **Loom**  | Hard pass — Atlassian's $975M video product                                              | All taken                                   | All taken                               |
+| Name      | Software conflicts                                                                                                                                                                      | Domain availability                                                        | GitHub orgs                             |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | --------------------------------------- |
+| **Cairn** | Moderate — cairn-dev/cairn AI coding agent (194 stars, codewithcairn.ai), google/cairn (P4 compiler), wabarc/cairn (npm CLI), cairn-lang orgs taken, Cairn Software (cairnsoftware.com) | cairn.dev, cairn.sh, cairn.io all taken; cairnbuild.dev possibly available | cairnproject, cairn-build available     |
+| **Grove** | Many tiny projects, no dominant one                                                                                                                                                     | grove.sh possibly available                                                | Unchecked                               |
+| **Kiln**  | Crowded — Kiln AI (4.7k stars), Fog Creek Kiln, pivotal-cf/kiln, kiln.sh secrets manager                                                                                                | kilnbuild.dev, usekiln.dev likely available                                | kilndev, getkiln, kilnproject available |
+| **Anvil** | Moderate — anvil.works (Python framework), Foundry `anvil` CLI                                                                                                                          | anvil.dev possibly available                                               | Unchecked                               |
+| **Forge** | Hard pass — `forge` CLI is Foundry/Ethereum (17k stars)                                                                                                                                 | All taken                                                                  | All taken                               |
+| **Loom**  | Hard pass — Atlassian's $975M video product                                                                                                                                             | All taken                                                                  | All taken                               |
 
 **Revised ranking** (factoring in namespace availability): Grove > Cairn > Anvil
 \> Kiln > Forge > Loom.
@@ -66,7 +66,8 @@ Cairn is more crowded than initially expected. The AI coding agent
 
 ### Vintage trade verbs (April 2026)
 
-Words from woodworking and other traditional trades — verbs that invoke building:
+Words from woodworking and other traditional trades — verbs that invoke
+building:
 
 **Woodworking:** hew (shape by cutting), rive (split along grain), adze (shaping
 tool), joinery (connecting pieces)
@@ -80,13 +81,13 @@ tool), joinery (connecting pieces)
 raw source." However, hew.sh is an active programming language (launched Feb
 2026), and core domains (hew.dev, hew.sh, hew.io) are taken.
 
-| Hew combo      | GitHub org    | Domain                                      |
-| -------------- | ------------- | ------------------------------------------- |
-| **hewbuild**   | Available     | hew.build, hewbuild.com, hewbuild.dev avail |
-| **hewlabs**    | Available     | hewlabs.dev available                       |
-| **usehew**     | Available     | usehew.dev available                        |
-| **hewdev**     | Available     | Unchecked                                   |
-| **hewsys**     | Available     | hewsys.dev available (hewsys.com taken)     |
+| Hew combo    | GitHub org | Domain                                      |
+| ------------ | ---------- | ------------------------------------------- |
+| **hewbuild** | Available  | hew.build, hewbuild.com, hewbuild.dev avail |
+| **hewlabs**  | Available  | hewlabs.dev available                       |
+| **usehew**   | Available  | usehew.dev available                        |
+| **hewdev**   | Available  | Unchecked                                   |
+| **hewsys**   | Available  | hewsys.dev available (hewsys.com taken)     |
 
 **hew.build** is the standout — short, descriptive, and the `hewbuild` GitHub
 org is free. CLI would still be `hew`.
@@ -96,8 +97,8 @@ org is free. CLI would still be `hew`.
 **Masonry tools:** trowel, hawk (handheld mortar platform), scutch (trimming
 hammer), bevel, darby (leveling tool)
 
-**Masonry objects:** ashlar (precisely dressed stone block), quoin (cornerstone),
-corbel, plinth, sett (cut paving stone), mortar
+**Masonry objects:** ashlar (precisely dressed stone block), quoin
+(cornerstone), corbel, plinth, sett (cut paving stone), mortar
 
 **Masonry operations:** lay, cope (shape to fit), dress (shape raw stone into
 finished blocks), point, shim
@@ -152,8 +153,9 @@ limbs)
 
 **Archery short-list:**
 
-- **Fletch** — a verb about assembling precision components (shaft + point + nock
-  + feathers) into something that flies true. Six letters, distinctive.
+- **Fletch** — a verb about assembling precision components (shaft + point +
+  nock
+  - feathers) into something that flies true. Six letters, distinctive.
 - **Nock** — to ready an arrow for release. Four letters, punchy. "Nock and
   release" maps to "build and deploy." Uncommon in software.
 - **Stave** — gains weight here too. A bow stave, a barrel stave, a walking

@@ -28,8 +28,8 @@ needed.**
   executor, image assembly, and bootstrap
 - The container runs with `--privileged` for bwrap namespaces and disk tools
 - Build output uses `--user uid:gid` so files are owned by the host user
-- Container images are built by container units (e.g., `toolchain-musl`) as
-  part of the DAG — no embedded Dockerfile
+- Container images are built by container units (e.g., `toolchain-musl`) as part
+  of the DAG — no embedded Dockerfile
 - Developers need only Git, Docker/Podman, and the `yoe` binary
 
 ## Repository Structure

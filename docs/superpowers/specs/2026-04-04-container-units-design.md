@@ -225,8 +225,7 @@ The execution path changes from the current hardcoded `containerTag(arch)`:
 
 1. Resolve the unit's `container` field
 2. Resolve `container_arch` to determine host or target arch
-3. If container is a unit name: use `yoe/<name>:<version>[-<arch>]` as image
-   tag
+3. If container is a unit name: use `yoe/<name>:<version>[-<arch>]` as image tag
 4. If container is an external reference: use it directly
 5. Pass the resolved image tag to `RunInContainer`
 
