@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **TUI: detail view log search** — press `/` in the unit detail view to search
+  build output and logs. Matching lines are highlighted in yellow; `n`/`N` jump
+  to next/previous match. First `esc` clears the search, second returns to the
+  unit list.
 - **TUI: color-coded unit types** — unselected units are now subtly colored by
   class: blue for regular units, magenta for images, cyan for containers.
   Selected unit uses a brighter green for visibility. Search (`/`) also matches

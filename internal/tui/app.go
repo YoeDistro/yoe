@@ -111,6 +111,12 @@ type model struct {
 	searchText string // current search query
 	filtered   []int  // indices into units matching search
 
+	// Detail log search
+	detailSearching  bool   // true = detail search input active
+	detailSearchText string // current detail search query
+	detailMatches    []int  // line indices in allLines that match
+	detailMatchIdx   int    // current match cursor (-1 = none)
+
 	// Setup view
 	machines    []string // sorted machine names
 	setupCursor int      // cursor within setup options
@@ -253,6 +259,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateConfirm(msg)
 		}
 		// Handle search input
+		if m.detailSearching {
+			return m.updateDetailSearch(msg)
+		}
 		if m.searching {
 			return m.updateSearch(msg)
 		}
@@ -667,6 +676,13 @@ func (m model) updateSetupMachine(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
+		// First esc clears search, second esc goes back to list
+		if m.detailSearchText != "" {
+			m.detailSearchText = ""
+			m.detailMatches = nil
+			m.detailMatchIdx = -1
+			return m, nil
+		}
 		m.view = viewUnits
 		m.detailUnit = ""
 		m.outputLines = nil
@@ -760,8 +776,100 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.message = fmt.Sprintf("No build log for %s", m.detailUnit)
 		return m, nil
+
+	case "/":
+		m.detailSearching = true
+		m.detailSearchText = ""
+		m.detailMatches = nil
+		m.detailMatchIdx = -1
+		return m, nil
+
+	case "n":
+		if len(m.detailMatches) > 0 {
+			m.detailMatchIdx = (m.detailMatchIdx + 1) % len(m.detailMatches)
+			m.scrollToDetailMatch()
+		}
+		return m, nil
+
+	case "N":
+		if len(m.detailMatches) > 0 {
+			m.detailMatchIdx--
+			if m.detailMatchIdx < 0 {
+				m.detailMatchIdx = len(m.detailMatches) - 1
+			}
+			m.scrollToDetailMatch()
+		}
+		return m, nil
 	}
 	return m, nil
+}
+
+func (m model) updateDetailSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.detailSearching = false
+		m.detailSearchText = ""
+		m.detailMatches = nil
+		m.detailMatchIdx = -1
+		return m, nil
+
+	case "enter":
+		m.detailSearching = false
+		// Keep matches active for n/N navigation
+		return m, nil
+
+	case "backspace":
+		if len(m.detailSearchText) > 0 {
+			m.detailSearchText = m.detailSearchText[:len(m.detailSearchText)-1]
+			m.applyDetailSearch()
+		}
+		return m, nil
+
+	default:
+		key := msg.String()
+		if len(key) == 1 && key[0] >= 32 && key[0] <= 126 {
+			m.detailSearchText += key
+			m.applyDetailSearch()
+		}
+		return m, nil
+	}
+}
+
+func (m *model) applyDetailSearch() {
+	m.detailMatches = nil
+	m.detailMatchIdx = -1
+	if m.detailSearchText == "" {
+		return
+	}
+	query := strings.ToLower(m.detailSearchText)
+	allLines := m.detailAllLines()
+	for i, line := range allLines {
+		if strings.Contains(strings.ToLower(line), query) {
+			m.detailMatches = append(m.detailMatches, i)
+		}
+	}
+	if len(m.detailMatches) > 0 {
+		m.detailMatchIdx = 0
+		m.scrollToDetailMatch()
+	}
+}
+
+func (m *model) scrollToDetailMatch() {
+	if m.detailMatchIdx < 0 || m.detailMatchIdx >= len(m.detailMatches) {
+		return
+	}
+	line := m.detailMatches[m.detailMatchIdx]
+	viewH := m.detailViewportHeight()
+	// Center the match in the viewport
+	m.detailScroll = line - viewH/2
+	if m.detailScroll < 0 {
+		m.detailScroll = 0
+	}
+	maxScroll := m.detailMaxScroll()
+	if m.detailScroll > maxScroll {
+		m.detailScroll = maxScroll
+	}
+	m.autoFollow = false
 }
 
 // ----- View -----
@@ -960,18 +1068,9 @@ func (m model) viewSetup() string {
 	return b.String()
 }
 
-func (m model) viewDetail() string {
-	var b strings.Builder
-
-	status := m.renderStatus(m.detailUnit)
-	b.WriteString(fmt.Sprintf("  ← %s %s\n\n",
-		titleStyle.Render(m.detailUnit),
-		status))
-
-	// Build combined content lines for scrolling
+func (m model) detailAllLines() []string {
 	var allLines []string
 
-	// Build output section
 	allLines = append(allLines, headerStyle.Render("  BUILD OUTPUT"))
 	if len(m.outputLines) == 0 {
 		allLines = append(allLines, dimStyle.Render("  (no output yet)"))
@@ -981,10 +1080,8 @@ func (m model) viewDetail() string {
 		}
 	}
 
-	// Separator
 	allLines = append(allLines, "")
 
-	// Build log section
 	allLines = append(allLines, headerStyle.Render("  BUILD LOG"))
 	if len(m.logLines) == 0 {
 		allLines = append(allLines, dimStyle.Render("  (no build log)"))
@@ -992,6 +1089,29 @@ func (m model) viewDetail() string {
 		for _, line := range m.logLines {
 			allLines = append(allLines, "  "+line)
 		}
+	}
+
+	return allLines
+}
+
+func (m model) viewDetail() string {
+	var b strings.Builder
+
+	status := m.renderStatus(m.detailUnit)
+	b.WriteString(fmt.Sprintf("  ← %s %s\n\n",
+		titleStyle.Render(m.detailUnit),
+		status))
+
+	allLines := m.detailAllLines()
+
+	// Build set of matching line indices for highlight
+	matchSet := map[int]bool{}
+	for _, idx := range m.detailMatches {
+		matchSet[idx] = true
+	}
+	currentMatchLine := -1
+	if m.detailMatchIdx >= 0 && m.detailMatchIdx < len(m.detailMatches) {
+		currentMatchLine = m.detailMatches[m.detailMatchIdx]
 	}
 
 	// Calculate visible window
@@ -1008,8 +1128,18 @@ func (m model) viewDetail() string {
 		end = len(allLines)
 	}
 
-	for _, line := range allLines[start:end] {
-		b.WriteString(line)
+	matchHighlight := lipgloss.NewStyle().Foreground(lipgloss.Color("11"))       // yellow
+	currentHighlight := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true) // bold yellow
+
+	for lineIdx := start; lineIdx < end; lineIdx++ {
+		line := allLines[lineIdx]
+		if lineIdx == currentMatchLine {
+			b.WriteString(currentHighlight.Render(line))
+		} else if matchSet[lineIdx] {
+			b.WriteString(matchHighlight.Render(line))
+		} else {
+			b.WriteString(line)
+		}
 		b.WriteString("\n")
 	}
 
@@ -1035,10 +1165,24 @@ func (m model) viewDetail() string {
 	b.WriteString(scrollInfo)
 	b.WriteString("\n")
 
+	// Search bar (shown when actively searching or when matches are active)
+	if m.detailSearching {
+		matchInfo := ""
+		if len(m.detailMatches) > 0 {
+			matchInfo = fmt.Sprintf(" [%d/%d]", m.detailMatchIdx+1, len(m.detailMatches))
+		} else if m.detailSearchText != "" {
+			matchInfo = " [no matches]"
+		}
+		b.WriteString(fmt.Sprintf("  /%s%s\n", m.detailSearchText, dimStyle.Render(matchInfo)))
+	} else if m.detailSearchText != "" && len(m.detailMatches) > 0 {
+		b.WriteString(dimStyle.Render(fmt.Sprintf("  /%s [%d/%d]  n next  N prev\n",
+			m.detailSearchText, m.detailMatchIdx+1, len(m.detailMatches))))
+	}
+
 	// Help bar
-	help := "  esc back  j/k scroll  g top  G bottom  b build  d diagnose  l log"
+	help := "  esc back  j/k scroll  g top  G bottom  / search  b build  d diagnose  l log"
 	if u, ok := m.proj.Units[m.detailUnit]; ok && u.Class == "image" {
-		help = "  esc back  j/k scroll  g top  G bottom  b build  r run  d diagnose  l log"
+		help = "  esc back  j/k scroll  g top  G bottom  / search  b build  r run  d diagnose  l log"
 	}
 	b.WriteString(helpStyle.Render(help))
 	b.WriteString("\n")
