@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/YoeDistro/yoe-ng/internal/artifact"
 	"github.com/YoeDistro/yoe-ng/internal/repo"
@@ -157,7 +158,7 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 	return nil
 }
 
-func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit *yoestar.Unit, hash string, opts Options, w io.Writer) error {
+func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit *yoestar.Unit, hash string, opts Options, w io.Writer) (buildErr error) {
 	sd := ScopeDir(unit, opts.Arch, opts.Machine)
 	buildDir := UnitBuildDir(opts.ProjectDir, sd, unit.Name)
 	EnsureDir(buildDir)
@@ -176,6 +177,41 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	lockPath := BuildingLockPath(opts.ProjectDir, sd, unit.Name)
 	os.WriteFile(lockPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0644)
 	defer os.Remove(lockPath)
+
+	// Write initial build metadata; update on completion.
+	buildStart := time.Now()
+	meta := &BuildMeta{
+		Status:  "building",
+		Started: &buildStart,
+		Hash:    hash,
+	}
+	WriteMeta(buildDir, meta)
+	defer func() {
+		now := time.Now()
+		meta.Finished = &now
+		meta.Duration = now.Sub(buildStart).Seconds()
+		meta.DiskBytes = DirSize(buildDir)
+		meta.InstalledBytes = DirSize(filepath.Join(buildDir, "destdir"))
+		if ctx.Err() != nil {
+			meta.Status = "cancelled"
+		} else if buildErr != nil {
+			meta.Status = "failed"
+			meta.Error = buildErr.Error()
+		} else {
+			meta.Status = "complete"
+		}
+		WriteMeta(buildDir, meta)
+	}()
+
+	// Write executor output to executor.log so TUI detail view can show it
+	// even for CLI builds.
+	outputPath := filepath.Join(buildDir, "executor.log")
+	outputFile, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("creating output log: %w", err)
+	}
+	defer outputFile.Close()
+	w = io.MultiWriter(w, outputFile)
 
 	// Open build log. In verbose mode, tee to terminal + log file.
 	// In normal mode, log only — on error, print the log path.

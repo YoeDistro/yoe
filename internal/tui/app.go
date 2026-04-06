@@ -95,7 +95,7 @@ type model struct {
 	cursor     int
 	view       viewKind
 	detailUnit   string
-	outputLines  []string // executor output (.output.log)
+	outputLines  []string // executor output (executor.log)
 	logLines     []string // build log (build.log)
 	detailScroll int      // scroll offset from top in detail view
 	autoFollow   bool     // auto-scroll to bottom during builds
@@ -152,7 +152,7 @@ func Run(proj *yoestar.Project, projectDir string) error {
 			statuses[name] = statusCached
 		} else if build.IsBuildInProgress(projectDir, sd, name) {
 			statuses[name] = statusBuilding
-		} else if build.HasBuildLog(projectDir, sd, name) {
+		} else if meta := build.ReadMeta(build.UnitBuildDir(projectDir, sd, name)); meta != nil && meta.Hash == hash && meta.Status == "failed" {
 			statuses[name] = statusFailed
 		}
 	}
@@ -1098,9 +1098,47 @@ func (m model) viewDetail() string {
 	var b strings.Builder
 
 	status := m.renderStatus(m.detailUnit)
-	b.WriteString(fmt.Sprintf("  ← %s %s\n\n",
+	b.WriteString(fmt.Sprintf("  ← %s %s\n",
 		titleStyle.Render(m.detailUnit),
 		status))
+
+	// Show build metadata if available
+	if u, ok := m.proj.Units[m.detailUnit]; ok {
+		sd := build.ScopeDir(u, m.arch, m.proj.Defaults.Machine)
+		buildDir := build.UnitBuildDir(m.projectDir, sd, m.detailUnit)
+		currentHash := m.hashes[m.detailUnit]
+		if meta := build.ReadMeta(buildDir); meta != nil && meta.Hash == currentHash {
+			dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+			info := fmt.Sprintf("  %s", meta.Status)
+			if meta.Duration > 0 {
+				if meta.Duration < 60 {
+					info += fmt.Sprintf("  %.1fs", meta.Duration)
+				} else {
+					info += fmt.Sprintf("  %dm%ds", int(meta.Duration)/60, int(meta.Duration)%60)
+				}
+			}
+			if meta.DiskBytes > 0 {
+				mb := float64(meta.DiskBytes) / (1024 * 1024)
+				if mb >= 1024 {
+					info += fmt.Sprintf("  build: %.1fGB", mb/1024)
+				} else {
+					info += fmt.Sprintf("  build: %.0fMB", mb)
+				}
+			}
+			if meta.InstalledBytes > 0 {
+				mb := float64(meta.InstalledBytes) / (1024 * 1024)
+				if mb >= 1024 {
+					info += fmt.Sprintf("  installed: %.1fGB", mb/1024)
+				} else if mb >= 1 {
+					info += fmt.Sprintf("  installed: %.0fMB", mb)
+				} else {
+					info += fmt.Sprintf("  installed: %.0fKB", mb*1024)
+				}
+			}
+			b.WriteString(dimStyle.Render(info))
+		}
+	}
+	b.WriteString("\n")
 
 	allLines := m.detailAllLines()
 
@@ -1237,7 +1275,7 @@ func (m *model) startBuild(name string) tea.Cmd {
 	if u, ok := m.proj.Units[name]; ok {
 		sd = build.ScopeDir(u, arch, machine)
 	}
-	outputPath := filepath.Join(build.UnitBuildDir(projectDir, sd, unitName), ".output.log")
+	outputPath := filepath.Join(build.UnitBuildDir(projectDir, sd, unitName), "executor.log")
 	build.EnsureDir(filepath.Dir(outputPath))
 
 	return func() tea.Msg {
@@ -1289,7 +1327,7 @@ func (m model) execEditor(path string) tea.Cmd {
 
 func (m *model) refreshDetail() {
 	unitDir := build.UnitBuildDir(m.projectDir, m.unitScopeDir(m.detailUnit), m.detailUnit)
-	outputPath := filepath.Join(unitDir, ".output.log")
+	outputPath := filepath.Join(unitDir, "executor.log")
 	m.outputLines = readFileAll(outputPath)
 	logPath := filepath.Join(unitDir, "build.log")
 	m.logLines = readFileAll(logPath)
@@ -1414,7 +1452,7 @@ func (m *model) recomputeStatuses() {
 			m.statuses[name] = statusCached
 		} else if build.IsBuildInProgress(m.projectDir, sd, name) {
 			m.statuses[name] = statusBuilding
-		} else if build.HasBuildLog(m.projectDir, sd, name) {
+		} else if meta := build.ReadMeta(build.UnitBuildDir(m.projectDir, sd, name)); meta != nil && meta.Hash == hash && meta.Status == "failed" {
 			m.statuses[name] = statusFailed
 		} else {
 			m.statuses[name] = statusNone

@@ -23,6 +23,7 @@ func UnitHash(unit *yoestar.Unit, arch string, depHashes map[string]string) stri
 	// Unit identity
 	fmt.Fprintf(h, "name:%s\n", unit.Name)
 	fmt.Fprintf(h, "version:%s\n", unit.Version)
+	fmt.Fprintf(h, "release:%d\n", unit.Release)
 	fmt.Fprintf(h, "class:%s\n", unit.Class)
 	fmt.Fprintf(h, "arch:%s\n", arch)
 
