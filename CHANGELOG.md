@@ -8,6 +8,9 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Unit `release` field** — units can now specify `release = N` for packaging
+  revisions (apk `-rN` suffix). Defaults to 0. Bump when the unit definition
+  changes but the upstream version doesn't.
 - **Build metadata** — each unit's build directory now contains a `build.json`
   with status, start/finish times, duration, build disk usage, installed size
   (destdir/apk), and input hash. The TUI detail view shows build time and sizes

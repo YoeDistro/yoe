@@ -97,6 +97,7 @@ type QEMUConfig struct {
 type Unit struct {
 	Name        string
 	Version     string
+	Release     int    // packaging revision (apk -r<N>), default 0
 	Class       string // "unit", "image", etc.
 	Scope       string // "arch" (default), "machine", or "noarch"
 	Description string

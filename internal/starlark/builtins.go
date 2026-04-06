@@ -73,6 +73,18 @@ func kwString(kwargs []starlark.Tuple, key string) string {
 	return ""
 }
 
+func kwInt(kwargs []starlark.Tuple, key string) int {
+	for _, kv := range kwargs {
+		if string(kv[0].(starlark.String)) == key {
+			if n, ok := kv[1].(starlark.Int); ok {
+				v, _ := n.Int64()
+				return int(v)
+			}
+		}
+	}
+	return 0
+}
+
 func kwStringList(kwargs []starlark.Tuple, key string) []string {
 	for _, kv := range kwargs {
 		if string(kv[0].(starlark.String)) == key {
@@ -397,6 +409,7 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 	r := &Unit{
 		Name:        name,
 		Version:     kwString(kwargs, "version"),
+		Release:     kwInt(kwargs, "release"),
 		Class:       cls,
 		Scope:       kwString(kwargs, "scope"),
 		Description: kwString(kwargs, "description"),

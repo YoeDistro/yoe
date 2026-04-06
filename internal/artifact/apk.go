@@ -31,7 +31,7 @@ func CreateAPK(unit *yoestar.Unit, destDir, outputDir, scopeDir string) (string,
 		return "", fmt.Errorf("creating output dir: %w", err)
 	}
 
-	apkName := fmt.Sprintf("%s-%s-r0.%s.apk", unit.Name, unit.Version, scopeDir)
+	apkName := fmt.Sprintf("%s-%s-r%d.%s.apk", unit.Name, unit.Version, unit.Release, scopeDir)
 	apkPath := filepath.Join(outputDir, apkName)
 
 	// Write a single gzip stream containing .PKGINFO followed by all files.
@@ -205,7 +205,7 @@ func generatePKGINFO(unit *yoestar.Unit, destDir, dataHashHex, arch string) stri
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "pkgname = %s\n", unit.Name)
-	fmt.Fprintf(&b, "pkgver = %s-r0\n", unit.Version)
+	fmt.Fprintf(&b, "pkgver = %s-r%d\n", unit.Version, unit.Release)
 
 	if unit.Description != "" {
 		fmt.Fprintf(&b, "pkgdesc = %s\n", unit.Description)
