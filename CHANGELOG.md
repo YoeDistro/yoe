@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Go class uses golang:alpine container** — `go_binary()` now defaults to the
+  `golang:1.24-alpine` external container image instead of `toolchain-musl`.
+  Cross-compilation is handled via `GOARCH`/`GOOS` environment variables with
+  `CGO_ENABLED=0` for static binaries, so the container always runs at host
+  architecture (no QEMU overhead).
 - **Per-task container resolution** — tasks can override the unit-level
   container via `task(container = "...")`. The executor resolves the container
   per-task, falling back to the unit default.
