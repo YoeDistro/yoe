@@ -51,34 +51,51 @@ with `.tmpl` are processed through Go's `text/template` via
 ### Unit Context (`map[string]any`)
 
 A single `map[string]any` is used for both template rendering and hash
-computation. The executor auto-populates it with unit, machine, and project
-fields. Units can add custom entries via `vars = {...}`.
-
-**Auto-populated fields:**
-
-| Key             | Source                    | Example            |
-| --------------- | ------------------------- | ------------------ |
-| `name`          | unit name                 | `"base-files"`     |
-| `version`       | unit version              | `"1.0.0"`          |
-| `release`       | unit release              | `0`                |
-| `arch`          | target architecture       | `"x86_64"`         |
-| `machine`       | active machine name       | `"qemu-x86_64"`    |
-| `console`       | serial console from kernel cmdline | `"ttyS0"` |
-| `project`       | project name              | `"my-project"`     |
-
-**User-defined fields** via `vars`:
+computation. The executor auto-populates standard fields, and any extra kwargs
+passed to `unit()` are captured into the same map. No separate `vars` field —
+just add fields directly to the unit:
 
 ```python
 unit(
     name = "my-app",
     version = "1.0.0",
-    vars = {"port": 8080, "log_level": "info", "debug": True},
+    port = 8080,
+    log_level = "info",
+    debug = True,
     ...
 )
 ```
 
-User vars merge into the same map as auto-populated fields. User vars override
-auto-populated fields if there's a name collision (explicit wins).
+Templates access all fields: `{{.port}}`, `{{.log_level}}`, `{{.name}}`.
+
+**Auto-populated fields** (injected by the executor, not declared in the unit):
+
+| Key       | Source                             | Example         |
+| --------- | ---------------------------------- | --------------- |
+| `name`    | unit name                          | `"base-files"`  |
+| `version` | unit version                       | `"1.0.0"`       |
+| `release` | unit release                       | `0`             |
+| `arch`    | target architecture                | `"x86_64"`      |
+| `machine` | active machine name                | `"qemu-x86_64"` |
+| `console` | serial console from kernel cmdline | `"ttyS0"`       |
+| `project` | project name                       | `"my-project"`  |
+
+Unit kwargs override auto-populated fields if there's a name collision (explicit
+wins).
+
+**Go implementation:** `registerUnit()` captures all unrecognized kwargs into a
+`map[string]any` on the Unit struct. The executor merges auto-populated fields
+(lower priority) with unit fields (higher priority) to build the context map.
+Classes pass `**kwargs` through to `unit()`, so custom fields flow naturally:
+
+```python
+autotools(
+    name = "my-lib",
+    version = "1.0",
+    source = "...",
+    custom_flag = "enabled",  # flows through **kwargs to unit()
+)
+```
 
 ### Template Syntax
 
@@ -227,13 +244,15 @@ go_binary(
 )
 ```
 
-### Example: custom app with vars
+### Example: custom app with extra fields
 
 ```python
 unit(
     name = "my-app",
     version = "2.0.0",
-    vars = {"port": 8080, "workers": 4, "enable_tls": True},
+    port = 8080,
+    workers = 4,
+    enable_tls = True,
     tasks = [
         task("config", fn=lambda: _config()),
     ],
@@ -257,13 +276,14 @@ workers = {{.workers}}
 The unit context map (`map[string]any`) is JSON-serialized with sorted keys and
 included in the unit hash. This means:
 
-- Changing a `vars` value changes the hash and triggers a rebuild
-- Auto-populated fields (arch, machine) already affect the hash through
-  existing mechanisms, but including them in the context map makes it explicit
+- Changing any unit field changes the hash and triggers a rebuild
+- Auto-populated fields (arch, machine) already affect the hash through existing
+  mechanisms, but including them in the context map makes it explicit
 - No separate hash logic needed for template fields vs build fields
 
-Additionally, all files in the unit's files directory (`<DefinedIn>/<unit-name>/`)
-are hashed by content. Changing a template file changes the hash.
+Additionally, all files in the unit's files directory
+(`<DefinedIn>/<unit-name>/`) are hashed by content. Changing a template file
+changes the hash.
 
 ### Path Resolution
 
@@ -296,7 +316,7 @@ This matches the existing container convention:
 
 **Modified: `internal/build/executor.go`**
 
-- Build the `map[string]any` context from unit, machine, project, and `vars`
+- Build the `map[string]any` context from unit fields, machine, and project
 - Pass context to build thread via thread-local storage
 
 **Modified: `internal/build/starlark_exec.go`**
@@ -308,11 +328,12 @@ This matches the existing container convention:
 
 - Add `install_template` and `install_file` placeholders (same pattern as
   `run()`)
-- Parse `vars` field from unit kwargs as `map[string]any`
+- Capture unrecognized kwargs in `registerUnit()` into `Extra map[string]any`
+  on the Unit struct
 
 **Modified: `internal/starlark/types.go`**
 
-- Add `Vars map[string]any` field to Unit struct
+- Add `Extra map[string]any` field to Unit struct for unrecognized kwargs
 
 **Modified: `internal/resolve/hash.go`**
 
@@ -328,11 +349,11 @@ directory, then the container mounts them.
 
 ## Implementation Order
 
-1. **`Vars` field on Unit** — parse from Starlark, add to types
+1. **`Extra` field on Unit** — capture unrecognized kwargs in `registerUnit()`
 2. **`install_file()` builtin** — copy static files
 3. **`install_template()` builtin** — Go template rendering with context map
-4. **Context map and hashing** — build context from unit/machine/project, hash
-   it and unit files directory
+4. **Context map and hashing** — build context from unit fields + extra +
+   machine/project, hash it and unit files directory
 5. **Migrate base-files** — move inittab, rcS, os-release, extlinux.conf to
    template files
 6. **Migrate network-config** — move udhcpc script and init script to files
