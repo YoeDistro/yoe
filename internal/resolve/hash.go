@@ -48,7 +48,10 @@ func UnitHash(unit *yoestar.Unit, arch string, depHashes map[string]string) stri
 	}
 	fmt.Fprintf(h, "container:%s\n", unit.Container)
 	fmt.Fprintf(h, "container_arch:%s\n", unit.ContainerArch)
+	fmt.Fprintf(h, "sandbox:%v\n", unit.Sandbox)
+	fmt.Fprintf(h, "shell:%s\n", unit.Shell)
 	fmt.Fprintf(h, "provides:%s\n", unit.Provides)
+	fmt.Fprintf(h, "services:%s\n", strings.Join(unit.Services, ","))
 
 	// Dependencies — include their hashes for transitivity
 	deps := make([]string, len(unit.Deps))

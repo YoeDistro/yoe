@@ -4,14 +4,14 @@ import "go.starlark.net/starlark"
 
 // Project represents an evaluated PROJECT.star.
 type Project struct {
-	Name     string
-	Version  string
-	Defaults Defaults
-	Cache    CacheConfig
-	Sources  SourcesConfig
-	Modules  []ModuleRef
-	Machines map[string]*Machine
-	Units    map[string]*Unit
+	Name      string
+	Version   string
+	Defaults  Defaults
+	Cache     CacheConfig
+	Sources   SourcesConfig
+	Modules   []ModuleRef
+	Machines  map[string]*Machine
+	Units     map[string]*Unit
 }
 
 type Defaults struct {
@@ -91,6 +91,15 @@ type QEMUConfig struct {
 	Memory   string
 	Firmware string
 	Display  string
+	Ports    []string // host:guest port mappings for user-mode networking
+}
+
+// QEMUPorts returns the port mappings from the machine's QEMU config, or nil.
+func (m *Machine) QEMUPorts() []string {
+	if m.QEMU == nil {
+		return nil
+	}
+	return m.QEMU.Ports
 }
 
 // Unit represents an evaluated unit(), image(), etc. call.
@@ -117,6 +126,8 @@ type Unit struct {
 	// Build
 	Container     string // default container for all tasks
 	ContainerArch string // "target" or "host"
+	Sandbox       bool   // use bwrap sandbox inside container (default false)
+	Shell         string // shell for build commands: "sh" (default) or "bash"
 	Tasks     []Task
 	Provides    string // virtual package name
 	Module      string // module that registered this unit (empty = project root)
@@ -127,6 +138,7 @@ type Unit struct {
 	Services    []string
 	Conffiles   []string
 	Environment map[string]string
+	CacheDirs   map[string]string // container_path:host_subdir cache mounts
 
 	// Image-specific (class == "image")
 	Artifacts  []string // artifacts to install in rootfs

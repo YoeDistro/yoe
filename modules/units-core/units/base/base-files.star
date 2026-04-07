@@ -29,7 +29,7 @@ def base_files(name = "base-files", users = None):
     unit(
         name = name,
         version = "1.0.0",
-        release = 1,
+        release = 2,
         scope = "machine",
         license = "MIT",
         description = "Base filesystem skeleton: users, groups, dirs, inittab, boot config",
@@ -66,6 +66,14 @@ INITTAB
                 + "done\n"
                 + "RCS",
                 "chmod +x $DESTDIR/etc/init.d/rcS",
+
+                # OS identification
+                "cat > $DESTDIR/etc/os-release << OSRELEASE\n"
+                + "NAME=Yoe\n"
+                + "ID=yoe\n"
+                + "PRETTY_NAME=\"Yoe Linux ($MACHINE)\"\n"
+                + "HOME_URL=https://github.com/YoeDistro/yoe\n"
+                + "OSRELEASE",
 
                 # Boot configuration (extlinux for QEMU serial console)
                 "mkdir -p $DESTDIR/boot/extlinux",

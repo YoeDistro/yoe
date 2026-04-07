@@ -21,5 +21,6 @@ def cmake(name, version, source, sha256="", deps=[], runtime_deps=[],
         tasks=tasks, services=services, conffiles=conffiles,
         license=license, description=description, scope=scope,
         container=container, container_arch=container_arch,
+        sandbox=True, shell="bash",
         **kwargs,
     )

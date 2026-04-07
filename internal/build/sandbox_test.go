@@ -53,9 +53,9 @@ func TestBwrapCommand_InnerCommandQuoted(t *testing.T) {
 
 	cmd := bwrapCommand(cfg, "make -j4")
 
-	// The inner bash -c argument must be single-quoted so semicolons in env
+	// The inner sh -c argument must be single-quoted so semicolons in env
 	// exports don't get interpreted by the outer shell.
-	if !strings.Contains(cmd, "-- bash -c '") {
+	if !strings.Contains(cmd, "-- sh -c '") {
 		t.Errorf("inner command should be single-quoted: %s", cmd)
 	}
 	// Should end with closing quote

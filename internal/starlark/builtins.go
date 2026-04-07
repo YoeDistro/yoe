@@ -28,7 +28,7 @@ func (e *Engine) builtins() starlark.StringDict {
 		"task":        starlark.NewBuiltin("task", fnTask),
 		"command":     starlark.NewBuiltin("command", e.fnCommand),
 		"arg":         starlark.NewBuiltin("arg", fnArg),
-		"run":         starlark.NewBuiltin("run", fnRunPlaceholder),
+		"run":            starlark.NewBuiltin("run", fnRunPlaceholder),
 		"True":        starlark.True,
 		"False":       starlark.False,
 	}
@@ -60,6 +60,7 @@ func fnRunPlaceholder(thread *starlark.Thread, b *starlark.Builtin, args starlar
 	return nil, fmt.Errorf("run() can only be called at build time (inside a task function)")
 }
 
+
 // --- Helper: extract keyword args ---
 
 func kwString(kwargs []starlark.Tuple, key string) string {
@@ -71,6 +72,62 @@ func kwString(kwargs []starlark.Tuple, key string) string {
 		}
 	}
 	return ""
+}
+
+// ParseTaskList converts a Starlark list of task structs into Go Task values.
+func ParseTaskList(list *starlark.List) []Task {
+	var tasks []Task
+	iter := list.Iterate()
+	defer iter.Done()
+	var v starlark.Value
+	for iter.Next(&v) {
+		s, ok := v.(*starlarkstruct.Struct)
+		if !ok {
+			continue
+		}
+		t := Task{
+			Name:      structString(s, "name"),
+			Container: structString(s, "container"),
+		}
+		if rv, err := s.Attr("run"); err == nil {
+			if cmd, ok := rv.(starlark.String); ok {
+				t.Steps = []Step{{Command: string(cmd)}}
+			}
+		}
+		if rv, err := s.Attr("fn"); err == nil {
+			if fn, ok := rv.(starlark.Callable); ok {
+				t.Steps = []Step{{Fn: fn}}
+			}
+		}
+		if rv, err := s.Attr("steps"); err == nil {
+			if list, ok := rv.(*starlark.List); ok {
+				si := list.Iterate()
+				var sv starlark.Value
+				for si.Next(&sv) {
+					switch val := sv.(type) {
+					case starlark.String:
+						t.Steps = append(t.Steps, Step{Command: string(val)})
+					case starlark.Callable:
+						t.Steps = append(t.Steps, Step{Fn: val})
+					}
+				}
+				si.Done()
+			}
+		}
+		tasks = append(tasks, t)
+	}
+	return tasks
+}
+
+func kwBool(kwargs []starlark.Tuple, key string) bool {
+	for _, kv := range kwargs {
+		if string(kv[0].(starlark.String)) == key {
+			if b, ok := kv[1].(starlark.Bool); ok {
+				return bool(b)
+			}
+		}
+	}
+	return false
 }
 
 func kwInt(kwargs []starlark.Tuple, key string) int {
@@ -99,6 +156,25 @@ func kwStringList(kwargs []starlark.Tuple, key string) []string {
 					}
 				}
 				return result
+			}
+		}
+	}
+	return nil
+}
+
+func kwStringMap(kwargs []starlark.Tuple, key string) map[string]string {
+	for _, kv := range kwargs {
+		if string(kv[0].(starlark.String)) == key {
+			if d, ok := kv[1].(*starlark.Dict); ok {
+				m := make(map[string]string, d.Len())
+				for _, item := range d.Items() {
+					if k, ok := item[0].(starlark.String); ok {
+						if v, ok := item[1].(starlark.String); ok {
+							m[string(k)] = string(v)
+						}
+					}
+				}
+				return m
 			}
 		}
 	}
@@ -360,6 +436,7 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 					Memory:   structString(s, "memory"),
 					Firmware: structString(s, "firmware"),
 					Display:  structString(s, "display"),
+					Ports:    structStringList(s, "ports"),
 				}
 			}
 		case "partitions":
@@ -423,9 +500,13 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 		RuntimeDeps: kwStringList(kwargs, "runtime_deps"),
 		Container:     kwString(kwargs, "container"),
 		ContainerArch: kwString(kwargs, "container_arch"),
+		Sandbox:       kwBool(kwargs, "sandbox"),
+		Shell:         kwString(kwargs, "shell"),
 		Provides:    kwString(kwargs, "provides"),
 		Services:    kwStringList(kwargs, "services"),
 		Conffiles:   kwStringList(kwargs, "conffiles"),
+		Environment: kwStringMap(kwargs, "environment"),
+		CacheDirs:   kwStringMap(kwargs, "cache_dirs"),
 		Artifacts:   kwStringList(kwargs, "artifacts"),
 		Exclude:     kwStringList(kwargs, "exclude"),
 		Hostname:    kwString(kwargs, "hostname"),
@@ -437,47 +518,7 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 	for _, kv := range kwargs {
 		if string(kv[0].(starlark.String)) == "tasks" {
 			if list, ok := kv[1].(*starlark.List); ok {
-				iter := list.Iterate()
-				defer iter.Done()
-				var v starlark.Value
-				for iter.Next(&v) {
-					s, ok := v.(*starlarkstruct.Struct)
-					if !ok {
-						continue
-					}
-					t := Task{
-						Name:      structString(s, "name"),
-						Container: structString(s, "container"),
-					}
-					// Parse steps: run (single string), fn (single callable),
-					// or steps (list of strings/callables)
-					if rv, err := s.Attr("run"); err == nil {
-						if cmd, ok := rv.(starlark.String); ok {
-							t.Steps = []Step{{Command: string(cmd)}}
-						}
-					}
-					if rv, err := s.Attr("fn"); err == nil {
-						if fn, ok := rv.(starlark.Callable); ok {
-							t.Steps = []Step{{Fn: fn}}
-						}
-					}
-					if rv, err := s.Attr("steps"); err == nil {
-						if list, ok := rv.(*starlark.List); ok {
-							si := list.Iterate()
-							var sv starlark.Value
-							for si.Next(&sv) {
-								switch val := sv.(type) {
-								case starlark.String:
-									t.Steps = append(t.Steps, Step{Command: string(val)})
-								case starlark.Callable:
-									t.Steps = append(t.Steps, Step{Fn: val})
-								}
-							}
-							si.Done()
-						}
-					}
-					r.Tasks = append(r.Tasks, t)
-				}
+				r.Tasks = append(r.Tasks, ParseTaskList(list)...)
 			}
 		}
 	}

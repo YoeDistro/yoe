@@ -31,10 +31,10 @@ func RunInit(projectDir string, machine string) error {
     cache = cache(path = "build/cache"),
     sources = sources(go_proxy = "https://proxy.golang.org"),
     modules = [
-        module("https://github.com/YoeDistro/yoe-ng.git",
+        module("https://github.com/YoeDistro/yoe.git",
                ref = "main",
                path = "modules/units-core"),
-        module("https://github.com/YoeDistro/yoe-ng.git",
+        module("https://github.com/YoeDistro/yoe.git",
                ref = "main",
                path = "modules/units-rpi"),
     ],

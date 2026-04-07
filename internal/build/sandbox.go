@@ -13,11 +13,13 @@ import (
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
 )
 
-// SandboxConfig defines the bubblewrap sandbox for a unit build.
+// SandboxConfig defines the build sandbox for a unit build.
 type SandboxConfig struct {
 	Ctx        context.Context
 	Arch       string // target architecture
 	Container  string // Docker image tag (e.g., "yoe/toolchain-musl:15")
+	Sandbox    bool   // use bwrap sandbox inside container
+	Shell      string // shell for build commands: "sh" (default) or "bash"
 	BuildRoot  string
 	SrcDir     string
 	DestDir    string
@@ -26,16 +28,28 @@ type SandboxConfig struct {
 	ProjectDir string
 	NoUser     bool      // run as root (for losetup/mount)
 	HostDir    string    // working directory for run(host=True) commands
+	CacheDirs  map[string]string // host:container cache mount mappings
 	Stdout     io.Writer // build output (nil = os.Stdout)
 	Stderr     io.Writer // build errors (nil = os.Stderr)
 }
 
-// RunInSandbox executes a command inside a bubblewrap sandbox within the
-// build container. For cross-arch builds (QEMU user-mode), bwrap's user
-// namespaces are not available, so we fall back to running directly in
-// the container (which is already isolated via Docker).
+// resolveShell returns the shell to use for build commands.
+// Defaults to "sh" if not specified.
+func resolveShell(cfg *SandboxConfig) string {
+	if cfg.Shell != "" {
+		return cfg.Shell
+	}
+	return "sh"
+}
+
+// RunInSandbox executes a command inside the build container.
+// When cfg.Sandbox is true and we're building for the host arch,
+// the command runs inside a bwrap sandbox for sysroot isolation.
+// Otherwise, the command runs directly in the container.
 func RunInSandbox(cfg *SandboxConfig, command string) error {
-	if cfg.Arch != "" && cfg.Arch != yoe.HostArch() {
+	// Cross-arch builds can't use bwrap (no user namespaces under QEMU),
+	// and non-sandbox units skip bwrap entirely.
+	if !cfg.Sandbox || (cfg.Arch != "" && cfg.Arch != yoe.HostArch()) {
 		return RunSimple(cfg, command)
 	}
 
@@ -47,6 +61,7 @@ func RunInSandbox(cfg *SandboxConfig, command string) error {
 		Arch:       cfg.Arch,
 		Image:      cfg.Container,
 		Command:    bwrapCmd,
+		Shell:      resolveShell(cfg),
 		ProjectDir: cfg.ProjectDir,
 		Mounts:     mounts,
 		Stdout:     cfg.Stdout,
@@ -55,7 +70,6 @@ func RunInSandbox(cfg *SandboxConfig, command string) error {
 }
 
 // RunSimple executes a command directly in the container (no bwrap sandbox).
-// Used for Stage 0 bootstrap where we use the container's Alpine toolchain.
 func RunSimple(cfg *SandboxConfig, command string) error {
 	var envExports []string
 	for k, v := range cfg.Env {
@@ -74,6 +88,7 @@ func RunSimple(cfg *SandboxConfig, command string) error {
 		Arch:       cfg.Arch,
 		Image:      cfg.Container,
 		Command:    fullCmd,
+		Shell:      resolveShell(cfg),
 		ProjectDir: cfg.ProjectDir,
 		Mounts:     mounts,
 		NoUser:     cfg.NoUser,
@@ -116,12 +131,13 @@ func bwrapCommand(cfg *SandboxConfig, command string) string {
 	}
 	fullCmd += command
 
-	parts = append(parts, "--", "bash", "-c", shellQuote(fullCmd))
+	shell := resolveShell(cfg)
+	parts = append(parts, "--", shell, "-c", shellQuote(fullCmd))
 	return strings.Join(parts, " ")
 }
 
 // BwrapShellCommand returns a bwrap command string that launches an
-// interactive bash shell with the given sandbox config's mounts and env.
+// interactive shell with the given sandbox config's mounts and env.
 func BwrapShellCommand(cfg *SandboxConfig) string {
 	var parts []string
 	parts = append(parts, "bwrap", "--die-with-parent")
@@ -145,7 +161,8 @@ func BwrapShellCommand(cfg *SandboxConfig) string {
 		"--chdir", "/build/src",
 	)
 
-	// Export env vars then exec interactive bash
+	// Export env vars then exec interactive shell
+	shell := resolveShell(cfg)
 	var envExports []string
 	for k, v := range cfg.Env {
 		envExports = append(envExports, fmt.Sprintf("export %s=%q", k, v))
@@ -154,9 +171,9 @@ func BwrapShellCommand(cfg *SandboxConfig) string {
 	if envStr != "" {
 		envStr += "; "
 	}
-	envStr += "exec bash"
+	envStr += "exec " + shell
 
-	parts = append(parts, "--", "bash", "-c", shellQuote(envStr))
+	parts = append(parts, "--", shell, "-c", shellQuote(envStr))
 	return strings.Join(parts, " ")
 }
 
@@ -182,6 +199,11 @@ func containerMountsForBuild(cfg *SandboxConfig) []yoe.Mount {
 	if cfg.Sysroot != "" {
 		mounts = append(mounts, yoe.Mount{
 			Host: cfg.Sysroot, Container: "/build/sysroot", ReadOnly: true,
+		})
+	}
+	for host, container := range cfg.CacheDirs {
+		mounts = append(mounts, yoe.Mount{
+			Host: host, Container: container,
 		})
 	}
 
