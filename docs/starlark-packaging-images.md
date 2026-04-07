@@ -84,7 +84,8 @@ Units can opt out: `unit(..., package = False)` skips auto-appended packaging.
 
 ### Package Metadata
 
-Package metadata uses existing top-level unit fields — no separate struct needed:
+Package metadata uses existing top-level unit fields — no separate struct
+needed:
 
 ```python
 unit(
@@ -97,10 +98,10 @@ unit(
 )
 ```
 
-`apk_tasks()` reads `description`, `license`, `version`, and `runtime_deps`
-from the unit to generate `.PKGINFO`. `deb_tasks()` would read the same fields
-to generate `control`. The metadata is packaging-format-agnostic and already
-part of the unit schema.
+`apk_tasks()` reads `description`, `license`, `version`, and `runtime_deps` from
+the unit to generate `.PKGINFO`. `deb_tasks()` would read the same fields to
+generate `control`. The metadata is packaging-format-agnostic and already part
+of the unit schema.
 
 ### Go Builtins for Packaging
 
