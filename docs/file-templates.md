@@ -1,7 +1,8 @@
 # File Templates
 
 Move inline file content out of Starlark units into external template files
-processed by Go's `text/template`.
+processed by Go's `text/template`. A unified `map[string]any` context serves as
+both the template data and the hash input — one source of truth.
 
 ## Status: Spec
 
@@ -13,38 +14,18 @@ highlighters, linters) from understanding the embedded content.
 
 Examples of inline content today:
 
-- `base-files.star` — inittab, rcS, os-release, extlinux.conf (lines 49-85)
-- `network-config.star` — udhcpc default.script, S10network init script (lines
-  14-42)
-- `image.star` — sfdisk partition tables, extlinux install scripts (lines
-  74-138)
-
-A typical unit mixes build logic with file content:
-
-```python
-# Hard to read, no syntax highlighting, escaping issues
-"""cat > $DESTDIR/etc/inittab << INITTAB
-::sysinit:/bin/mount -t proc proc /proc
-::sysinit:/bin/hostname -F /etc/hostname
-${CONSOLE}::respawn:/sbin/getty -L ${CONSOLE} 115200 vt100
-INITTAB"""
-```
+- `base-files.star` — inittab, rcS, os-release, extlinux.conf
+- `network-config.star` — udhcpc default.script, S10network init script
+- `image.star` — sfdisk partition tables, extlinux install scripts
 
 ## Design
 
 ### Template Files
 
-Templates live in a directory named after the unit, alongside the `.star` file.
-This matches the existing container convention where
-`containers/toolchain-musl.star` has its Dockerfile in
-`containers/toolchain-musl/Dockerfile`:
+Templates live in a directory named after the unit, alongside the `.star` file:
 
 ```
 modules/units-core/
-  containers/
-    toolchain-musl.star          # existing pattern
-    toolchain-musl/
-      Dockerfile
   units/
     base/
       base-files.star
@@ -55,22 +36,53 @@ modules/units-core/
         extlinux.conf.tmpl
     net/
       network-config.star
-      network-config/            # same name as the unit
+      network-config/
         udhcpc-default.script
         S10network
-  classes/
-    image.star
-    image/
-      sfdisk.tmpl
-      fstab.tmpl
+      simpleiot.star
+      simpleiot/
+        simpleiot.init
 ```
 
-Files without `.tmpl` extension are copied verbatim. Files with `.tmpl` are
-processed through Go's `text/template` engine.
+Files without `.tmpl` extension are copied verbatim via `install_file()`. Files
+with `.tmpl` are processed through Go's `text/template` via
+`install_template()`.
+
+### Unit Context (`map[string]any`)
+
+A single `map[string]any` is used for both template rendering and hash
+computation. The executor auto-populates it with unit, machine, and project
+fields. Units can add custom entries via `vars = {...}`.
+
+**Auto-populated fields:**
+
+| Key             | Source                    | Example            |
+| --------------- | ------------------------- | ------------------ |
+| `name`          | unit name                 | `"base-files"`     |
+| `version`       | unit version              | `"1.0.0"`          |
+| `release`       | unit release              | `0`                |
+| `arch`          | target architecture       | `"x86_64"`         |
+| `machine`       | active machine name       | `"qemu-x86_64"`    |
+| `console`       | serial console from kernel cmdline | `"ttyS0"` |
+| `project`       | project name              | `"my-project"`     |
+
+**User-defined fields** via `vars`:
+
+```python
+unit(
+    name = "my-app",
+    version = "1.0.0",
+    vars = {"port": 8080, "log_level": "info", "debug": True},
+    ...
+)
+```
+
+User vars merge into the same map as auto-populated fields. User vars override
+auto-populated fields if there's a name collision (explicit wins).
 
 ### Template Syntax
 
-Go `text/template` with unit/machine/project data:
+Go `text/template` with the unit context map:
 
 ```
 # inittab.tmpl
@@ -78,7 +90,7 @@ Go `text/template` with unit/machine/project data:
 ::sysinit:/bin/mount -t sysfs sys /sys
 ::sysinit:/bin/hostname -F /etc/hostname
 ::sysinit:/etc/init.d/rcS
-{{.Console}}::respawn:/sbin/getty -L {{.Console}} 115200 vt100
+{{.console}}::respawn:/sbin/getty -L {{.console}} 115200 vt100
 ::ctrlaltdel:/sbin/reboot
 ::shutdown:/bin/umount -a -r
 ```
@@ -87,200 +99,43 @@ Go `text/template` with unit/machine/project data:
 # os-release.tmpl
 NAME=Yoe
 ID=yoe
-PRETTY_NAME="Yoe Linux ({{.Machine}})"
+PRETTY_NAME="Yoe Linux ({{.machine}})"
 HOME_URL=https://github.com/YoeDistro/yoe
 ```
 
 ```
-# extlinux.conf.tmpl
-DEFAULT yoe
-LABEL yoe
-    LINUX /boot/vmlinuz
-    APPEND {{.KernelCmdline}}
+# config.toml.tmpl (custom vars)
+[server]
+port = {{.port}}
+log_level = "{{.log_level}}"
+debug = {{.debug}}
 ```
 
 ### Starlark API
 
-A new `install_template()` builtin and `install_file()` builtin, callable from
-task steps:
+Two new builtins callable from task functions:
 
 ```python
-# base-files.star
-unit(
-    name = "base-files",
-    version = "1.0.0",
-    tasks = [
-        task("build", fn = lambda: _build()),
-    ],
-)
+# install_template(src, dest, mode=0o644)
+# Reads Go template from unit's files directory, renders with context, writes to dest.
+install_template("inittab.tmpl", "$DESTDIR/etc/inittab")
 
-def _build():
-    run("mkdir -p $DESTDIR/etc $DESTDIR/root $DESTDIR/proc $DESTDIR/sys $DESTDIR/dev $DESTDIR/tmp $DESTDIR/run")
-
-    # Template — rendered with unit/machine data
-    install_template("inittab.tmpl", "$DESTDIR/etc/inittab")
-    install_template("os-release.tmpl", "$DESTDIR/etc/os-release")
-
-    # Static file — copied verbatim
-    install_file("rcS", "$DESTDIR/etc/init.d/rcS", mode = 0o755)
-
-    # Boot config — only if machine uses extlinux
-    install_template("extlinux.conf.tmpl", "$DESTDIR/boot/extlinux/extlinux.conf")
+# install_file(src, dest, mode=0o644)
+# Copies file verbatim from unit's files directory to dest.
+install_file("rcS", "$DESTDIR/etc/init.d/rcS", mode=0o755)
 ```
 
 Paths are relative to the unit's directory (e.g., `"inittab.tmpl"` resolves to
 `units/base/base-files/inittab.tmpl` for a unit defined in
 `units/base/base-files.star`).
 
-### Template Data
+### Example: base-files with templates
 
-The template engine receives a data map built from the unit, machine, and
-project context:
-
-```go
-data := TemplateData{
-    // Unit fields
-    Name:    unit.Name,
-    Version: unit.Version,
-
-    // Machine fields (from project's active machine)
-    Machine:       machine.Name,
-    Arch:          machine.Arch,
-    Console:       extractConsole(machine.Kernel.Cmdline),
-    KernelCmdline: machine.Kernel.Cmdline,
-
-    // Project fields
-    Project: proj.Name,
-
-    // Partitions (for disk layout templates)
-    Partitions: machine.Partitions,
-
-    // Custom key-value pairs from unit
-    Vars: unit.Vars,
-}
-```
-
-Units can pass additional variables via a `vars` field:
-
-```python
-unit(
-    name = "my-app",
-    vars = {"port": "8080", "log_level": "info"},
-    ...
-)
-```
-
-Accessible in templates as `{{.Vars.port}}`.
-
-### Path Resolution
-
-Template paths are resolved to a directory named after the unit, alongside the
-`.star` file. This uses the existing `DefinedIn` field (directory containing the
-`.star` file) plus the unit name:
-
-```go
-func resolveTemplatePath(unit *Unit, relPath string) string {
-    return filepath.Join(unit.DefinedIn, unit.Name, relPath)
-}
-```
-
-This means `install_template("inittab.tmpl", ...)` in a unit defined at
-`modules/units-core/units/base/base-files.star` resolves to
-`modules/units-core/units/base/base-files/inittab.tmpl`.
-
-This matches the existing container convention:
-
-| Unit file                        | Associated directory         |
-| -------------------------------- | ---------------------------- |
-| `containers/toolchain-musl.star` | `containers/toolchain-musl/` |
-| `units/base/base-files.star`     | `units/base/base-files/`     |
-| `units/net/network-config.star`  | `units/net/network-config/`  |
-| `classes/image.star`             | `classes/image/`             |
-
-### Go Implementation
-
-Two new Starlark builtins registered in the engine:
-
-```go
-// install_template(src, dest, mode=0644)
-// - Reads template from src (relative to unit's DefinedIn)
-// - Renders with template data
-// - Writes to dest (environment variables expanded)
-// - Sets file mode
-func (e *Engine) builtinInstallTemplate(kwargs []starlark.Tuple) (starlark.Value, error)
-
-// install_file(src, dest, mode=0644)
-// - Copies file from src (relative to unit's DefinedIn)
-// - Writes to dest (environment variables expanded)
-// - Sets file mode
-func (e *Engine) builtinInstallFile(kwargs []starlark.Tuple) (starlark.Value, error)
-```
-
-Both builtins:
-
-1. Resolve the source path to `<DefinedIn>/<unit-name>/<src>`
-2. Expand environment variables in the destination path (`$DESTDIR`, etc.)
-3. Create parent directories as needed
-4. Write with the specified mode (default 0644)
-
-`install_template` additionally parses the source as a Go template and executes
-it with the template data map.
-
-### Conditionals and Loops in Templates
-
-Go templates support conditionals and iteration, useful for generated config:
-
-```
-# fstab.tmpl
-{{range .Partitions -}}
-LABEL={{.Label}}  {{if .Root}}/{{else}}/mnt/{{.Label}}{{end}}  {{.Type}}  defaults  0  {{if .Root}}1{{else}}0{{end}}
-{{end -}}
-```
-
-```
-# sfdisk.tmpl
-label: dos
-{{range $i, $p := .Partitions -}}
-{{if not (isLast $i $.Partitions)}}size={{sizeMB $p.Size}}MiB, {{end}}type={{sfdiskType $p.Type}}{{if $p.Root}}, bootable{{end}}
-{{end -}}
-```
-
-Custom template functions registered for disk operations:
-
-| Function     | Purpose                           |
-| ------------ | --------------------------------- |
-| `sizeMB`     | Parse "256M", "1G" to integer MB  |
-| `sfdiskType` | Map "ext4" to "83", "vfat" to "c" |
-| `isLast`     | Check if index is last element    |
-
-### Image Class with Templates
-
-The image class moves disk layout generation to templates:
-
-```python
-# classes/image.star
-def _create_disk_image(name, partitions):
-    if not partitions:
-        return
-    total_mb = 1
-    for p in partitions:
-        total_mb += _parse_size_mb(p.size)
-
-    img = "$DESTDIR/%s.img" % name
-    run("dd if=/dev/zero of=%s bs=1M count=0 seek=%d" % (img, total_mb))
-
-    # Partition table from template instead of inline printf
-    install_template("sfdisk.tmpl", "$DESTDIR/sfdisk.script")
-    run("sfdisk %s < $DESTDIR/sfdisk.script" % img)
-    # ... rest of disk assembly
-```
-
-## Migration
-
-### Before (inline heredoc)
+**Before (inline heredocs):**
 
 ```python
 task("build", steps=[
+    "mkdir -p $DESTDIR/etc",
     """cat > $DESTDIR/etc/inittab << INITTAB
 ::sysinit:/bin/mount -t proc proc /proc
 ::sysinit:/bin/hostname -F /etc/hostname
@@ -288,10 +143,16 @@ ${CONSOLE}::respawn:/sbin/getty -L ${CONSOLE} 115200 vt100
 ::ctrlaltdel:/sbin/reboot
 ::shutdown:/bin/umount -a -r
 INITTAB""",
+    """cat > $DESTDIR/etc/os-release << OSRELEASE
+NAME=Yoe
+ID=yoe
+PRETTY_NAME="Yoe Linux ($MACHINE)"
+HOME_URL=https://github.com/YoeDistro/yoe
+OSRELEASE""",
 ])
 ```
 
-### After (external template)
+**After (external templates):**
 
 `base-files/inittab.tmpl`:
 
@@ -300,53 +161,187 @@ INITTAB""",
 ::sysinit:/bin/mount -t sysfs sys /sys
 ::sysinit:/bin/hostname -F /etc/hostname
 ::sysinit:/etc/init.d/rcS
-{{.Console}}::respawn:/sbin/getty -L {{.Console}} 115200 vt100
+{{.console}}::respawn:/sbin/getty -L {{.console}} 115200 vt100
 ::ctrlaltdel:/sbin/reboot
 ::shutdown:/bin/umount -a -r
 ```
 
-```python
-task("build", fn = lambda: _build()),
+`base-files/os-release.tmpl`:
 
-def _build():
-    run("mkdir -p $DESTDIR/etc")
-    install_template("inittab.tmpl", "$DESTDIR/etc/inittab")
+```
+NAME=Yoe
+ID=yoe
+PRETTY_NAME="Yoe Linux ({{.machine}})"
+HOME_URL=https://github.com/YoeDistro/yoe
 ```
 
-### Files to Migrate
+`base-files/rcS`:
 
-| Unit file             | Inline content         | Template file                                   |
-| --------------------- | ---------------------- | ----------------------------------------------- |
-| `base-files.star`     | inittab                | `base-files/inittab.tmpl`                       |
-| `base-files.star`     | rcS                    | `base-files/rcS` (static)                       |
-| `base-files.star`     | os-release             | `base-files/os-release.tmpl`                    |
-| `base-files.star`     | extlinux.conf          | `base-files/extlinux.conf.tmpl`                 |
-| `network-config.star` | udhcpc default.script  | `network-config/udhcpc-default.script` (static) |
-| `network-config.star` | S10network             | `network-config/S10network` (static)            |
-| `image.star`          | sfdisk partition table | `image/sfdisk.tmpl`                             |
+```sh
+#!/bin/sh
+for s in /etc/init.d/S*; do
+    [ -x "$s" ] && "$s" start
+done
+```
 
-Note: static files (no variables) use `install_file()` — no template processing,
-just a clean copy. This avoids accidental template interpretation of file
-content that happens to contain `{{`.
+```python
+unit(
+    name = "base-files",
+    version = "1.0.0",
+    tasks = [
+        task("build", fn=lambda: _build()),
+    ],
+)
+
+def _build():
+    run("mkdir -p $DESTDIR/etc $DESTDIR/root $DESTDIR/proc $DESTDIR/sys"
+        + " $DESTDIR/dev $DESTDIR/tmp $DESTDIR/run")
+    install_template("inittab.tmpl", "$DESTDIR/etc/inittab")
+    install_template("os-release.tmpl", "$DESTDIR/etc/os-release")
+    install_file("rcS", "$DESTDIR/etc/init.d/rcS", mode=0o755)
+    install_template("extlinux.conf.tmpl", "$DESTDIR/boot/extlinux/extlinux.conf")
+```
+
+### Example: simpleiot init script
+
+`simpleiot/simpleiot.init`:
+
+```sh
+#!/bin/sh
+case "$1" in
+    start) /usr/bin/siot &;;
+    stop) killall siot;;
+esac
+```
+
+```python
+go_binary(
+    name = "simpleiot",
+    version = "0.18.5",
+    services = ["simpleiot"],
+    tasks = [
+        task("build", steps=[...]),
+        task("init-script", fn=lambda: install_file(
+            "simpleiot.init", "$DESTDIR/etc/init.d/simpleiot", mode=0o755)),
+    ],
+)
+```
+
+### Example: custom app with vars
+
+```python
+unit(
+    name = "my-app",
+    version = "2.0.0",
+    vars = {"port": 8080, "workers": 4, "enable_tls": True},
+    tasks = [
+        task("config", fn=lambda: _config()),
+    ],
+)
+
+def _config():
+    install_template("app.conf.tmpl", "$DESTDIR/etc/my-app/app.conf")
+```
+
+`my-app/app.conf.tmpl`:
+
+```
+# Generated by Yoe for {{.machine}}
+listen_port = {{.port}}
+workers = {{.workers}}
+{{if .enable_tls}}tls_cert = /etc/ssl/certs/ca-certificates.crt{{end}}
+```
+
+### Hashing
+
+The unit context map (`map[string]any`) is JSON-serialized with sorted keys and
+included in the unit hash. This means:
+
+- Changing a `vars` value changes the hash and triggers a rebuild
+- Auto-populated fields (arch, machine) already affect the hash through
+  existing mechanisms, but including them in the context map makes it explicit
+- No separate hash logic needed for template fields vs build fields
+
+Additionally, all files in the unit's files directory (`<DefinedIn>/<unit-name>/`)
+are hashed by content. Changing a template file changes the hash.
+
+### Path Resolution
+
+Template paths resolve to `<DefinedIn>/<unit-name>/<relPath>`:
+
+```go
+func resolveTemplatePath(unit *Unit, relPath string) string {
+    return filepath.Join(unit.DefinedIn, unit.Name, relPath)
+}
+```
+
+This matches the existing container convention:
+
+| Unit file                        | Associated directory         |
+| -------------------------------- | ---------------------------- |
+| `containers/toolchain-musl.star` | `containers/toolchain-musl/` |
+| `units/base/base-files.star`     | `units/base/base-files/`     |
+| `units/net/network-config.star`  | `units/net/network-config/`  |
+
+### Go Implementation
+
+**New file: `internal/build/templates.go`**
+
+- `TemplateContext` — carries `map[string]any` context
+- `fnInstallTemplate` — Starlark builtin: read template, render, write
+- `fnInstallFile` — Starlark builtin: copy file verbatim
+- `resolveTemplatePath` — resolve `<DefinedIn>/<unit-name>/<relPath>`
+- `expandEnv` — expand `$DESTDIR` etc. in destination paths
+- `templateFuncs` — custom Go template functions (`sizeMB`, `sfdiskType`)
+
+**Modified: `internal/build/executor.go`**
+
+- Build the `map[string]any` context from unit, machine, project, and `vars`
+- Pass context to build thread via thread-local storage
+
+**Modified: `internal/build/starlark_exec.go`**
+
+- Store template context on build thread
+- Register `install_template` and `install_file` builtins
+
+**Modified: `internal/starlark/builtins.go`**
+
+- Add `install_template` and `install_file` placeholders (same pattern as
+  `run()`)
+- Parse `vars` field from unit kwargs as `map[string]any`
+
+**Modified: `internal/starlark/types.go`**
+
+- Add `Vars map[string]any` field to Unit struct
+
+**Modified: `internal/resolve/hash.go`**
+
+- JSON-serialize the context map and include in hash
+- Hash contents of all files in unit's files directory
+
+### What Stays in Go
+
+Template rendering runs on the host (Go executor), not in the container. This
+keeps template data (machine config, unit metadata) accessible without passing
+it through environment variables. The rendered files are placed in the build
+directory, then the container mounts them.
 
 ## Implementation Order
 
-1. **`install_file()` builtin** — copy static files. Migrate rcS, udhcpc
-   default.script, S10network.
-2. **`install_template()` builtin** — Go template rendering with unit/machine
-   data. Migrate inittab, os-release, extlinux.conf.
-3. **Template functions** — `sizeMB`, `sfdiskType`, `isLast` for disk layout
-   templates.
-4. **`vars` field on unit** — custom key-value pairs accessible in templates.
-5. **Migrate image class** — sfdisk partition table as template.
+1. **`Vars` field on Unit** — parse from Starlark, add to types
+2. **`install_file()` builtin** — copy static files
+3. **`install_template()` builtin** — Go template rendering with context map
+4. **Context map and hashing** — build context from unit/machine/project, hash
+   it and unit files directory
+5. **Migrate base-files** — move inittab, rcS, os-release, extlinux.conf to
+   template files
+6. **Migrate network-config** — move udhcpc script and init script to files
+7. **Migrate simpleiot** — move init script to file
 
 ## Non-Goals
 
 - **Jinja2 or other template engines.** Go `text/template` is in stdlib and
   sufficient.
-- **Template inheritance or includes.** Keep templates flat and simple. If a
-  template needs to compose, use multiple `install_template()` calls.
+- **Template inheritance or includes.** Keep templates flat and simple.
 - **Build-time template rendering in the container.** Templates are rendered by
-  the Go executor on the host before files are placed in the build directory.
-  This keeps template data (machine config, unit metadata) accessible without
-  passing it through environment variables.
+  the Go executor on the host.
