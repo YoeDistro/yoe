@@ -8,6 +8,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Starlark packaging** — APK creation, repo publishing, and sysroot staging
+  are now Starlark builtins (`apk_create()`, `apk_publish()`,
+  `sysroot_stage()`). Classes (autotools, cmake, go) append `apk_tasks()` to
+  handle packaging in Starlark. Units using `unit()` directly still get Go-side
+  packaging as a fallback.
+- **Per-task container resolution** — tasks can override the unit-level container
+  via `task(container = "...")`. The executor resolves the container per-task,
+  falling back to the unit default.
+
 ## [0.7.1] - 2026-04-06
 
 - **Unit `release` field** — units can now specify `release = N` for packaging

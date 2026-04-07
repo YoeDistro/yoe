@@ -90,14 +90,22 @@ const execerKey = "yoe.execer"
 const contextKey = "yoe.context"
 
 // NewBuildThread creates a Starlark thread wired up for build-time execution.
-// The thread carries a sandbox config, an Execer, and a context in thread-local storage.
-func NewBuildThread(ctx context.Context, cfg *SandboxConfig, execer Execer) *starlark.Thread {
+// The thread carries a sandbox config, an Execer, a context, and an optional
+// BuildContext in thread-local storage.
+func NewBuildThread(ctx context.Context, cfg *SandboxConfig, execer Execer, bctx *BuildContext) *starlark.Thread {
 	t := &starlark.Thread{Name: "build"}
 	t.SetLocal(sandboxKey, cfg)
 	t.SetLocal(execerKey, execer)
 	t.SetLocal(contextKey, ctx)
-	// Store the real run() function so the global placeholder can delegate.
+	if bctx != nil {
+		t.SetLocal(buildCtxKey, bctx)
+	}
+	// Store the real run() and packaging builtins so global placeholders
+	// can delegate to them.
 	t.SetLocal("yoe.run", starlark.NewBuiltin("run", fnRun))
+	t.SetLocal("yoe.apk_create", starlark.NewBuiltin("apk_create", fnAPKCreate))
+	t.SetLocal("yoe.apk_publish", starlark.NewBuiltin("apk_publish", fnAPKPublish))
+	t.SetLocal("yoe.sysroot_stage", starlark.NewBuiltin("sysroot_stage", fnSysrootStage))
 	return t
 }
 

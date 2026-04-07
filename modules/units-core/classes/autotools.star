@@ -1,3 +1,5 @@
+load("//classes/apk.star", "apk_tasks")
+
 def autotools(name, version, source, sha256="", deps=[], runtime_deps=[],
               configure_args=[], patches=[], services=[], conffiles=[],
               license="", description="", tasks=[], scope="",
@@ -13,6 +15,7 @@ def autotools(name, version, source, sha256="", deps=[], runtime_deps=[],
                 "make DESTDIR=$DESTDIR install ACLOCAL=true AUTOCONF=true AUTOMAKE=true AUTOHEADER=true MAKEINFO=true",
             ]),
         ]
+    tasks = tasks + apk_tasks()
     # Merge class deps with user deps
     all_deps = list(deps)
     if container and container not in all_deps:

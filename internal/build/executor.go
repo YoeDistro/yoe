@@ -309,6 +309,14 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		fmt.Fprintf(w, "  [%d/%d] task: %s\n", ti+1, len(unit.Tasks), t.Name)
 		fmt.Fprintf(logW, "  task: %s (%d steps)\n", t.Name, len(t.Steps))
 
+		// Per-task container override
+		taskContainer := containerImage
+		if t.Container != "" {
+			taskUnit := *unit
+			taskUnit.Container = t.Container
+			taskContainer = resolveContainerImage(proj, &taskUnit, opts.Arch)
+		}
+
 		for i, step := range t.Steps {
 			if err := ctx.Err(); err != nil {
 				return fmt.Errorf("build cancelled")
@@ -319,7 +327,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 				cfg := &SandboxConfig{
 					Ctx:        ctx,
 					Arch:       opts.Arch,
-					Container:  containerImage,
+					Container:  taskContainer,
 					SrcDir:     srcDir,
 					DestDir:    destDir,
 					Sysroot:    sysroot,
@@ -340,7 +348,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 				cfg := &SandboxConfig{
 					Ctx:        ctx,
 					Arch:       opts.Arch,
-					Container:  containerImage,
+					Container:  taskContainer,
 					SrcDir:     srcDir,
 					DestDir:    destDir,
 					Sysroot:    sysroot,
@@ -350,7 +358,15 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 					Stdout:     logW,
 					Stderr:     logW,
 				}
-				thread := NewBuildThread(ctx, cfg, RealExecer{})
+				bctx := &BuildContext{
+					Unit:       unit,
+					Project:    proj,
+					ProjectDir: opts.ProjectDir,
+					BuildDir:   buildDir,
+					DestDir:    destDir,
+					ScopeDir:   sd,
+				}
+				thread := NewBuildThread(ctx, cfg, RealExecer{}, bctx)
 				if _, err := starlark.Call(thread, step.Fn, nil, nil); err != nil {
 					if !opts.Verbose {
 						fmt.Fprintf(w, "  build log: %s\n", logPath)
@@ -361,8 +377,10 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		}
 	}
 
-	// Package the output into an .apk and publish to the local repo
-	if unit.Class != "image" && unit.Class != "container" {
+	// Package the output into an .apk and publish to the local repo.
+	// Skip if: image/container class, or unit already has a "package" task
+	// (which means the class handles packaging via apk_tasks()).
+	if unit.Class != "image" && unit.Class != "container" && !hasTask(unit, "package") {
 		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), sd)
 		if err != nil {
 			return fmt.Errorf("creating apk: %w", err)
@@ -439,6 +457,16 @@ func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[strin
 		fmt.Fprintf(w, "  %-20s [%s] %s%s\n", name, unit.Class, hashes[name][:12], cached)
 	}
 	return nil
+}
+
+// hasTask returns true if the unit has a task with the given name.
+func hasTask(unit *yoestar.Unit, name string) bool {
+	for _, t := range unit.Tasks {
+		if t.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveContainerImage returns the Docker image tag for a unit's container.

@@ -1,3 +1,5 @@
+load("//classes/apk.star", "apk_tasks")
+
 def go_binary(name, version, source, tag="", sha256="",
               go_package="", deps=[], runtime_deps=[],
               services=[], conffiles=[], environment={},
@@ -11,6 +13,7 @@ def go_binary(name, version, source, tag="", sha256="",
                 "go build -o $DESTDIR$PREFIX/bin/" + name + " " + go_package,
             ]),
         ]
+    tasks = tasks + apk_tasks()
     # Merge class deps with user deps
     all_deps = list(deps)
     if container and container not in all_deps:

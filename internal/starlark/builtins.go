@@ -28,7 +28,10 @@ func (e *Engine) builtins() starlark.StringDict {
 		"task":        starlark.NewBuiltin("task", fnTask),
 		"command":     starlark.NewBuiltin("command", e.fnCommand),
 		"arg":         starlark.NewBuiltin("arg", fnArg),
-		"run":         starlark.NewBuiltin("run", fnRunPlaceholder),
+		"run":            starlark.NewBuiltin("run", fnRunPlaceholder),
+		"apk_create":    starlark.NewBuiltin("apk_create", fnBuildtimePlaceholder("apk_create")),
+		"apk_publish":   starlark.NewBuiltin("apk_publish", fnBuildtimePlaceholder("apk_publish")),
+		"sysroot_stage": starlark.NewBuiltin("sysroot_stage", fnBuildtimePlaceholder("sysroot_stage")),
 		"True":        starlark.True,
 		"False":       starlark.False,
 	}
@@ -58,6 +61,22 @@ func fnRunPlaceholder(thread *starlark.Thread, b *starlark.Builtin, args starlar
 		}
 	}
 	return nil, fmt.Errorf("run() can only be called at build time (inside a task function)")
+}
+
+// fnBuildtimePlaceholder creates a placeholder for build-time builtins that
+// delegates to the real implementation stored on the build thread.
+func fnBuildtimePlaceholder(name string) func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error) {
+	key := "yoe." + name
+	return func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+		if thread.Local("yoe.sandbox") != nil {
+			if fn := thread.Local(key); fn != nil {
+				if callable, ok := fn.(starlark.Callable); ok {
+					return starlark.Call(thread, callable, args, kwargs)
+				}
+			}
+		}
+		return nil, fmt.Errorf("%s() can only be called at build time (inside a task function)", name)
+	}
 }
 
 // --- Helper: extract keyword args ---
