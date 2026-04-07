@@ -43,5 +43,7 @@ def go_binary(name, version, source, tag="", sha256="",
         tasks=tasks, services=services, conffiles=conffiles,
         license=license, description=description, scope=scope,
         container=container, container_arch=container_arch,
+        environment={"GOMODCACHE": "/go/cache/mod", "GOCACHE": "/go/cache/build"},
+        cache_dirs={"/go/cache": "go"},
         **kwargs,
     )

@@ -28,6 +28,7 @@ type SandboxConfig struct {
 	ProjectDir string
 	NoUser     bool      // run as root (for losetup/mount)
 	HostDir    string    // working directory for run(host=True) commands
+	CacheDirs  map[string]string // host:container cache mount mappings
 	Stdout     io.Writer // build output (nil = os.Stdout)
 	Stderr     io.Writer // build errors (nil = os.Stderr)
 }
@@ -198,6 +199,11 @@ func containerMountsForBuild(cfg *SandboxConfig) []yoe.Mount {
 	if cfg.Sysroot != "" {
 		mounts = append(mounts, yoe.Mount{
 			Host: cfg.Sysroot, Container: "/build/sysroot", ReadOnly: true,
+		})
+	}
+	for host, container := range cfg.CacheDirs {
+		mounts = append(mounts, yoe.Mount{
+			Host: host, Container: container,
 		})
 	}
 

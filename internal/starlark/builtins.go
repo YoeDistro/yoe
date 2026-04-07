@@ -162,6 +162,25 @@ func kwStringList(kwargs []starlark.Tuple, key string) []string {
 	return nil
 }
 
+func kwStringMap(kwargs []starlark.Tuple, key string) map[string]string {
+	for _, kv := range kwargs {
+		if string(kv[0].(starlark.String)) == key {
+			if d, ok := kv[1].(*starlark.Dict); ok {
+				m := make(map[string]string, d.Len())
+				for _, item := range d.Items() {
+					if k, ok := item[0].(starlark.String); ok {
+						if v, ok := item[1].(starlark.String); ok {
+							m[string(k)] = string(v)
+						}
+					}
+				}
+				return m
+			}
+		}
+	}
+	return nil
+}
+
 func kwStruct(kwargs []starlark.Tuple, key string) *starlarkstruct.Struct {
 	for _, kv := range kwargs {
 		if string(kv[0].(starlark.String)) == key {
@@ -486,6 +505,8 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 		Provides:    kwString(kwargs, "provides"),
 		Services:    kwStringList(kwargs, "services"),
 		Conffiles:   kwStringList(kwargs, "conffiles"),
+		Environment: kwStringMap(kwargs, "environment"),
+		CacheDirs:   kwStringMap(kwargs, "cache_dirs"),
 		Artifacts:   kwStringList(kwargs, "artifacts"),
 		Exclude:     kwStringList(kwargs, "exclude"),
 		Hostname:    kwString(kwargs, "hostname"),

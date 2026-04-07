@@ -294,6 +294,11 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		"REPO":            filepath.Join("/project", repoRelPath(proj, opts.ProjectDir)),
 	}
 
+	// Merge unit-level environment variables (from classes like go_binary)
+	for k, v := range unit.Environment {
+		env[k] = v
+	}
+
 	// Resolve container image for this unit
 	containerImage := resolveContainerImage(proj, unit, opts.Arch)
 
@@ -302,6 +307,18 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	hostDir := ""
 	if unit.Class == "container" && unit.DefinedIn != "" {
 		hostDir = unit.DefinedIn
+	}
+
+	// Resolve cache dir mounts: unit's cache_dirs maps container paths to
+	// subdirectory names under the project's cache directory.
+	var cacheDirs map[string]string
+	if len(unit.CacheDirs) > 0 {
+		cacheDirs = make(map[string]string, len(unit.CacheDirs))
+		for containerPath, subdir := range unit.CacheDirs {
+			hostPath := filepath.Join(opts.ProjectDir, "cache", subdir)
+			os.MkdirAll(hostPath, 0755)
+			cacheDirs[hostPath] = containerPath
+		}
 	}
 
 	// Execute tasks
@@ -336,6 +353,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 					Env:        env,
 					ProjectDir: opts.ProjectDir,
 					HostDir:    hostDir,
+					CacheDirs:  cacheDirs,
 					Stdout:     logW,
 					Stderr:     logW,
 				}
@@ -359,6 +377,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 					Env:        env,
 					ProjectDir: opts.ProjectDir,
 					HostDir:    hostDir,
+					CacheDirs:  cacheDirs,
 					Stdout:     logW,
 					Stderr:     logW,
 				}

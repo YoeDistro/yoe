@@ -326,6 +326,30 @@ project(name = "second", version = "2.0.0")
 	}
 }
 
+func TestEvalUnitCacheDirs(t *testing.T) {
+	src := `
+unit(
+    name = "mygo",
+    version = "1.0.0",
+    cache_dirs = {"/go/cache": "go"},
+)
+`
+	eng := NewEngine()
+	if err := eng.ExecString("units/mygo.star", src); err != nil {
+		t.Fatalf("ExecString: %v", err)
+	}
+	u := eng.Units()["mygo"]
+	if u == nil {
+		t.Fatal("unit 'mygo' not found")
+	}
+	if len(u.CacheDirs) != 1 {
+		t.Fatalf("CacheDirs = %v, want 1 entry", u.CacheDirs)
+	}
+	if u.CacheDirs["/go/cache"] != "go" {
+		t.Errorf("CacheDirs[/go/cache] = %q, want %q", u.CacheDirs["/go/cache"], "go")
+	}
+}
+
 func TestEvalUnitDuplicate(t *testing.T) {
 	src := `
 unit(name = "foo", version = "1.0.0")

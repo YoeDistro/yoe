@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Go module cache** — Go units now persist module and build caches across
+  builds via `cache_dirs = {"/go/cache": "go"}`. The executor mounts
+  `cache/go/` from the project directory into the container, and `GOMODCACHE`
+  and `GOCACHE` point to it. Subsequent builds skip module downloads.
 - **QEMU port forwarding in machine config** — `qemu_config()` now accepts a
   `ports` field (e.g., `ports = ["2222:22", "8118:8118"]`) for default port
   forwarding. CLI `--port` flags extend these. Fixed a bug where multiple ports

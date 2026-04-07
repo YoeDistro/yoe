@@ -138,6 +138,7 @@ type Unit struct {
 	Services    []string
 	Conffiles   []string
 	Environment map[string]string
+	CacheDirs   map[string]string // container_path:host_subdir cache mounts
 
 	// Image-specific (class == "image")
 	Artifacts  []string // artifacts to install in rootfs
