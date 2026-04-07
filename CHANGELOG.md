@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Service enablement moved to units** — units now declare
+  `services = ["sshd"]` to indicate which init scripts they provide. The image
+  assembly auto-enables services by reading `service` metadata from installed
+  APKs and creating `S50<name>` symlinks (or custom priority like `S10network`).
+  The `services` parameter on `image()` is removed.
 - **Design specs** — added `docs/starlark-packaging-images.md` (move packaging
   and image assembly to composable Starlark tasks) and `docs/file-templates.md`
   (external template files using Go `text/template`, replacing inline heredocs in

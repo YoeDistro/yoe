@@ -18,5 +18,4 @@ image(
         "simpleiot", "strace", "vim",
     ],
     hostname = "yoe-dev",
-    services = ["sshd", "simpleiot"],
 )

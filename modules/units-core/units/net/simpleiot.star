@@ -8,6 +8,7 @@ go_binary(
     go_package = "./cmd/siot",
     license = "Apache-2.0",
     description = "IoT application for sensor data, telemetry, configuration, and device management",
+    services = ["simpleiot"],
     tasks = [
         task("build", steps=[
             'case "$ARCH" in x86_64) goarch=amd64;; aarch64) goarch=arm64;; armv7l) goarch=arm;; riscv64) goarch=riscv64;; *) echo "unsupported ARCH=$ARCH" >&2; exit 1;; esac'

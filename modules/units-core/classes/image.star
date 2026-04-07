@@ -1,5 +1,5 @@
 def image(name, artifacts=[], hostname="", timezone="", locale="",
-          services=[], partitions=[], scope="machine",
+          partitions=[], scope="machine",
           container="toolchain-musl", container_arch="target", deps=[], **kwargs):
     """Create a bootable disk image from packages."""
     # Merge machine packages
@@ -34,13 +34,13 @@ def image(name, artifacts=[], hostname="", timezone="", locale="",
         shell = "bash",
         deps = all_deps,
         tasks = [
-            task("rootfs", fn=lambda: _assemble_rootfs(resolved, hostname, timezone, locale, services)),
+            task("rootfs", fn=lambda: _assemble_rootfs(resolved, hostname, timezone, locale)),
             task("disk", fn=lambda: _create_disk_image(name, all_partitions)),
         ],
         **kwargs,
     )
 
-def _assemble_rootfs(packages, hostname, timezone, locale, services):
+def _assemble_rootfs(packages, hostname, timezone, locale):
     run("mkdir -p $DESTDIR/rootfs")
     for pkg in packages:
         apk = _find_apk(pkg)
@@ -57,8 +57,31 @@ def _assemble_rootfs(packages, hostname, timezone, locale, services):
         run("mkdir -p $DESTDIR/rootfs/etc")
         run("echo %s > $DESTDIR/rootfs/etc/timezone" % timezone)
 
-    for svc in services:
-        run("test -f $DESTDIR/rootfs/etc/init.d/%s && ln -sf ../init.d/%s $DESTDIR/rootfs/etc/init.d/S50%s || true" % (svc, svc, svc))
+    # Auto-enable services declared in package metadata.
+    # Read "service = <name>" lines from .PKGINFO in each installed APK.
+    _enable_services(packages)
+
+def _enable_services(packages):
+    """Read service metadata from installed APKs and create init symlinks."""
+    for pkg in packages:
+        apk = _find_apk(pkg)
+        if not apk:
+            continue
+        # Extract service lines from .PKGINFO
+        result = run(
+            "tar xzf %s .PKGINFO -O 2>/dev/null | grep '^service = ' | cut -d' ' -f3" % apk,
+            check=False)
+        if result.exit_code != 0:
+            continue
+        for line in str(result.stdout).strip().split("\n"):
+            svc = line.strip()
+            if not svc:
+                continue
+            # If name starts with S followed by digits, use as-is; otherwise S50 prefix
+            if len(svc) > 2 and svc[0] == "S" and svc[1].isdigit():
+                run("test -f $DESTDIR/rootfs/etc/init.d/%s && ln -sf ../init.d/%s $DESTDIR/rootfs/etc/init.d/%s || true" % (svc, svc, svc))
+            else:
+                run("test -f $DESTDIR/rootfs/etc/init.d/%s && ln -sf ../init.d/%s $DESTDIR/rootfs/etc/init.d/S50%s || true" % (svc, svc, svc))
 
 def _create_disk_image(name, partitions):
     if not partitions:

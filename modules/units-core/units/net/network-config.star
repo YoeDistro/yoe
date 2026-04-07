@@ -3,6 +3,7 @@ unit(
     version = "1.0.0",
     license = "MIT",
     description = "DHCP networking via busybox udhcpc on eth0",
+    services = ["S10network"],
     runtime_deps = ["busybox"],
     deps = ["toolchain-musl"],
     container = "toolchain-musl",
