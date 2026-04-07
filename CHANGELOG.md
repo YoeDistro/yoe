@@ -12,6 +12,10 @@ and this project adheres to
   builds via `cache_dirs = {"/go/cache": "go"}`. The executor mounts
   `cache/go/` from the project directory into the container, and `GOMODCACHE`
   and `GOCACHE` point to it. Subsequent builds skip module downloads.
+- **Unit environment field** — units can declare `environment = {"KEY": "VAL"}`
+  which the executor merges into the build environment for all tasks. The Go
+  class uses this for `GOMODCACHE`/`GOCACHE` so custom tasks (like simpleiot)
+  get the cache env vars automatically.
 - **QEMU port forwarding in machine config** — `qemu_config()` now accepts a
   `ports` field (e.g., `ports = ["2222:22", "8118:8118"]`) for default port
   forwarding. CLI `--port` flags extend these. Fixed a bug where multiple ports
