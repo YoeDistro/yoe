@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/YoeDistro/yoe-ng/internal/artifact"
 	"github.com/YoeDistro/yoe-ng/internal/repo"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
 	"github.com/YoeDistro/yoe-ng/internal/source"
@@ -377,26 +376,6 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		}
 	}
 
-	// Package the output into an .apk and publish to the local repo.
-	// Skip if: image/container class, or unit already has a "package" task
-	// (which means the class handles packaging via apk_tasks()).
-	if unit.Class != "image" && unit.Class != "container" && !hasTask(unit, "package") {
-		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), sd)
-		if err != nil {
-			return fmt.Errorf("creating apk: %w", err)
-		}
-		fmt.Fprintf(w, "  → %s\n", filepath.Base(apkPath))
-
-		repoDir := repo.RepoDir(proj, opts.ProjectDir)
-		if err := repo.Publish(apkPath, repoDir); err != nil {
-			return fmt.Errorf("publishing to repo: %w", err)
-		}
-
-		// Stage destdir for downstream units' per-unit sysroots
-		if err := StageSysroot(destDir, buildDir); err != nil {
-			fmt.Fprintf(w, "  (warning: sysroot staging failed: %v)\n", err)
-		}
-	}
 
 	return nil
 }

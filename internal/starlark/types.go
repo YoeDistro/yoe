@@ -4,14 +4,15 @@ import "go.starlark.net/starlark"
 
 // Project represents an evaluated PROJECT.star.
 type Project struct {
-	Name     string
-	Version  string
-	Defaults Defaults
-	Cache    CacheConfig
-	Sources  SourcesConfig
-	Modules  []ModuleRef
-	Machines map[string]*Machine
-	Units    map[string]*Unit
+	Name      string
+	Version   string
+	Defaults  Defaults
+	Cache     CacheConfig
+	Sources   SourcesConfig
+	TasksAppend []starlark.Callable // functions appended to every unit's tasks (e.g., apk_tasks)
+	Modules   []ModuleRef
+	Machines  map[string]*Machine
+	Units     map[string]*Unit
 }
 
 type Defaults struct {

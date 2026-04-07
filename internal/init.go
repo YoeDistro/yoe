@@ -30,6 +30,7 @@ func RunInit(projectDir string, machine string) error {
     defaults = defaults(machine = %q, image = "base-image"),
     cache = cache(path = "build/cache"),
     sources = sources(go_proxy = "https://proxy.golang.org"),
+    tasks_append = [apk_tasks],
     modules = [
         module("https://github.com/YoeDistro/yoe.git",
                ref = "main",

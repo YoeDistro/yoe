@@ -32,6 +32,7 @@ func (e *Engine) builtins() starlark.StringDict {
 		"apk_create":    starlark.NewBuiltin("apk_create", fnBuildtimePlaceholder("apk_create")),
 		"apk_publish":   starlark.NewBuiltin("apk_publish", fnBuildtimePlaceholder("apk_publish")),
 		"sysroot_stage": starlark.NewBuiltin("sysroot_stage", fnBuildtimePlaceholder("sysroot_stage")),
+		"apk_tasks":     starlark.NewBuiltin("apk_tasks", fnAPKTasks),
 		"True":        starlark.True,
 		"False":       starlark.False,
 	}
@@ -90,6 +91,99 @@ func kwString(kwargs []starlark.Tuple, key string) string {
 		}
 	}
 	return ""
+}
+
+// fnAPKTasks implements the apk_tasks() predeclared. Returns a list containing
+// a "package" task that calls apk_create, apk_publish, and sysroot_stage.
+// Used in project(tasks_append = [apk_tasks]).
+func fnAPKTasks(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
+	// Build the packaging function as a Starlark lambda-like callable.
+	// We use a Go-implemented callable that delegates to the build-time builtins.
+	pkgFn := starlark.NewBuiltin("_apk_package", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
+		// Call apk_create()
+		createFn := thread.Local("yoe.apk_create")
+		if createFn == nil {
+			return nil, fmt.Errorf("apk_create not available (not in build context)")
+		}
+		result, err := starlark.Call(thread, createFn.(starlark.Callable), nil, nil)
+		if err != nil {
+			return nil, err
+		}
+		// Get path from result struct
+		pathVal, err := result.(*starlarkstruct.Struct).Attr("path")
+		if err != nil {
+			return nil, fmt.Errorf("apk_create result has no path: %w", err)
+		}
+		// Call apk_publish(path)
+		publishFn := thread.Local("yoe.apk_publish")
+		if publishFn == nil {
+			return nil, fmt.Errorf("apk_publish not available (not in build context)")
+		}
+		if _, err := starlark.Call(thread, publishFn.(starlark.Callable), starlark.Tuple{pathVal}, nil); err != nil {
+			return nil, err
+		}
+		// Call sysroot_stage()
+		stageFn := thread.Local("yoe.sysroot_stage")
+		if stageFn == nil {
+			return nil, fmt.Errorf("sysroot_stage not available (not in build context)")
+		}
+		if _, err := starlark.Call(thread, stageFn.(starlark.Callable), nil, nil); err != nil {
+			return nil, err
+		}
+		return starlark.None, nil
+	})
+
+	taskStruct := starlarkstruct.FromStringDict(starlark.String("task"), starlark.StringDict{
+		"name": starlark.String("package"),
+		"fn":   pkgFn,
+	})
+
+	return starlark.NewList([]starlark.Value{taskStruct}), nil
+}
+
+// ParseTaskList converts a Starlark list of task structs into Go Task values.
+func ParseTaskList(list *starlark.List) []Task {
+	var tasks []Task
+	iter := list.Iterate()
+	defer iter.Done()
+	var v starlark.Value
+	for iter.Next(&v) {
+		s, ok := v.(*starlarkstruct.Struct)
+		if !ok {
+			continue
+		}
+		t := Task{
+			Name:      structString(s, "name"),
+			Container: structString(s, "container"),
+		}
+		if rv, err := s.Attr("run"); err == nil {
+			if cmd, ok := rv.(starlark.String); ok {
+				t.Steps = []Step{{Command: string(cmd)}}
+			}
+		}
+		if rv, err := s.Attr("fn"); err == nil {
+			if fn, ok := rv.(starlark.Callable); ok {
+				t.Steps = []Step{{Fn: fn}}
+			}
+		}
+		if rv, err := s.Attr("steps"); err == nil {
+			if list, ok := rv.(*starlark.List); ok {
+				si := list.Iterate()
+				var sv starlark.Value
+				for si.Next(&sv) {
+					switch val := sv.(type) {
+					case starlark.String:
+						t.Steps = append(t.Steps, Step{Command: string(val)})
+					case starlark.Callable:
+						t.Steps = append(t.Steps, Step{Fn: val})
+					}
+				}
+				si.Done()
+			}
+		}
+		tasks = append(tasks, t)
+	}
+	return tasks
 }
 
 func kwInt(kwargs []starlark.Tuple, key string) int {
@@ -314,6 +408,25 @@ func (e *Engine) fnProject(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 		}
 	}
 
+	// Parse tasks_append list (list of callable task functions)
+	for _, kv := range kwargs {
+		if string(kv[0].(starlark.String)) == "tasks_append" {
+			if list, ok := kv[1].(*starlark.List); ok {
+				iter := list.Iterate()
+				defer iter.Done()
+				var v starlark.Value
+				for iter.Next(&v) {
+					if fn, ok := v.(starlark.Callable); ok {
+						p.TasksAppend = append(p.TasksAppend, fn)
+					}
+				}
+			} else if fn, ok := kv[1].(starlark.Callable); ok {
+				// Also accept a single callable for convenience
+				p.TasksAppend = append(p.TasksAppend, fn)
+			}
+		}
+	}
+
 	e.project = p
 	return starlark.None, nil
 }
@@ -456,47 +569,7 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 	for _, kv := range kwargs {
 		if string(kv[0].(starlark.String)) == "tasks" {
 			if list, ok := kv[1].(*starlark.List); ok {
-				iter := list.Iterate()
-				defer iter.Done()
-				var v starlark.Value
-				for iter.Next(&v) {
-					s, ok := v.(*starlarkstruct.Struct)
-					if !ok {
-						continue
-					}
-					t := Task{
-						Name:      structString(s, "name"),
-						Container: structString(s, "container"),
-					}
-					// Parse steps: run (single string), fn (single callable),
-					// or steps (list of strings/callables)
-					if rv, err := s.Attr("run"); err == nil {
-						if cmd, ok := rv.(starlark.String); ok {
-							t.Steps = []Step{{Command: string(cmd)}}
-						}
-					}
-					if rv, err := s.Attr("fn"); err == nil {
-						if fn, ok := rv.(starlark.Callable); ok {
-							t.Steps = []Step{{Fn: fn}}
-						}
-					}
-					if rv, err := s.Attr("steps"); err == nil {
-						if list, ok := rv.(*starlark.List); ok {
-							si := list.Iterate()
-							var sv starlark.Value
-							for si.Next(&sv) {
-								switch val := sv.(type) {
-								case starlark.String:
-									t.Steps = append(t.Steps, Step{Command: string(val)})
-								case starlark.Callable:
-									t.Steps = append(t.Steps, Step{Fn: val})
-								}
-							}
-							si.Done()
-						}
-					}
-					r.Tasks = append(r.Tasks, t)
-				}
+				r.Tasks = append(r.Tasks, ParseTaskList(list)...)
 			}
 		}
 	}

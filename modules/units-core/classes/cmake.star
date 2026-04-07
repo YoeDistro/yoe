@@ -1,5 +1,3 @@
-load("//classes/apk.star", "apk_tasks")
-
 def cmake(name, version, source, sha256="", deps=[], runtime_deps=[],
           cmake_args=[], patches=[], services=[], conffiles=[],
           license="", description="", tasks=[], scope="",
@@ -13,7 +11,6 @@ def cmake(name, version, source, sha256="", deps=[], runtime_deps=[],
                 "DESTDIR=$DESTDIR cmake --install build",
             ]),
         ]
-    tasks = tasks + apk_tasks()
     # Merge class deps with user deps
     all_deps = list(deps)
     if container and container not in all_deps:
