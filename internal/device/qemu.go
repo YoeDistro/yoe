@@ -52,14 +52,17 @@ func RunQEMU(proj *yoestar.Project, unitName, machineName, projectDir string, op
 	buildArgs := func(imgFile string) []string {
 		a := baseQEMUArgs(machine, opts)
 		a = append(a, "-drive", fmt.Sprintf("file=%s,format=raw,if=virtio", imgFile))
-		for _, port := range opts.Ports {
-			a = append(a, "-netdev", fmt.Sprintf("user,id=net0,hostfwd=tcp::%s", port))
-			a = append(a, "-device", "virtio-net-pci,netdev=net0")
+
+		// Merge machine-defined ports with CLI ports (CLI takes precedence)
+		ports := machine.QEMUPorts()
+		ports = append(ports, opts.Ports...)
+
+		netdev := "user,id=net0"
+		for _, port := range ports {
+			netdev += fmt.Sprintf(",hostfwd=tcp::%s", port)
 		}
-		if len(opts.Ports) == 0 {
-			a = append(a, "-netdev", "user,id=net0")
-			a = append(a, "-device", "virtio-net-pci,netdev=net0")
-		}
+		a = append(a, "-netdev", netdev)
+		a = append(a, "-device", "virtio-net-pci,netdev=net0")
 
 		// Direct kernel boot: when no firmware is configured, pass
 		// -kernel and -append for architectures that need it (arm64, riscv64).

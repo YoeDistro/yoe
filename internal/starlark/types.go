@@ -91,6 +91,15 @@ type QEMUConfig struct {
 	Memory   string
 	Firmware string
 	Display  string
+	Ports    []string // host:guest port mappings for user-mode networking
+}
+
+// QEMUPorts returns the port mappings from the machine's QEMU config, or nil.
+func (m *Machine) QEMUPorts() []string {
+	if m.QEMU == nil {
+		return nil
+	}
+	return m.QEMU.Ports
 }
 
 // Unit represents an evaluated unit(), image(), etc. call.

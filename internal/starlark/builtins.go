@@ -417,6 +417,7 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 					Memory:   structString(s, "memory"),
 					Firmware: structString(s, "firmware"),
 					Display:  structString(s, "display"),
+					Ports:    structStringList(s, "ports"),
 				}
 			}
 		case "partitions":
