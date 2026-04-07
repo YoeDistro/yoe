@@ -59,7 +59,8 @@ func RunQEMU(proj *yoestar.Project, unitName, machineName, projectDir string, op
 
 		netdev := "user,id=net0"
 		for _, port := range ports {
-			netdev += fmt.Sprintf(",hostfwd=tcp::%s", port)
+			// port format is "host:guest", QEMU wants "hostfwd=tcp::host-:guest"
+			netdev += fmt.Sprintf(",hostfwd=tcp::%s", strings.Replace(port, ":", "-:", 1))
 		}
 		a = append(a, "-netdev", netdev)
 		a = append(a, "-device", "virtio-net-pci,netdev=net0")

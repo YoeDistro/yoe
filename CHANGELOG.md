@@ -19,8 +19,9 @@ and this project adheres to
 - **QEMU port forwarding in machine config** — `qemu_config()` now accepts a
   `ports` field (e.g., `ports = ["2222:22", "8118:8118"]`) for default port
   forwarding. CLI `--port` flags extend these. Fixed a bug where multiple ports
-  created duplicate QEMU netdevs. QEMU machines default to SSH (2222:22) and
-  SimpleIoT (8118:8118), and HTTP (8080:80).
+  created duplicate QEMU netdevs. Fixed hostfwd syntax to use QEMU's
+  `host-:guest` format. QEMU machines default to SSH (2222:22), HTTP (8080:80),
+  and SimpleIoT (8118:8118).
 - **Service enablement moved to units** — units now declare
   `services = ["sshd"]` to indicate which init scripts they provide. The image
   assembly auto-enables services by reading `service` metadata from installed
