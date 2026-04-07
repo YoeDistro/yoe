@@ -8,7 +8,8 @@ assembly reads this metadata from installed packages and auto-enables services.
 
 Services are declared in two places:
 
-1. **Units** — `services` field exists but is unused metadata (not stored in APK)
+1. **Units** — `services` field exists but is unused metadata (not stored in
+   APK)
 2. **Images** — `services = ["sshd", "simpleiot"]` creates `S50<name>` symlinks
 
 This creates redundancy. The image author must know which services each package
@@ -105,7 +106,8 @@ and avoids adding another builtin.
 **Starlark units:**
 
 - `openssh.star` — add `services = ["sshd"]`
-- `simpleiot.star` — already has init script task, add `services = ["simpleiot"]`
+- `simpleiot.star` — already has init script task, add
+  `services = ["simpleiot"]`
 - `network-config.star` — add `services = ["S10network"]`, remove the `S10`
   prefix from the init script filename since the image assembly will handle it.
   Actually, keep the `S10network` filename as-is since the service name includes
