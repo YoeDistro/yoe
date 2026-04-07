@@ -30,6 +30,8 @@ def image(name, artifacts=[], hostname="", timezone="", locale="",
         partitions = all_partitions,
         container = container,
         container_arch = container_arch,
+        sandbox = True,
+        shell = "bash",
         deps = all_deps,
         tasks = [
             task("rootfs", fn=lambda: _assemble_rootfs(resolved, hostname, timezone, locale, services)),

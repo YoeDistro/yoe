@@ -117,6 +117,8 @@ type Unit struct {
 	// Build
 	Container     string // default container for all tasks
 	ContainerArch string // "target" or "host"
+	Sandbox       bool   // use bwrap sandbox inside container (default false)
+	Shell         string // shell for build commands: "sh" (default) or "bash"
 	Tasks     []Task
 	Provides    string // virtual package name
 	Module      string // module that registered this unit (empty = project root)

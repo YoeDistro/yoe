@@ -10,7 +10,7 @@ def go_binary(name, version, source, tag="", sha256="",
               go_package="", deps=[], runtime_deps=[],
               services=[], conffiles=[], environment={},
               license="", description="", tasks=[], scope="",
-              container="golang:1.24-alpine", container_arch="host",
+              container="golang:1.24", container_arch="host",
               go_version="", **kwargs):
     if not go_package:
         go_package = "./cmd/" + name
@@ -27,6 +27,7 @@ def go_binary(name, version, source, tag="", sha256="",
         tasks = [
             task("build", steps=[
                 cross_setup +
+                " && export PATH=/usr/local/go/bin:$PATH" +
                 " && CGO_ENABLED=0 GOOS=linux GOARCH=$goarch" +
                 " go build -o $DESTDIR$PREFIX/bin/" + name + " " + go_package,
             ]),

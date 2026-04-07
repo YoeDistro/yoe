@@ -119,6 +119,17 @@ func ParseTaskList(list *starlark.List) []Task {
 	return tasks
 }
 
+func kwBool(kwargs []starlark.Tuple, key string) bool {
+	for _, kv := range kwargs {
+		if string(kv[0].(starlark.String)) == key {
+			if b, ok := kv[1].(starlark.Bool); ok {
+				return bool(b)
+			}
+		}
+	}
+	return false
+}
+
 func kwInt(kwargs []starlark.Tuple, key string) int {
 	for _, kv := range kwargs {
 		if string(kv[0].(starlark.String)) == key {
@@ -469,6 +480,8 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 		RuntimeDeps: kwStringList(kwargs, "runtime_deps"),
 		Container:     kwString(kwargs, "container"),
 		ContainerArch: kwString(kwargs, "container_arch"),
+		Sandbox:       kwBool(kwargs, "sandbox"),
+		Shell:         kwString(kwargs, "shell"),
 		Provides:    kwString(kwargs, "provides"),
 		Services:    kwStringList(kwargs, "services"),
 		Conffiles:   kwStringList(kwargs, "conffiles"),

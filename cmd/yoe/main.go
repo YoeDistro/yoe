@@ -305,6 +305,8 @@ func cmdContainerShell() {
 	build.EnsureDir(destDir)
 
 	cfg := &build.SandboxConfig{
+		Sandbox:    true,
+		Shell:      "bash",
 		SrcDir:     srcDir,
 		DestDir:    destDir,
 		Sysroot:    sysroot,
@@ -335,6 +337,7 @@ func cmdContainerShell() {
 	proj := loadProject()
 
 	if err := yoe.RunInContainer(yoe.ContainerRunConfig{
+		Shell:       "bash",
 		Image:       yoe.DefaultContainerImage(proj.Units),
 		Command:     bwrapCmd,
 		ProjectDir:  projectDir,
