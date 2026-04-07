@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Design specs** — added `docs/starlark-packaging-images.md` (move packaging
+  and image assembly to composable Starlark tasks) and `docs/file-templates.md`
+  (external template files using Go `text/template`, replacing inline heredocs in
+  units).
 - **Go class uses golang container** — `go_binary()` now defaults to the
   `golang:1.24` external container image instead of `toolchain-musl`.
   Cross-compilation is handled via `GOARCH`/`GOOS` environment variables with
