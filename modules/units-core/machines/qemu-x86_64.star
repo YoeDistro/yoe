@@ -18,6 +18,6 @@ machine(
         memory = "1G",
         firmware = "seabios",
         display = "none",
-        ports = ["2222:22", "8118:8118"],
+        ports = ["2222:22", "8080:80", "8118:8118"],
     ),
 )
