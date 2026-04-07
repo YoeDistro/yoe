@@ -77,9 +77,11 @@ def _enable_services(packages):
             svc = line.strip()
             if not svc:
                 continue
-            # If name starts with S followed by digits, use as-is; otherwise S50 prefix
+            # If name starts with S followed by digits, it's already named
+            # for rcS to find — no symlink needed. Otherwise create S50 symlink.
             if len(svc) > 2 and svc[0] == "S" and svc[1].isdigit():
-                run("test -f $DESTDIR/rootfs/etc/init.d/%s && ln -sf ../init.d/%s $DESTDIR/rootfs/etc/init.d/%s || true" % (svc, svc, svc))
+                # Already has S<NN> prefix, rcS will find it directly
+                pass
             else:
                 run("test -f $DESTDIR/rootfs/etc/init.d/%s && ln -sf ../init.d/%s $DESTDIR/rootfs/etc/init.d/S50%s || true" % (svc, svc, svc))
 

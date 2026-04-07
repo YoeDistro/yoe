@@ -12,6 +12,10 @@ and this project adheres to
   builds via `cache_dirs = {"/go/cache": "go"}`. The executor mounts
   `cache/go/` from the project directory into the container, and `GOMODCACHE`
   and `GOCACHE` point to it. Subsequent builds skip module downloads.
+- **Fix service enablement for S-prefixed init scripts** — services declared with
+  an `S<NN>` prefix (like `S10network`) no longer get a symlink created on top of
+  the actual script, which was causing a symlink loop and breaking networking at
+  boot.
 - **Unit environment field** — units can declare `environment = {"KEY": "VAL"}`
   which the executor merges into the build environment for all tasks. The Go
   class uses this for `GOMODCACHE`/`GOCACHE` so custom tasks (like simpleiot)
