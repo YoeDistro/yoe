@@ -8,13 +8,6 @@ and this project adheres to
 
 ## [Unreleased]
 
-- **Starlark packaging via `tasks_append`** — APK creation, repo publishing, and
-  sysroot staging are now Starlark builtins (`apk_create()`, `apk_publish()`,
-  `sysroot_stage()`). Projects define packaging policy via
-  `tasks_append = [apk_tasks]` in `PROJECT.star`, which appends packaging tasks
-  to every unit. No Go-side packaging fallback — packaging is fully in Starlark.
-  `tasks_append` is a general mechanism for appending tasks to all units at the
-  project level.
 - **Per-task container resolution** — tasks can override the unit-level container
   via `task(container = "...")`. The executor resolves the container per-task,
   falling back to the unit default.

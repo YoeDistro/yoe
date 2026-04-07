@@ -29,10 +29,6 @@ func (e *Engine) builtins() starlark.StringDict {
 		"command":     starlark.NewBuiltin("command", e.fnCommand),
 		"arg":         starlark.NewBuiltin("arg", fnArg),
 		"run":            starlark.NewBuiltin("run", fnRunPlaceholder),
-		"apk_create":    starlark.NewBuiltin("apk_create", fnBuildtimePlaceholder("apk_create")),
-		"apk_publish":   starlark.NewBuiltin("apk_publish", fnBuildtimePlaceholder("apk_publish")),
-		"sysroot_stage": starlark.NewBuiltin("sysroot_stage", fnBuildtimePlaceholder("sysroot_stage")),
-		"apk_tasks":     starlark.NewBuiltin("apk_tasks", fnAPKTasks),
 		"True":        starlark.True,
 		"False":       starlark.False,
 	}
@@ -64,21 +60,6 @@ func fnRunPlaceholder(thread *starlark.Thread, b *starlark.Builtin, args starlar
 	return nil, fmt.Errorf("run() can only be called at build time (inside a task function)")
 }
 
-// fnBuildtimePlaceholder creates a placeholder for build-time builtins that
-// delegates to the real implementation stored on the build thread.
-func fnBuildtimePlaceholder(name string) func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error) {
-	key := "yoe." + name
-	return func(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-		if thread.Local("yoe.sandbox") != nil {
-			if fn := thread.Local(key); fn != nil {
-				if callable, ok := fn.(starlark.Callable); ok {
-					return starlark.Call(thread, callable, args, kwargs)
-				}
-			}
-		}
-		return nil, fmt.Errorf("%s() can only be called at build time (inside a task function)", name)
-	}
-}
 
 // --- Helper: extract keyword args ---
 
@@ -91,44 +72,6 @@ func kwString(kwargs []starlark.Tuple, key string) string {
 		}
 	}
 	return ""
-}
-
-// fnAPKTasks implements the apk_tasks() predeclared. Returns a list containing
-// a "package" task that calls apk_create and apk_publish.
-// Used in project(tasks_append = [apk_tasks]).
-func fnAPKTasks(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
-	pkgFn := starlark.NewBuiltin("_apk_package", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
-		// Call apk_create()
-		createFn := thread.Local("yoe.apk_create")
-		if createFn == nil {
-			return nil, fmt.Errorf("apk_create not available (not in build context)")
-		}
-		result, err := starlark.Call(thread, createFn.(starlark.Callable), nil, nil)
-		if err != nil {
-			return nil, err
-		}
-		// Get path from result struct
-		pathVal, err := result.(*starlarkstruct.Struct).Attr("path")
-		if err != nil {
-			return nil, fmt.Errorf("apk_create result has no path: %w", err)
-		}
-		// Call apk_publish(path)
-		publishFn := thread.Local("yoe.apk_publish")
-		if publishFn == nil {
-			return nil, fmt.Errorf("apk_publish not available (not in build context)")
-		}
-		if _, err := starlark.Call(thread, publishFn.(starlark.Callable), starlark.Tuple{pathVal}, nil); err != nil {
-			return nil, err
-		}
-		return starlark.None, nil
-	})
-
-	taskStruct := starlarkstruct.FromStringDict(starlark.String("task"), starlark.StringDict{
-		"name": starlark.String("package"),
-		"fn":   pkgFn,
-	})
-
-	return starlark.NewList([]starlark.Value{taskStruct}), nil
 }
 
 // ParseTaskList converts a Starlark list of task structs into Go Task values.
@@ -394,25 +337,6 @@ func (e *Engine) fnProject(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 						})
 					}
 				}
-			}
-		}
-	}
-
-	// Parse tasks_append list (list of callable task functions)
-	for _, kv := range kwargs {
-		if string(kv[0].(starlark.String)) == "tasks_append" {
-			if list, ok := kv[1].(*starlark.List); ok {
-				iter := list.Iterate()
-				defer iter.Done()
-				var v starlark.Value
-				for iter.Next(&v) {
-					if fn, ok := v.(starlark.Callable); ok {
-						p.TasksAppend = append(p.TasksAppend, fn)
-					}
-				}
-			} else if fn, ok := kv[1].(starlark.Callable); ok {
-				// Also accept a single callable for convenience
-				p.TasksAppend = append(p.TasksAppend, fn)
 			}
 		}
 	}

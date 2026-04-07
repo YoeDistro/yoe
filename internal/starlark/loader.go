@@ -357,28 +357,6 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	proj.Machines = eng.Machines()
 	proj.Units = eng.Units()
 
-	// Append project-level tasks_append to each unit (not images/containers).
-	if len(proj.TasksAppend) > 0 {
-		thread := &starlark.Thread{Name: "tasks_append"}
-		for _, fn := range proj.TasksAppend {
-			result, err := starlark.Call(thread, fn, nil, nil)
-			if err != nil {
-				return nil, fmt.Errorf("tasks_append %s: %w", fn.Name(), err)
-			}
-			list, ok := result.(*starlark.List)
-			if !ok {
-				return nil, fmt.Errorf("tasks_append %s: expected list, got %s", fn.Name(), result.Type())
-			}
-			extraTasks := ParseTaskList(list)
-			for _, u := range proj.Units {
-				if u.Class != "unit" || len(u.Tasks) == 0 {
-					continue
-				}
-				u.Tasks = append(u.Tasks, extraTasks...)
-			}
-		}
-	}
-
 	// Validate: units with tasks must have container and container_arch.
 	for name, u := range proj.Units {
 		if len(u.Tasks) == 0 {

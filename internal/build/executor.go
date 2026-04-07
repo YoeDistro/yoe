@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/YoeDistro/yoe-ng/internal/artifact"
 	"github.com/YoeDistro/yoe-ng/internal/repo"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
 	"github.com/YoeDistro/yoe-ng/internal/source"
@@ -357,15 +358,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 					Stdout:     logW,
 					Stderr:     logW,
 				}
-				bctx := &BuildContext{
-					Unit:       unit,
-					Project:    proj,
-					ProjectDir: opts.ProjectDir,
-					BuildDir:   buildDir,
-					DestDir:    destDir,
-					ScopeDir:   sd,
-				}
-				thread := NewBuildThread(ctx, cfg, RealExecer{}, bctx)
+				thread := NewBuildThread(ctx, cfg, RealExecer{})
 				if _, err := starlark.Call(thread, step.Fn, nil, nil); err != nil {
 					if !opts.Verbose {
 						fmt.Fprintf(w, "  build log: %s\n", logPath)
@@ -376,9 +369,20 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		}
 	}
 
-	// Stage destdir for downstream units' per-unit sysroots.
-	// This is a build system concern, not a packaging step.
+	// Package the output into an .apk and publish to the local repo.
+	// Then stage destdir for downstream units' per-unit sysroots.
 	if unit.Class != "image" && unit.Class != "container" {
+		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), sd)
+		if err != nil {
+			return fmt.Errorf("creating apk: %w", err)
+		}
+		fmt.Fprintf(w, "  → %s\n", filepath.Base(apkPath))
+
+		repoDir := repo.RepoDir(proj, opts.ProjectDir)
+		if err := repo.Publish(apkPath, repoDir); err != nil {
+			return fmt.Errorf("publishing to repo: %w", err)
+		}
+
 		if err := StageSysroot(destDir, buildDir); err != nil {
 			fmt.Fprintf(w, "  (warning: sysroot staging failed: %v)\n", err)
 		}

@@ -28,7 +28,7 @@ func (f *fakeExecer) RunHost(_ context.Context, command string, _ string) (ExecR
 func TestFnRun_Success(t *testing.T) {
 	fake := &fakeExecer{result: ExecResult{ExitCode: 0}}
 	cfg := &SandboxConfig{Arch: "x86_64"}
-	thread := NewBuildThread(context.Background(), cfg, fake, nil)
+	thread := NewBuildThread(context.Background(), cfg, fake)
 
 	predeclared := BuildPredeclared()
 	globals, err := starlark.ExecFile(thread, "test.star", `
@@ -59,7 +59,7 @@ func TestFnRun_FailureWithCheck(t *testing.T) {
 		err:    fmt.Errorf("command failed"),
 	}
 	cfg := &SandboxConfig{Arch: "x86_64"}
-	thread := NewBuildThread(context.Background(), cfg, fake, nil)
+	thread := NewBuildThread(context.Background(), cfg, fake)
 
 	predeclared := BuildPredeclared()
 	_, err := starlark.ExecFile(thread, "test.star", `
@@ -76,7 +76,7 @@ func TestFnRun_FailureWithCheckFalse(t *testing.T) {
 		err:    fmt.Errorf("command failed"),
 	}
 	cfg := &SandboxConfig{Arch: "x86_64"}
-	thread := NewBuildThread(context.Background(), cfg, fake, nil)
+	thread := NewBuildThread(context.Background(), cfg, fake)
 
 	predeclared := BuildPredeclared()
 	globals, err := starlark.ExecFile(thread, "test.star", `
@@ -96,7 +96,7 @@ result = run("false", check=False)
 func TestFnRun_MultipleCalls(t *testing.T) {
 	fake := &fakeExecer{result: ExecResult{ExitCode: 0}}
 	cfg := &SandboxConfig{Arch: "arm64"}
-	thread := NewBuildThread(context.Background(), cfg, fake, nil)
+	thread := NewBuildThread(context.Background(), cfg, fake)
 
 	predeclared := BuildPredeclared()
 	_, err := starlark.ExecFile(thread, "test.star", `
