@@ -11,6 +11,7 @@ and this project adheres to
 - **Per-task container resolution** — tasks can override the unit-level
   container via `task(container = "...")`. The executor resolves the container
   per-task, falling back to the unit default.
+- Fix module URLs in `init` generated project file.
 
 ## [0.7.1] - 2026-04-06
 
