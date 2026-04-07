@@ -20,6 +20,8 @@ and this project adheres to
   sh — since they don't ship bwrap or bash.
 - **simpleiot unit** — new `go_binary` unit for SimpleIoT v0.18.5, an IoT
   application for sensor data, telemetry, and device management.
+- **ca-certificates unit** — Mozilla CA bundle for TLS verification. Added to
+  dev-image alongside simpleiot.
 - **Per-task container resolution** — tasks can override the unit-level
   container via `task(container = "...")`. The executor resolves the container
   per-task, falling back to the unit default.
