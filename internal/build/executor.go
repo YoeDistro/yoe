@@ -376,6 +376,13 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		}
 	}
 
+	// Stage destdir for downstream units' per-unit sysroots.
+	// This is a build system concern, not a packaging step.
+	if unit.Class != "image" && unit.Class != "container" {
+		if err := StageSysroot(destDir, buildDir); err != nil {
+			fmt.Fprintf(w, "  (warning: sysroot staging failed: %v)\n", err)
+		}
+	}
 
 	return nil
 }

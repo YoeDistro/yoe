@@ -94,11 +94,9 @@ func kwString(kwargs []starlark.Tuple, key string) string {
 }
 
 // fnAPKTasks implements the apk_tasks() predeclared. Returns a list containing
-// a "package" task that calls apk_create, apk_publish, and sysroot_stage.
+// a "package" task that calls apk_create and apk_publish.
 // Used in project(tasks_append = [apk_tasks]).
 func fnAPKTasks(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
-	// Build the packaging function as a Starlark lambda-like callable.
-	// We use a Go-implemented callable that delegates to the build-time builtins.
 	pkgFn := starlark.NewBuiltin("_apk_package", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
 		// Call apk_create()
 		createFn := thread.Local("yoe.apk_create")
@@ -120,14 +118,6 @@ func fnAPKTasks(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []s
 			return nil, fmt.Errorf("apk_publish not available (not in build context)")
 		}
 		if _, err := starlark.Call(thread, publishFn.(starlark.Callable), starlark.Tuple{pathVal}, nil); err != nil {
-			return nil, err
-		}
-		// Call sysroot_stage()
-		stageFn := thread.Local("yoe.sysroot_stage")
-		if stageFn == nil {
-			return nil, fmt.Errorf("sysroot_stage not available (not in build context)")
-		}
-		if _, err := starlark.Call(thread, stageFn.(starlark.Callable), nil, nil); err != nil {
 			return nil, err
 		}
 		return starlark.None, nil
