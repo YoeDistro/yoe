@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **CLI flag parsing with flag.NewFlagSet** — refactored all subcommands
+  (`build`, `run`, `flash`, `init`, `clean`, `log`, `refs`, `graph`) from
+  manual switch-based parsing to Go's `flag.NewFlagSet`. Adds free `--help` for
+  every subcommand, consistent `-flag`/`--flag` support, and repeatable flags
+  (e.g., `--port`). Net reduction of ~70 lines.
 - **Go module cache** — Go units now persist module and build caches across
   builds via `cache_dirs = {"/go/cache": "go"}`. The executor mounts
   `cache/go/` from the project directory into the container, and `GOMODCACHE`
