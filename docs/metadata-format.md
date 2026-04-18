@@ -1,9 +1,9 @@
 # Unit & Configuration Format
 
-`[yoe]` uses [Starlark](https://github.com/google/starlark-go) — a deterministic,
-sandboxed dialect of Python — for all build definitions. Units, classes, machine
-definitions, and project configuration are all `.star` files. See
-[Build Languages](build-languages.md) for the rationale behind this choice.
+`[yoe]` uses [Starlark](https://github.com/google/starlark-go) — a
+deterministic, sandboxed dialect of Python — for all build definitions. Units,
+classes, machine definitions, and project configuration are all `.star` files.
+See [Build Languages](build-languages.md) for the rationale behind this choice.
 
 ## Units vs. Packages
 

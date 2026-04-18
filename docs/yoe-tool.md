@@ -765,7 +765,7 @@ yoe clean openssh
 
 | Variable                | Default   | Description                                     |
 | ----------------------- | --------- | ----------------------------------------------- |
-| `YOE_PROJECT`           | `.` (cwd) | Path to the `[yoe]` project root                 |
+| `YOE_PROJECT`           | `.` (cwd) | Path to the `[yoe]` project root                |
 | `YOE_CACHE`             | `cache/`  | Cache directory for sources, builds, packages   |
 | `YOE_JOBS`              | nproc     | Parallel build jobs                             |
 | `YOE_LOG`               | `info`    | Log level (`debug`, `info`, `warn`, `error`)    |

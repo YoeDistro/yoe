@@ -42,7 +42,7 @@ resolved to).
 `[yoe]`'s model is function-based, which covers the same use cases more
 explicitly:
 
-| Yocto override                     | `[yoe]` equivalent                                         |
+| Yocto override                     | `[yoe]` equivalent                                        |
 | ---------------------------------- | --------------------------------------------------------- |
 | `DEPENDS:append:raspberrypi4`      | `if MACHINE == "raspberrypi4": extra_deps = [...]`        |
 | `SRC_URI:append:aarch64`           | `if ARCH == "aarch64": ...` in the unit                   |
@@ -56,7 +56,7 @@ hidden layering of string operations.
 
 **Key differences:**
 
-|                     | Yocto                                        | `[yoe]`                                        |
+|                     | Yocto                                        | `[yoe]`                                       |
 | ------------------- | -------------------------------------------- | --------------------------------------------- |
 | Build system        | BitBake (Python)                             | `yoe` (Go)                                    |
 | Package format      | rpm / deb / ipk                              | apk                                           |
@@ -93,7 +93,7 @@ shares `[yoe]`'s preference for simplicity.
 
 **Key differences:**
 
-|                    | Buildroot                                     | `[yoe]`                                              |
+|                    | Buildroot                                     | `[yoe]`                                             |
 | ------------------ | --------------------------------------------- | --------------------------------------------------- |
 | Configuration      | Kconfig (menuconfig)                          | Starlark files                                      |
 | Build engine       | Make                                          | `yoe` (Go)                                          |
@@ -154,7 +154,7 @@ looks like.
 
 **Key differences:**
 
-|                   | Alpine                            | `[yoe]`                                               |
+|                   | Alpine                            | `[yoe]`                                              |
 | ----------------- | --------------------------------- | ---------------------------------------------------- |
 | C library         | musl                              | glibc                                                |
 | Init system       | OpenRC                            | systemd                                              |
@@ -196,7 +196,7 @@ transparency directly influences `[yoe]`'s design.
 
 **Key differences:**
 
-|                   | Arch                      | `[yoe]`                          |
+|                   | Arch                      | `[yoe]`                         |
 | ----------------- | ------------------------- | ------------------------------- |
 | Target            | Desktop/server, x86-first | Embedded, multi-arch            |
 | Package manager   | pacman                    | apk                             |
@@ -236,7 +236,7 @@ its implementation complexity is not.
 
 **Key differences:**
 
-|                 | NixOS                                | `[yoe]`                                     |
+|                 | NixOS                                | `[yoe]`                                    |
 | --------------- | ------------------------------------ | ------------------------------------------ |
 | Config language | Nix (custom functional language)     | Starlark (Python-like)                     |
 | Store model     | Content-addressed `/nix/store` paths | Standard FHS with apk                      |
@@ -278,8 +278,8 @@ tooling design.
   flags to anything that depends on a target. `[yoe]` propagates machine-level
   settings (arch flags, optimization, kernel headers) through the unit graph.
 - **Build introspection** — GN provides `gn desc` (what does this target do?)
-  and `gn refs` (what depends on this?). `[yoe]` provides `yoe desc`, `yoe refs`,
-  and `yoe graph` for the same purpose.
+  and `gn refs` (what depends on this?). `[yoe]` provides `yoe desc`,
+  `yoe refs`, and `yoe graph` for the same purpose.
 - **Label-based references** — GN uses `//path/to:target` for unambiguous target
   identification. `[yoe]` uses a similar scheme for composable unit references
   across repositories.
@@ -294,7 +294,7 @@ tooling design.
 
 **Key differences:**
 
-|                        | GN                      | `[yoe]`                              |
+|                        | GN                      | `[yoe]`                             |
 | ---------------------- | ----------------------- | ----------------------------------- |
 | Purpose                | C/C++ meta-build system | Embedded Linux distribution builder |
 | Output                 | Ninja build files       | `.apk` packages and disk images     |
@@ -342,8 +342,8 @@ This is not a technology problem — it's an ecosystem problem that Linux
 Foundation backing solves. No amount of technical superiority overcomes "the
 silicon vendor gives us a Yocto BSP and supports it."
 
-**Package count.** Yocto has thousands of units, Buildroot has ~2800. `[yoe]` has
-a handful. Need curl, dbus, python3, or ffmpeg? You have to write the unit.
+**Package count.** Yocto has thousands of units, Buildroot has ~2800. `[yoe]`
+has a handful. Need curl, dbus, python3, or ffmpeg? You have to write the unit.
 
 **Configuration UX.** Buildroot's `make menuconfig` is a killer feature —
 visual, discoverable, searchable. You can explore what's available without
@@ -426,24 +426,24 @@ Buildroot is too limited.
 
 6. **Don't chase Yocto's tail** — resist the urge to add Yocto-like features
    (task-level DAGs, unit splitting, bbappend equivalents) to win over Yocto
-   users. Instead, make the simple path so good that teams choose `[yoe]` because
-   it fits their workflow, not because it replicates Yocto's.
+   users. Instead, make the simple path so good that teams choose `[yoe]`
+   because it fits their workflow, not because it replicates Yocto's.
 
 ## Summary Matrix
 
 | Feature                 | Yocto    | Buildroot | Alpine   | Arch     | NixOS   | **`[yoe]`** |
-| ----------------------- | -------- | --------- | -------- | -------- | ------- | ---------- |
-| Embedded focus          | Yes      | Yes       | Partial  | No       | No      | **Yes**    |
-| Simple config           | No       | Moderate  | Moderate | Yes      | No      | **Yes**    |
-| Native builds           | No       | No        | Yes      | Yes      | Yes     | **Yes**    |
-| On-device packages      | Optional | No        | Yes      | Yes      | Yes     | **Yes**    |
-| Content-addressed cache | Partial  | No        | No       | No       | Yes     | **Yes**    |
-| Remote shared cache     | Complex  | No        | No       | No       | Yes     | **Yes**    |
-| Pre-built package cache | No       | No        | Yes      | Yes      | Yes     | **Yes**    |
-| Declarative images      | Yes      | Partial   | No       | No       | Yes     | **Yes**    |
-| Multi-image support     | Yes      | No        | No       | No       | Yes     | **Yes**    |
-| Image inheritance       | Partial  | No        | No       | No       | Yes     | **Yes**    |
-| Custom BSP support      | Yes      | Yes       | No       | No       | Minimal | **Yes**    |
-| Incremental updates     | Complex  | No        | Yes      | Yes      | Yes     | **Yes**    |
-| Hermetic builds         | Partial  | No        | No       | No       | Yes     | **Yes**    |
-| Fast package ops        | N/A      | N/A       | Yes      | Moderate | Slow    | **Yes**    |
+| ----------------------- | -------- | --------- | -------- | -------- | ------- | ----------- |
+| Embedded focus          | Yes      | Yes       | Partial  | No       | No      | **Yes**     |
+| Simple config           | No       | Moderate  | Moderate | Yes      | No      | **Yes**     |
+| Native builds           | No       | No        | Yes      | Yes      | Yes     | **Yes**     |
+| On-device packages      | Optional | No        | Yes      | Yes      | Yes     | **Yes**     |
+| Content-addressed cache | Partial  | No        | No       | No       | Yes     | **Yes**     |
+| Remote shared cache     | Complex  | No        | No       | No       | Yes     | **Yes**     |
+| Pre-built package cache | No       | No        | Yes      | Yes      | Yes     | **Yes**     |
+| Declarative images      | Yes      | Partial   | No       | No       | Yes     | **Yes**     |
+| Multi-image support     | Yes      | No        | No       | No       | Yes     | **Yes**     |
+| Image inheritance       | Partial  | No        | No       | No       | Yes     | **Yes**     |
+| Custom BSP support      | Yes      | Yes       | No       | No       | Minimal | **Yes**     |
+| Incremental updates     | Complex  | No        | Yes      | Yes      | Yes     | **Yes**     |
+| Hermetic builds         | Partial  | No        | No       | No       | Yes     | **Yes**     |
+| Fast package ops        | N/A      | N/A       | Yes      | Moderate | Slow    | **Yes**     |

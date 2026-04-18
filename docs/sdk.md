@@ -19,7 +19,7 @@ for the target architecture.
 
 Different developers have different needs:
 
-| Developer type                  | What they need                            | `[yoe]` solution                  |
+| Developer type                  | What they need                            | `[yoe]` solution                 |
 | ------------------------------- | ----------------------------------------- | -------------------------------- |
 | Go/Rust/Zig app developer       | Native toolchain, target libs for CGO/FFI | Container with Tier 1 build root |
 | Python/Node.js developer        | Runtime + native extension headers        | Container or `apk add` from repo |

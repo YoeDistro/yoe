@@ -219,8 +219,8 @@ yoe bootstrap stage0
 ```
 
 These packages are built with Alpine's musl-based gcc targeting glibc. The
-output is a minimal set of `.apk` files — enough to create a self-hosting `[yoe]`
-build root.
+output is a minimal set of `.apk` files — enough to create a self-hosting
+`[yoe]` build root.
 
 ### Stage 1: Self-Hosting
 
@@ -239,8 +239,9 @@ built by `[yoe]`'s own toolchain. The Alpine dependency is gone.
 
 ### Stage 2: Normal Operation
 
-From this point on, all builds use the `[yoe]` build root. New units build inside
-Tier 2 isolated environments. The bootstrap is a one-time cost per architecture.
+From this point on, all builds use the `[yoe]` build root. New units build
+inside Tier 2 isolated environments. The bootstrap is a one-time cost per
+architecture.
 
 ```sh
 # Normal development — no bootstrap needed
@@ -258,8 +259,8 @@ base packages for each supported architecture:
 - `aarch64` — built on ARM64 CI runners
 - `riscv64` — built on RISC-V hardware or QEMU
 
-A new project pulls these from the `[yoe]` package repository and starts building
-immediately. The bootstrap process is only needed by:
+A new project pulls these from the `[yoe]` package repository and starts
+building immediately. The bootstrap process is only needed by:
 
 - `[yoe]` distribution developers maintaining the base packages.
 - Users who need to verify the full build chain for compliance/traceability.
@@ -513,7 +514,7 @@ S3 API, and works in air-gapped environments.
 
 ### Comparison with Nix and Yocto
 
-|                   | Nix                          | Yocto sstate               | `[yoe]`                          |
+|                   | Nix                          | Yocto sstate               | `[yoe]`                         |
 | ----------------- | ---------------------------- | -------------------------- | ------------------------------- |
 | Cache granularity | Per derivation output        | Per task                   | Per unit                        |
 | Key computation   | Full derivation hash         | Task hash + signatures     | Unit input hash (SHA256)        |

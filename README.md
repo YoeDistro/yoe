@@ -380,8 +380,8 @@ Each language ecosystem manages its own dependencies:
 | JavaScript | npm / pnpm      | `package-lock.json` |
 | Zig        | Zig build       | `build.zig.zon`     |
 
-`[yoe]` provides caching infrastructure (a shared module proxy for Go, a registry
-mirror for Cargo/npm, etc.) so builds are fast and repeatable without
+`[yoe]` provides caching infrastructure (a shared module proxy for Go, a
+registry mirror for Cargo/npm, etc.) so builds are fast and repeatable without
 re-downloading the internet.
 
 ### 🖥️ Kernel and System Image Tooling
@@ -447,8 +447,8 @@ Why apk over pacman or opkg:
 - **Small footprint** — apk-tools is tiny, appropriate for embedded targets.
 - **Active development** — apk 3.x adds content-addressed storage and atomic
   transactions, aligning with `[yoe]`'s Nix-inspired reproducibility goals.
-- **Works with glibc** — apk is not tied to musl; it works with any libc. `[yoe]`
-  runs its own package repositories, not Alpine's.
+- **Works with glibc** — apk is not tied to musl; it works with any libc.
+  `[yoe]` runs its own package repositories, not Alpine's.
 - **On-device package management** — devices can pull updates from a `[yoe]`
   package repository, enabling incremental OTA updates (install only changed
   packages) alongside full image updates.
@@ -484,9 +484,9 @@ real-world services without surprises.
 
 ### 🔒 Reproducibility
 
-`[yoe]` targets **functional equivalence**, not bit-for-bit reproducibility. Same
-inputs produce functionally identical outputs — same behavior, same files, same
-permissions — but the bytes may differ due to embedded timestamps, archive
+`[yoe]` targets **functional equivalence**, not bit-for-bit reproducibility.
+Same inputs produce functionally identical outputs — same behavior, same files,
+same permissions — but the bytes may differ due to embedded timestamps, archive
 member ordering, or compiler non-determinism.
 
 This is a deliberate trade-off:
