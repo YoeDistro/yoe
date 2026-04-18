@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/yoe-logo-amber-on-black.svg" alt="Yoe" width="360">
+</p>
+
 # 🐧 Yoe Next Generation
 
 **For teams building edge products in Go, Rust, Zig, Python, etc. who need Linux
