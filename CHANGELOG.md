@@ -8,6 +8,9 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **TUI: amber `[yoe]` title** — the top-left title in the TUI now renders
+  `[yoe]` in amber on black, matching the project logo.
+
 ## [0.7.1] - 2026-04-06
 
 - **Unit `release` field** — units can now specify `release = N` for packaging
