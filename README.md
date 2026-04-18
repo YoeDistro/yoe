@@ -2,7 +2,7 @@
   <img src="docs/yoe-logo-amber-on-black.svg" alt="Yoe" width="360">
 </p>
 
-# 🐧 Yoe Next Generation
+# [yoe] Next Generation
 
 **For teams building edge products in Go, Rust, Zig, Python, etc. who need Linux
 on ARM/RISC-V without the complexity of Yocto.**
@@ -22,7 +22,7 @@ cloud CI — same tool, same config, same results.
 Note: Not everything in the documentation has been implemented yet as this
 project is in the early stages.
 
-## Is Yoe-NG Right for You?
+## Is [yoe] Right for You?
 
 Yoe-NG is not for everyone. If you are building a mission-critical system that
 requires bit-for-bit reproducible builds, long-term release freezes, or
