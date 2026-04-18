@@ -1,12 +1,12 @@
 # Build & Configuration Languages
 
 An analysis of embeddable languages for defining units, build rules, and project
-configuration in Yoe-NG. This informs the choice of how users express _what to
+configuration in `[yoe]`. This informs the choice of how users express _what to
 build_ and _how to build it_.
 
 ## The Problem
 
-Yoe-NG needs a way for users to define:
+`[yoe]` needs a way for users to define:
 
 - **Units** — what to build, from what source, with what dependencies
 - **Classes/rules** — how to build (autotools, cmake, go, image assembly)
@@ -338,7 +338,7 @@ indirection makes debugging non-trivial.
 
 ## Recommendation
 
-**Starlark** is the recommended choice for Yoe-NG.
+**Starlark** is the recommended choice for `[yoe]`.
 
 **Why:**
 
@@ -376,7 +376,7 @@ indirection makes debugging non-trivial.
 
 **Composability pattern for modules:**
 
-Yoe-NG's module system (vendor BSP modules, product modules) works through
+`[yoe]`'s module system (vendor BSP modules, product modules) works through
 Starlark's function composition:
 
 ```python
@@ -401,7 +401,7 @@ openssh(extra_configure_args=["--with-pam"])
 Each module is explicit about what it modifies and where the base comes from.
 This is less magical than Nix overlays but easier to debug.
 
-## What This Means for Yoe-NG
+## What This Means for `[yoe]`
 
 With Starlark as the single language, the project structure becomes:
 
@@ -453,7 +453,7 @@ C++):
 
 These projects embed the
 [go.starlark.net](https://github.com/google/starlark-go) Go library — the same
-library Yoe-NG would use:
+library `[yoe]` would use:
 
 - **Tilt** — microservice dev environment; uses Starlark for `Tiltfile`
   configuration
@@ -472,12 +472,12 @@ library Yoe-NG would use:
 - **AutoKitteh** — developer platform for workflow automation and orchestration
 - **FizzBee** — system design language for verifying distributed systems
 
-### Why This Matters for Yoe-NG
+### Why This Matters for `[yoe]`
 
 The starlark-go library is actively maintained by Google and used in production
 by a diverse set of Go projects. The pattern of embedding starlark-go to provide
 a sandboxed, deterministic configuration language in a Go CLI is
-well-established — Yoe-NG would be following a proven approach, not blazing a
+well-established — `[yoe]` would be following a proven approach, not blazing a
 new trail.
 
 ## Open Questions

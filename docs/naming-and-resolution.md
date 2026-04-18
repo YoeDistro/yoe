@@ -1,7 +1,7 @@
 # Naming and Resolution
 
 How modules, units, and dependencies are named, referenced, and resolved in
-Yoe-NG.
+`[yoe]`.
 
 See [metadata-format.md](metadata-format.md) for the full unit/class/module
 Starlark API. See [build-environment.md](build-environment.md) for how build

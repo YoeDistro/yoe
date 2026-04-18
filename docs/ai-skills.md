@@ -1,9 +1,9 @@
-# AI-First Tooling for Yoe-NG
+# AI-First Tooling for `[yoe]`
 
-Yoe-NG is designed as an **AI-first build system**. While every operation has a
+`[yoe]` is designed as an **AI-first build system**. While every operation has a
 CLI equivalent, the primary interface for many workflows is a conversation with
 an AI assistant that understands the build system deeply. This document defines
-the skills (AI-driven workflows) that ship with Yoe-NG.
+the skills (AI-driven workflows) that ship with `[yoe]`.
 
 ## Why AI-First
 
@@ -228,7 +228,7 @@ configure issues or testing build commands manually.
 
 #### `/explain <concept>`
 
-Explain a Yoe-NG concept in context. Not just documentation — the AI reads the
+Explain a `[yoe]` concept in context. Not just documentation — the AI reads the
 project's actual configuration and explains how the concept applies to this
 specific project.
 
@@ -240,7 +240,7 @@ specific project.
 
 #### `/diff-from-yocto`
 
-For developers coming from Yocto, explain how a Yocto concept maps to Yoe-NG.
+For developers coming from Yocto, explain how a Yocto concept maps to `[yoe]`.
 References the actual Yocto documentation and provides side-by-side comparisons.
 
 ```

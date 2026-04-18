@@ -1,6 +1,6 @@
 # The `yoe` Tool
 
-`yoe` is the single CLI tool that drives all Yoe-NG workflows — building
+`yoe` is the single CLI tool that drives all `[yoe]` workflows — building
 packages and images from units, managing caches and source downloads, and
 flashing devices. It is a statically-linked Go binary with no runtime
 dependencies.
@@ -23,7 +23,7 @@ workstation, run on an ARM build server.
 
 ```
 yoe                 Launch the interactive TUI
-yoe init            Create a new Yoe-NG project
+yoe init            Create a new `[yoe]` project
 yoe build           Build units (packages and images)
 yoe dev             Manage source modifications (extract, diff, status)
 yoe flash           Write an image to a device/SD card
@@ -52,7 +52,7 @@ for details.
 
 ### `yoe init`
 
-Scaffolds a new Yoe-NG project directory with the standard layout.
+Scaffolds a new `[yoe]` project directory with the standard layout.
 
 ```sh
 yoe init my-project
@@ -168,7 +168,7 @@ assembly:
 5. **Read machine definition** — evaluate `machines/<name>.star` for
    architecture, kernel, bootloader, and partition layout.
 6. **Create empty rootfs** — set up a temporary directory.
-7. **Install packages** — run `apk add --root <rootfs>` with the Yoe-NG
+7. **Install packages** — run `apk add --root <rootfs>` with the `[yoe]`
    repository to install all declared packages. apk handles dependency
    resolution.
 8. **Apply configuration** — set hostname, timezone, locale, enable systemd
@@ -529,7 +529,7 @@ Running `yoe` with no arguments launches an interactive terminal UI showing all
 units with their build status.
 
 ```
-  Yoe-NG  Machine: qemu-x86_64  Image: base-image
+  `[yoe]`  Machine: qemu-x86_64  Image: base-image
 
   NAME                         CLASS        STATUS
 → base-files                   unit         ● cached
@@ -765,7 +765,7 @@ yoe clean openssh
 
 | Variable                | Default   | Description                                     |
 | ----------------------- | --------- | ----------------------------------------------- |
-| `YOE_PROJECT`           | `.` (cwd) | Path to the Yoe-NG project root                 |
+| `YOE_PROJECT`           | `.` (cwd) | Path to the `[yoe]` project root                 |
 | `YOE_CACHE`             | `cache/`  | Cache directory for sources, builds, packages   |
 | `YOE_JOBS`              | nproc     | Parallel build jobs                             |
 | `YOE_LOG`               | `info`    | Log level (`debug`, `info`, `warn`, `error`)    |

@@ -1,6 +1,6 @@
 # SDK Management
 
-How Yoe-NG provides development environments for application and system
+How `[yoe]` provides development environments for application and system
 developers targeting embedded hardware.
 
 ## The Problem
@@ -10,7 +10,7 @@ target sysroot, and headers/libraries — distributed to developers who write
 applications for the target device. Yocto's `populate_sdk` generates a
 self-contained tarball with everything needed to cross-compile for the target.
 
-Yoe-NG does not cross-compile. All builds are native — the host architecture
+`[yoe]` does not cross-compile. All builds are native — the host architecture
 _is_ the target architecture. This changes the SDK story fundamentally: instead
 of shipping a cross-toolchain, the SDK is a **native development environment**
 for the target architecture.
@@ -19,7 +19,7 @@ for the target architecture.
 
 Different developers have different needs:
 
-| Developer type                  | What they need                            | Yoe-NG solution                  |
+| Developer type                  | What they need                            | `[yoe]` solution                  |
 | ------------------------------- | ----------------------------------------- | -------------------------------- |
 | Go/Rust/Zig app developer       | Native toolchain, target libs for CGO/FFI | Container with Tier 1 build root |
 | Python/Node.js developer        | Runtime + native extension headers        | Container or `apk add` from repo |
@@ -30,7 +30,7 @@ Different developers have different needs:
 
 For most language-native development (Go, Rust, Python), developers work on
 their own machines with standard toolchains and don't need an SDK at all —
-Yoe-NG just packages the output. The SDK matters when developers need **target
+`[yoe]` just packages the output. The SDK matters when developers need **target
 system libraries** (for CGO, FFI, or C/C++ development) or when the target
 architecture differs from their workstation.
 
@@ -45,7 +45,7 @@ load("//classes/sdk.star", "sdk")
 sdk(
     name = "yoe-sdk",
     version = "1.0.0",
-    description = "Yoe-NG development SDK for BeagleBone",
+    description = "`[yoe]` development SDK for BeagleBone",
     machine = "beaglebone-black",
 
     # Base system packages (headers + libs + pkg-config)
@@ -82,7 +82,7 @@ This produces:
 ## Container-Based SDK
 
 The container is the primary SDK format. It leverages the Tier 1 build root that
-Yoe-NG already maintains — the same glibc-based environment used for building
+`[yoe]` already maintains — the same glibc-based environment used for building
 packages, but packaged as a Docker/OCI image.
 
 ### Using the SDK

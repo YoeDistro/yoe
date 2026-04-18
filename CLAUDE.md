@@ -5,7 +5,7 @@ code in this repository.
 
 ## Project Overview
 
-Yoe-NG is a next-generation embedded Linux distribution builder — a simpler
+`[yoe]` is a next-generation embedded Linux distribution builder — a simpler
 alternative to Yocto. The project has a working Go CLI (`yoe`) that builds
 artifacts from Starlark units inside a Docker container, creates bootable disk
 images, and runs them in QEMU. A `units-core` module provides Starlark classes

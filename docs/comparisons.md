@@ -1,7 +1,7 @@
 # Comparisons
 
-How Yoe-NG relates to existing embedded Linux build systems and distributions.
-For each, we identify what Yoe-NG adopts, what it leaves behind, and where it
+How `[yoe]` relates to existing embedded Linux build systems and distributions.
+For each, we identify what `[yoe]` adopts, what it leaves behind, and where it
 differs.
 
 ## vs. Yocto / OpenEmbedded
@@ -9,7 +9,7 @@ differs.
 Yocto is the industry standard for custom embedded Linux. It is extremely
 capable but carries significant complexity.
 
-**What Yoe-NG adopts from Yocto:**
+**What `[yoe]` adopts from Yocto:**
 
 - **Machine abstraction** — a declarative way to define board-specific
   configuration (kernel defconfig, device tree, bootloader, partition layout).
@@ -20,12 +20,12 @@ capable but carries significant complexity.
 - **OTA integration** — first-class support for update frameworks (RAUC,
   SWUpdate).
 
-**What Yoe-NG leaves behind:**
+**What `[yoe]` leaves behind:**
 
 - BitBake and the task-level dependency graph.
 - The unit/bbappend/bbclass metadata system.
 - sstate-cache complexity — Yocto's sstate is per-task and requires careful
-  configuration of mirrors, hash equivalence servers, and signing. Yoe-NG's
+  configuration of mirrors, hash equivalence servers, and signing. `[yoe]`'s
   cache is per-unit, stored in S3-compatible object storage, and needs only a
   bucket URL.
 - Cross-compilation toolchains.
@@ -39,10 +39,10 @@ layer conditional string operations on top. The result is powerful but
 notoriously hard to debug (you need `bitbake -e` to see what a variable actually
 resolved to).
 
-Yoe-NG's model is function-based, which covers the same use cases more
+`[yoe]`'s model is function-based, which covers the same use cases more
 explicitly:
 
-| Yocto override                     | Yoe-NG equivalent                                         |
+| Yocto override                     | `[yoe]` equivalent                                         |
 | ---------------------------------- | --------------------------------------------------------- |
 | `DEPENDS:append:raspberrypi4`      | `if MACHINE == "raspberrypi4": extra_deps = [...]`        |
 | `SRC_URI:append:aarch64`           | `if ARCH == "aarch64": ...` in the unit                   |
@@ -56,7 +56,7 @@ hidden layering of string operations.
 
 **Key differences:**
 
-|                     | Yocto                                        | Yoe-NG                                        |
+|                     | Yocto                                        | `[yoe]`                                        |
 | ------------------- | -------------------------------------------- | --------------------------------------------- |
 | Build system        | BitBake (Python)                             | `yoe` (Go)                                    |
 | Package format      | rpm / deb / ipk                              | apk                                           |
@@ -77,14 +77,14 @@ and tooling invested.
 ## vs. Buildroot
 
 Buildroot is the simplest of the established embedded Linux build systems. It
-shares Yoe-NG's preference for simplicity.
+shares `[yoe]`'s preference for simplicity.
 
-**What Yoe-NG adopts from Buildroot:**
+**What `[yoe]` adopts from Buildroot:**
 
 - The principle that simpler is better.
 - Minimal base system approach.
 
-**What Yoe-NG leaves behind:**
+**What `[yoe]` leaves behind:**
 
 - Kconfig as the configuration interface.
 - Make as the build engine.
@@ -93,7 +93,7 @@ shares Yoe-NG's preference for simplicity.
 
 **Key differences:**
 
-|                    | Buildroot                                     | Yoe-NG                                              |
+|                    | Buildroot                                     | `[yoe]`                                              |
 | ------------------ | --------------------------------------------- | --------------------------------------------------- |
 | Configuration      | Kconfig (menuconfig)                          | Starlark files                                      |
 | Build engine       | Make                                          | `yoe` (Go)                                          |
@@ -116,12 +116,12 @@ rootfs. This means:
 **Caching gap:** Buildroot has no output caching at all — every developer and
 every CI run rebuilds from source. `ccache` can help with C/C++ compilation but
 doesn't help with configure steps, language-native builds, or package assembly.
-Yoe-NG's S3-backed cache means a typical developer build pulls pre-built
+`[yoe]`'s S3-backed cache means a typical developer build pulls pre-built
 packages for everything except the component they're actively changing.
 
 **Multi-image gap:** Buildroot produces a single image per configuration. To
 build a "dev" variant and a "production" variant, you need separate build
-directories with separate configs. With Yoe-NG, both images share the same
+directories with separate configs. With `[yoe]`, both images share the same
 package repository — only the package lists differ.
 
 **When to use Buildroot instead:** when you want the absolute simplest build
@@ -132,10 +132,10 @@ Buildroot's simplicity is hard to beat.
 
 ## vs. Alpine Linux
 
-Alpine is the closest existing distribution to what Yoe-NG's target runtime
+Alpine is the closest existing distribution to what `[yoe]`'s target runtime
 looks like.
 
-**What Yoe-NG adopts from Alpine:**
+**What `[yoe]` adopts from Alpine:**
 
 - **apk as the package manager** — adopted directly. Fast, simple, proven.
 - **busybox as coreutils** — minimal userspace in a single binary.
@@ -145,16 +145,16 @@ looks like.
   setuid binaries unless explicitly required.
 - **Fast package operations** — install/remove measured in milliseconds.
 
-**What Yoe-NG leaves behind:**
+**What `[yoe]` leaves behind:**
 
 - **musl** — using glibc instead for maximum compatibility with language
   runtimes and pre-built binaries.
-- **No systemd** — Alpine uses OpenRC; Yoe-NG uses systemd.
+- **No systemd** — Alpine uses OpenRC; `[yoe]` uses systemd.
 - **Limited BSP/hardware story** — Alpine doesn't target custom embedded boards.
 
 **Key differences:**
 
-|                   | Alpine                            | Yoe-NG                                               |
+|                   | Alpine                            | `[yoe]`                                               |
 | ----------------- | --------------------------------- | ---------------------------------------------------- |
 | C library         | musl                              | glibc                                                |
 | Init system       | OpenRC                            | systemd                                              |
@@ -173,21 +173,21 @@ VMs.
 ## vs. Arch Linux
 
 Arch is a philosophy as much as a distribution. Its commitment to simplicity and
-transparency directly influences Yoe-NG's design.
+transparency directly influences `[yoe]`'s design.
 
-**What Yoe-NG adopts from Arch:**
+**What `[yoe]` adopts from Arch:**
 
 - **Rolling release model** — no big-bang version upgrades; packages update
   continuously against a single branch.
 - **Minimal base, user-assembled** — ship the smallest useful system and let the
   integrator compose what they need.
 - **PKGBUILD-style simplicity** — build definitions should be concise, readable
-  shell-like scripts, not complex metadata. Yoe-NG's Starlark units aim for
+  shell-like scripts, not complex metadata. `[yoe]`'s Starlark units aim for
   similar auditability — simple units read like declarative config.
 - **Documentation culture** — invest in clear, practical docs rather than tribal
   knowledge.
 
-**What Yoe-NG leaves behind:**
+**What `[yoe]` leaves behind:**
 
 - x86-centric assumptions.
 - pacman (using apk instead).
@@ -196,7 +196,7 @@ transparency directly influences Yoe-NG's design.
 
 **Key differences:**
 
-|                   | Arch                      | Yoe-NG                          |
+|                   | Arch                      | `[yoe]`                          |
 | ----------------- | ------------------------- | ------------------------------- |
 | Target            | Desktop/server, x86-first | Embedded, multi-arch            |
 | Package manager   | pacman                    | apk                             |
@@ -212,11 +212,11 @@ well for power users on general-purpose hardware.
 
 ## vs. NixOS / Nix
 
-Nix is the most intellectually ambitious of the systems Yoe-NG draws from. Its
+Nix is the most intellectually ambitious of the systems `[yoe]` draws from. Its
 ideas about reproducibility and declarative configuration are adopted wholesale;
 its implementation complexity is not.
 
-**What Yoe-NG adopts from Nix:**
+**What `[yoe]` adopts from Nix:**
 
 - **Content-addressed build cache** — build outputs keyed by their inputs so
   identical builds produce cache hits regardless of when or where they run.
@@ -227,7 +227,7 @@ its implementation complexity is not.
 - **Atomic system updates and rollback** — deploy new system images atomically
   with the ability to boot into the previous version.
 
-**What Yoe-NG leaves behind:**
+**What `[yoe]` leaves behind:**
 
 - The Nix expression language.
 - The `/nix/store` path model and its massive closure sizes.
@@ -236,7 +236,7 @@ its implementation complexity is not.
 
 **Key differences:**
 
-|                 | NixOS                                | Yoe-NG                                     |
+|                 | NixOS                                | `[yoe]`                                     |
 | --------------- | ------------------------------------ | ------------------------------------------ |
 | Config language | Nix (custom functional language)     | Starlark (Python-like)                     |
 | Store model     | Content-addressed `/nix/store` paths | Standard FHS with apk                      |
@@ -249,12 +249,12 @@ its implementation complexity is not.
 | Learning curve  | Steep (must learn Nix language)      | Shallow (Starlark, Python-like)            |
 
 **Caching comparison:** Nix's binary cache (Cachix, or self-hosted with
-`nix-serve`) is conceptually similar to Yoe-NG's remote cache — both store
+`nix-serve`) is conceptually similar to `[yoe]`'s remote cache — both store
 content-addressed build outputs in S3-compatible storage. The key differences:
 Nix caches _closures_ (a package plus all its transitive runtime dependencies),
-which can be very large. Yoe-NG caches individual `.apk` packages, which are
+which can be very large. `[yoe]` caches individual `.apk` packages, which are
 smaller and more granular. Nix's content addressing is based on the full
-derivation hash (all inputs); Yoe-NG uses a similar scheme but at unit
+derivation hash (all inputs); `[yoe]` uses a similar scheme but at unit
 granularity rather than Nix's per-output granularity.
 
 **When to use Nix instead:** when you need the strongest possible
@@ -265,36 +265,36 @@ system management on general-purpose hardware.
 ## vs. Google GN
 
 GN is not a Linux distribution — it's a meta-build system used by Chromium and
-Fuchsia. But several of its architectural ideas directly influenced Yoe-NG's
+Fuchsia. But several of its architectural ideas directly influenced `[yoe]`'s
 tooling design.
 
-**What Yoe-NG adopts from GN:**
+**What `[yoe]` adopts from GN:**
 
 - **Two-phase resolve-then-build** — GN fully resolves and validates the
   dependency graph before generating any build files. `yoe build` does the same:
   resolve the entire unit DAG, check for errors, then build. No partial builds
   from graph errors discovered mid-way.
 - **Config propagation** — GN's `public_configs` automatically apply compiler
-  flags to anything that depends on a target. Yoe-NG propagates machine-level
+  flags to anything that depends on a target. `[yoe]` propagates machine-level
   settings (arch flags, optimization, kernel headers) through the unit graph.
 - **Build introspection** — GN provides `gn desc` (what does this target do?)
-  and `gn refs` (what depends on this?). Yoe-NG provides `yoe desc`, `yoe refs`,
+  and `gn refs` (what depends on this?). `[yoe]` provides `yoe desc`, `yoe refs`,
   and `yoe graph` for the same purpose.
 - **Label-based references** — GN uses `//path/to:target` for unambiguous target
-  identification. Yoe-NG uses a similar scheme for composable unit references
+  identification. `[yoe]` uses a similar scheme for composable unit references
   across repositories.
 
-**What Yoe-NG leaves behind:**
+**What `[yoe]` leaves behind:**
 
-- Ninja file generation — Yoe-NG's unit builds are coarse-grained enough that
+- Ninja file generation — `[yoe]`'s unit builds are coarse-grained enough that
   `yoe` orchestrates directly.
-- GN's custom scripting language — Starlark serves the same purpose for Yoe-NG.
+- GN's custom scripting language — Starlark serves the same purpose for `[yoe]`.
 - C/C++ build model specifics — GN is deeply tied to source-file-level
   dependency tracking, which isn't relevant for unit-level builds.
 
 **Key differences:**
 
-|                        | GN                      | Yoe-NG                              |
+|                        | GN                      | `[yoe]`                              |
 | ---------------------- | ----------------------- | ----------------------------------- |
 | Purpose                | C/C++ meta-build system | Embedded Linux distribution builder |
 | Output                 | Ninja build files       | `.apk` packages and disk images     |
@@ -303,9 +303,9 @@ tooling design.
 | Build execution        | Ninja                   | `yoe` directly                      |
 | Introspection          | `gn desc`, `gn refs`    | `yoe desc`, `yoe refs`, `yoe graph` |
 
-GN is not an alternative to Yoe-NG — they solve different problems. But GN's
+GN is not an alternative to `[yoe]` — they solve different problems. But GN's
 approach to graph resolution, config propagation, and introspection are
-well-proven patterns that Yoe-NG applies to the embedded Linux domain.
+well-proven patterns that `[yoe]` applies to the embedded Linux domain.
 
 ## Value Proposition and Strategic Positioning
 
@@ -326,13 +326,13 @@ already knows about — `SRC_URI` with checksums for each crate,
 `LIC_FILES_CHKSUM` for each module. This is busywork that duplicates what
 `Cargo.lock` and `go.sum` already guarantee.
 
-Yoe-NG's position: **let the language package manager do its job.** A Go unit
+`[yoe]`'s position: **let the language package manager do its job.** A Go unit
 should declare _what_ to build, not _how to resolve every transitive
 dependency_. Content-addressed caching hashes the output — if inputs haven't
 changed, the output is the same. You get reproducibility without micromanaging
 the build.
 
-### Where Yoe-NG Cannot Compete (Yet)
+### Where `[yoe]` Cannot Compete (Yet)
 
 Be honest about the gaps:
 
@@ -342,26 +342,26 @@ This is not a technology problem — it's an ecosystem problem that Linux
 Foundation backing solves. No amount of technical superiority overcomes "the
 silicon vendor gives us a Yocto BSP and supports it."
 
-**Package count.** Yocto has thousands of units, Buildroot has ~2800. Yoe-NG has
+**Package count.** Yocto has thousands of units, Buildroot has ~2800. `[yoe]` has
 a handful. Need curl, dbus, python3, or ffmpeg? You have to write the unit.
 
 **Configuration UX.** Buildroot's `make menuconfig` is a killer feature —
 visual, discoverable, searchable. You can explore what's available without
-reading unit files. Yoe-NG requires editing Starlark by hand.
+reading unit files. `[yoe]` requires editing Starlark by hand.
 
 **Documentation and community.** Yocto has comprehensive manuals, Bootlin
 training materials, and years of mailing list archives. Buildroot has a
-well-maintained manual and active list. Problems are googleable. Yoe-NG has
+well-maintained manual and active list. Problems are googleable. `[yoe]` has
 design docs and a small team.
 
 **Legal compliance tooling.** Yocto's `do_populate_lic` and Buildroot's
 `make legal-info` generate license manifests and source archives. This is
-required for shipping products in many industries. Yoe-NG has nothing here yet.
+required for shipping products in many industries. `[yoe]` has nothing here yet.
 
 **Proven production track record.** Thousands of products ship with Yocto.
-Buildroot runs on millions of devices. Yoe-NG is a prototype.
+Buildroot runs on millions of devices. `[yoe]` is a prototype.
 
-### Where Yoe-NG Can Win
+### Where `[yoe]` Can Win
 
 **Target audience:** Teams building Go/Rust/Zig services for embedded Linux —
 edge computing, IoT gateways, network appliances. Teams where the application
@@ -380,12 +380,12 @@ touch.
 **Custom hardware without desktop distro limitations.** Desktop distros (Debian,
 Fedora, Alpine) have great package management but no story for custom kernels,
 device trees, bootloaders, board-specific firmware, or flash/deploy workflows.
-This is the entire reason Yocto and Buildroot exist. Yoe-NG should provide BSP
+This is the entire reason Yocto and Buildroot exist. `[yoe]` should provide BSP
 tooling (machine definitions, kernel units, `yoe flash`, `yoe run`) that is
 simpler than Yocto's but more capable than anything desktop distros offer.
 
 **Incremental builds and shared caching.** Buildroot rebuilds everything from
-scratch. Yocto's sstate is powerful but complex to set up. Yoe-NG's
+scratch. Yocto's sstate is powerful but complex to set up. `[yoe]`'s
 content-addressed `.apk` cache in S3-compatible storage is conceptually simpler:
 push packages to a bucket, pull them on other machines. CI builds once,
 developers reuse the output.
@@ -398,7 +398,7 @@ format.
 ### The Alpine Linux Precedent
 
 Alpine didn't supplant Debian — it became the default for containers because it
-was radically smaller and simpler for that specific use case. Yoe-NG doesn't
+was radically smaller and simpler for that specific use case. `[yoe]` doesn't
 need to replace Yocto for automotive or aerospace. It needs to be the obvious
 choice for a specific class of embedded product where Yocto is overkill and
 Buildroot is too limited.
@@ -410,7 +410,7 @@ Buildroot is too limited.
    have a binary" to "I have a bootable image on custom hardware" in minutes.
 
 2. **BSP tooling** — machine definitions, kernel/bootloader units, `yoe flash`,
-   `yoe run`. This is what desktop distros lack and what justifies Yoe-NG's
+   `yoe run`. This is what desktop distros lack and what justifies `[yoe]`'s
    existence as a build system rather than just another distro.
 
 3. **Shared build cache** — the S3-backed package cache is a major advantage
@@ -426,12 +426,12 @@ Buildroot is too limited.
 
 6. **Don't chase Yocto's tail** — resist the urge to add Yocto-like features
    (task-level DAGs, unit splitting, bbappend equivalents) to win over Yocto
-   users. Instead, make the simple path so good that teams choose Yoe-NG because
+   users. Instead, make the simple path so good that teams choose `[yoe]` because
    it fits their workflow, not because it replicates Yocto's.
 
 ## Summary Matrix
 
-| Feature                 | Yocto    | Buildroot | Alpine   | Arch     | NixOS   | **Yoe-NG** |
+| Feature                 | Yocto    | Buildroot | Alpine   | Arch     | NixOS   | **`[yoe]`** |
 | ----------------------- | -------- | --------- | -------- | -------- | ------- | ---------- |
 | Embedded focus          | Yes      | Yes       | Partial  | No       | No      | **Yes**    |
 | Simple config           | No       | Moderate  | Moderate | Yes      | No      | **Yes**    |

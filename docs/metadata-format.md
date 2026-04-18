@@ -1,13 +1,13 @@
 # Unit & Configuration Format
 
-Yoe-NG uses [Starlark](https://github.com/google/starlark-go) — a deterministic,
+`[yoe]` uses [Starlark](https://github.com/google/starlark-go) — a deterministic,
 sandboxed dialect of Python — for all build definitions. Units, classes, machine
 definitions, and project configuration are all `.star` files. See
 [Build Languages](build-languages.md) for the rationale behind this choice.
 
 ## Units vs. Packages
 
-These are distinct concepts in Yoe-NG:
+These are distinct concepts in `[yoe]`:
 
 - **Units** — `.star` files in the project tree that describe _how to build_
   software. They live in version control and are a development/CI concern.
@@ -108,7 +108,7 @@ tradeoff Yocto and Debian make — granular packaging trades a small amount of
 unit complexity for significant control over image contents.
 
 Alpine's apk already supports sub-packages natively (Alpine's `openssh` APKBUILD
-produces `openssh`, `openssh-doc`, `openssh-dev`, etc.), so Yoe-NG follows a
+produces `openssh`, `openssh-doc`, `openssh-dev`, etc.), so `[yoe]` follows a
 proven pattern.
 
 ## Why Starlark
@@ -459,7 +459,7 @@ Top-level configuration that ties everything together.
 project(
     name = "yoe",
     version = "0.1.0",
-    description = "Yoe-NG embedded Linux distribution",
+    description = "`[yoe]` embedded Linux distribution",
     defaults = defaults(
         machine = "qemu-arm64",
         image = "base-image",
@@ -626,7 +626,7 @@ deterministic evaluation model.
 
 ## Directory Structure
 
-A typical Yoe-NG project layout:
+A typical `[yoe]` project layout:
 
 ```
 my-project/
@@ -789,7 +789,7 @@ equivalent to Go's `replace` directive in `go.mod`.
 
 ## Label-Based References
 
-Inspired by Bazel's label system and GN's `//path/to:target`, Yoe-NG uses a
+Inspired by Bazel's label system and GN's `//path/to:target`, `[yoe]` uses a
 label scheme for referencing units and classes across repositories:
 
 ```python
