@@ -23,7 +23,7 @@ import (
 
 // Styles
 var (
-	titleStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	titleStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#e8863a")).Background(lipgloss.Color("#000000"))
 	headerStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14"))
 	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#5fff5f"))
 	dimStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
@@ -892,7 +892,7 @@ func (m model) viewUnits() string {
 	machine := m.proj.Defaults.Machine
 	image := m.proj.Defaults.Image
 	b.WriteString(fmt.Sprintf("  %s  Machine: %s  Image: %s\n",
-		titleStyle.Render("Yoe-NG"),
+		titleStyle.Render("[yoe]"),
 		headerStyle.Render(machine),
 		headerStyle.Render(image)))
 
