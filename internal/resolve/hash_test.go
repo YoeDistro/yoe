@@ -1,6 +1,8 @@
 package resolve
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
@@ -101,5 +103,64 @@ func TestComputeAllHashes(t *testing.T) {
 	}
 	if hashes["openssh"] == hashes2["openssh"] {
 		t.Error("openssh hash should change when transitive dep changes")
+	}
+}
+
+func TestUnitHash_ExtraAffectsHash(t *testing.T) {
+	base := func() *yoestar.Unit {
+		return &yoestar.Unit{
+			Name:    "my-app",
+			Version: "1.0.0",
+			Class:   "unit",
+			Extra:   map[string]any{"port": int64(8080)},
+		}
+	}
+	h1 := UnitHash(base(), "x86_64", nil)
+
+	u2 := base()
+	u2.Extra["port"] = int64(9000)
+	h2 := UnitHash(u2, "x86_64", nil)
+
+	if h1 == h2 {
+		t.Error("hash did not change when Extra changed")
+	}
+}
+
+func TestUnitHash_ExtraKeyOrderStable(t *testing.T) {
+	u1 := &yoestar.Unit{
+		Name: "u", Version: "1", Class: "unit",
+		Extra: map[string]any{"a": int64(1), "b": int64(2), "c": int64(3)},
+	}
+	u2 := &yoestar.Unit{
+		Name: "u", Version: "1", Class: "unit",
+		Extra: map[string]any{"c": int64(3), "b": int64(2), "a": int64(1)},
+	}
+	if UnitHash(u1, "x86_64", nil) != UnitHash(u2, "x86_64", nil) {
+		t.Error("hash depends on Extra map iteration order")
+	}
+}
+
+func TestUnitHash_FilesDirectoryAffectsHash(t *testing.T) {
+	tmp := t.TempDir()
+	unitDir := filepath.Join(tmp, "unit-src", "u")
+	if err := os.MkdirAll(unitDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(unitDir, "a.tmpl"), []byte("one"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	u := &yoestar.Unit{
+		Name: "u", Version: "1", Class: "unit",
+		DefinedIn: filepath.Join(tmp, "unit-src"),
+	}
+	h1 := UnitHash(u, "x86_64", nil)
+
+	if err := os.WriteFile(filepath.Join(unitDir, "a.tmpl"), []byte("two"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	h2 := UnitHash(u, "x86_64", nil)
+
+	if h1 == h2 {
+		t.Error("hash did not change when file in unit files dir changed")
 	}
 }
