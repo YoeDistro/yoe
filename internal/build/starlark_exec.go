@@ -101,6 +101,18 @@ func NewBuildThread(ctx context.Context, cfg *SandboxConfig, execer Execer) *sta
 	return t
 }
 
+// SetTemplateContext attaches a TemplateContext to a build thread. Called by
+// the executor before invoking a task function so install_file /
+// install_template builtins can read per-unit state.
+//
+// The install_file / install_template SetLocal calls are commented out until
+// Task 3 and Task 4 add the real fnInstallFile / fnInstallTemplate functions.
+func SetTemplateContext(thread *starlark.Thread, tctx *TemplateContext) {
+	thread.SetLocal(templateKey, tctx)
+	// thread.SetLocal("yoe.install_file", starlark.NewBuiltin("install_file", fnInstallFile))
+	// thread.SetLocal("yoe.install_template", starlark.NewBuiltin("install_template", fnInstallTemplate))
+}
+
 // fnRun implements the run() Starlark builtin for build-time command execution.
 //
 //	run(command, check=True) -> struct(exit_code, stdout, stderr)
