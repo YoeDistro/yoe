@@ -21,12 +21,13 @@ device**.
 Units are inputs to the build system. Packages are outputs. A developer edits
 units; a device only ever sees packages.
 
-### Sub-packages (planned; not yet implemented)
+### Sub-packages (planned)
 
-> **Status:** Design-ahead. Today `[yoe]` produces exactly one `.apk` per unit —
-> `internal/artifact/apk.go` packages `$DESTDIR` into a single archive, and the
-> Starlark `subpackages =` field is not yet parsed. This section describes the
-> intended future model so units and classes can be written with it in mind.
+> **Status:** Today `[yoe]` produces exactly one `.apk` per unit —
+> `internal/artifact/apk.go` packages `$DESTDIR` into a single archive, and
+> the Starlark `subpackages =` field is not yet parsed. This section
+> describes the intended future model so units and classes can be written
+> with it in mind.
 
 A single unit will be able to produce a small number of `.apk` packages from one
 source build. The goal is targeted — keep runtime images lean — not exhaustive
@@ -142,7 +143,15 @@ produces `openssl`, `openssl-dev`, `openssl-dbg`, etc.), so the plumbing in apk
 is already proven — what `[yoe]` needs to build is the Starlark surface, the
 split engine, and the default strip logic in the shared classes.
 
-### Dependency resolution at image time
+### Dependency resolution at image time (planned)
+
+> **Status:** Image assembly currently reads the unit metadata, not the
+> package metadata. `internal/image/rootfs.go` walks `unit.RuntimeDeps`
+> recursively from the in-memory Starlark project and then extracts each
+> resolved `.apk` with `tar xzf --exclude=.PKGINFO` — bypassing apk's
+> resolver entirely. `.PKGINFO` is written (`internal/artifact/apk.go` emits
+> `depend =` lines) but not consulted during image assembly. This section
+> describes the planned move to package-metadata-driven resolution.
 
 There are two places dependency information lives in `[yoe]`, and they serve
 different phases:
@@ -157,13 +166,6 @@ different phases:
 The unit author writes `runtime_deps = [...]` once; the build emits those into
 `.PKGINFO` as `depend =` lines. From that point the package metadata is
 authoritative for installation.
-
-**Status today.** Image assembly currently reads the unit metadata, not the
-package metadata. `internal/image/rootfs.go` walks `unit.RuntimeDeps`
-recursively from the in-memory Starlark project and then extracts each resolved
-`.apk` with `tar xzf --exclude=.PKGINFO` — bypassing apk's resolver entirely.
-`.PKGINFO` is written (`internal/artifact/apk.go` emits `depend =` lines) but
-not consulted during image assembly.
 
 **Planned: move image-time resolution to package metadata.** Image assembly will
 resolve dependencies by reading the `APKINDEX` / `.PKGINFO` of the already-built
@@ -447,6 +449,15 @@ busybox(extra_patches=["patches/vendor-busybox-audit.patch"])
 
 ### Tasks and Per-Task Containers (planned)
 
+> **Status:** `task()` and unit-level `container =` are _shipped_ — every
+> built-in class in `modules/units-core/classes/` (autotools, cmake, go,
+> container, image) already generates `tasks = [task(...)]` and the build
+> executor (`internal/build/executor.go`) runs each task's steps inside the
+> unit's resolved container. The _per-task_ `container=` override described
+> below is _planned_: the task struct in Starlark accepts the field but the
+> executor currently ignores it and uses the unit-level container for every
+> task in the unit. Wire-through is the remaining work.
+
 Units can define named build tasks via `task()`, each with an optional Docker
 container. This replaces the flat `build = [...]` string list with structured
 steps that can each run in different environments.
@@ -541,9 +552,13 @@ go_binary(
 ```
 
 Language-specific classes handle the build details — `go_binary()` sets up
-`GOMODCACHE`, runs `go build`, and packages the result. Similar classes exist
-for Rust (`rust_binary()`), Zig (`zig_binary()`), Python (`python_unit()`), and
-Node.js (`node_unit()`).
+`GOMODCACHE`, runs `go build`, and packages the result.
+
+> **Status:** Only `go_binary()` (in `modules/units-core/classes/go.star`) is
+> implemented today. Similar classes for Rust (`rust_binary()`), Zig
+> (`zig_binary()`), Python (`python_unit()`), and Node.js (`node_unit()`) are
+> _planned_ but not yet shipped. Applications in those languages can still be
+> built by using `unit()` directly with explicit build steps.
 
 ### Project Configuration (`PROJECT.star`)
 
@@ -593,20 +608,22 @@ _what to build_.
 
 ### Built-in Classes
 
-These ship with `yoe` and cover common build patterns:
+These ship with the `units-core` module (at `modules/units-core/classes/`) or
+are under the `(planned)` roadmap:
 
-| Class           | Description                                   |
-| --------------- | --------------------------------------------- |
-| `unit()`        | Generic package — custom build steps as shell |
-| `autotools()`   | configure / make / make install               |
-| `cmake()`       | CMake build                                   |
-| `meson()`       | Meson + Ninja build                           |
-| `go_binary()`   | Go application                                |
-| `rust_binary()` | Rust application (Cargo)                      |
-| `zig_binary()`  | Zig application                               |
-| `python_unit()` | Python package (pip/uv)                       |
-| `node_unit()`   | Node.js package (npm/pnpm)                    |
-| `image()`       | Root filesystem image assembly                |
+| Class             | Status    | Description                                   |
+| ----------------- | --------- | --------------------------------------------- |
+| `unit()`          | shipped   | Generic package — custom build steps as shell |
+| `autotools()`     | shipped   | configure / make / make install               |
+| `cmake()`         | shipped   | CMake build                                   |
+| `go_binary()`     | shipped   | Go application                                |
+| `container()`     | shipped   | Build a Docker/OCI container image            |
+| `image()`         | shipped   | Root filesystem image assembly                |
+| `meson()`         | planned   | Meson + Ninja build                           |
+| `rust_binary()`   | planned   | Rust application (Cargo)                      |
+| `zig_binary()`    | planned   | Zig application                               |
+| `python_unit()`   | planned   | Python package (pip/uv)                       |
+| `node_unit()`     | planned   | Node.js package (npm/pnpm)                    |
 
 ### Class Composition
 
@@ -796,7 +813,15 @@ caches these repositories, making them available as `@module-name` in `load()`
 statements. The module name is derived from the last component of `path` (if
 set) or the URL.
 
-### Module Manifests (MODULE.star)
+### Module Manifests (MODULE.star) (planned)
+
+> **Status:** The `module_info()` Starlark builtin is wired up in
+> `internal/starlark/builtins.go` and the `ModuleInfo` struct is populated
+> when a `MODULE.star` is evaluated, but the module resolver in
+> `internal/module/` never reads those declared `deps`. Transitive module
+> resolution — both the v1 "error on missing" and v2 "auto-fetch" behaviors
+> below — is _planned_. Today only the top-level `modules = [...]` list in
+> `PROJECT.star` is fetched.
 
 Modules can declare their own dependencies via a `MODULE.star` file in the
 repository root. This enables BSP vendors to ship self-contained modules without

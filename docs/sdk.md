@@ -1,6 +1,12 @@
-# SDK Management
+# SDK Management (planned)
 
-How `[yoe]` provides development environments for application and system
+> **Status:** The SDK surface described below is not yet implemented. There
+> is no `sdk()` Starlark class, no `yoe sdk` subcommand, and no sysroot or
+> container-image export paths in the build engine today. This document
+> describes the intended design so application and system developers can see
+> where `[yoe]` is headed.
+
+How `[yoe]` will provide development environments for application and system
 developers targeting embedded hardware.
 
 ## The Problem

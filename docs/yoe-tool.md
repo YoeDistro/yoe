@@ -30,7 +30,7 @@ yoe flash           Write an image to a device/SD card
 yoe run             Run an image in QEMU
 yoe module          Manage external modules (fetch, sync, list)
 yoe repo            Manage the local apk package repository
-yoe cache           Manage the build cache (local and remote)
+yoe cache           Manage the build cache (local and remote)  [planned]
 yoe source          Download and manage source archives/repos
 yoe config          View and edit project configuration
 yoe desc            Describe a unit, package, or target
@@ -103,16 +103,16 @@ yoe build base-image --machine qemu-arm64
 yoe build --all
 
 # Build all image units for all machines (full matrix)
-yoe build --all --class image
+yoe build --all --class image             # planned: --class filter
 
 # Build a unit and all its dependencies
-yoe build --with-deps myapp
+yoe build --with-deps myapp               # planned: --with-deps flag
 
 # Rebuild even if the cache is fresh
 yoe build --force openssh
 
 # Skip remote cache — only check local cache
-yoe build --no-remote-cache openssh
+yoe build --no-remote-cache openssh       # planned: remote cache
 
 # Skip all caches — force build from source
 yoe build --no-cache openssh
@@ -121,7 +121,7 @@ yoe build --no-cache openssh
 yoe build --dry-run --all
 
 # List available image/machine combinations
-yoe build --list-targets
+yoe build --list-targets                  # planned
 ```
 
 **What happens during a build:**
@@ -290,6 +290,11 @@ architecture.
 Manages external modules — the Git repositories declared in `PROJECT.star` that
 provide units, classes, and machine definitions.
 
+> **Status:** `yoe module sync` and `yoe module list` are implemented.
+> `yoe module info`, `yoe module check-updates`, and `yoe module list --tree`
+> (transitive tree output) are _planned_ — the CLI dispatches them today
+> with a "not yet implemented" stub message.
+
 ```sh
 # Fetch/update all modules to the refs declared in PROJECT.star
 yoe module sync
@@ -298,13 +303,13 @@ yoe module sync
 yoe module list
 
 # Show the full resolved module tree (including transitive deps from MODULE.star)
-yoe module list --tree
+yoe module list --tree        # planned
 
 # Show details for a specific module
-yoe module info @vendor-bsp
+yoe module info @vendor-bsp   # planned
 
 # Check for updates — show if upstream has newer tags
-yoe module check-updates
+yoe module check-updates      # planned
 ```
 
 **What happens during `yoe module sync`:**
@@ -345,6 +350,10 @@ Module                             Ref        Status
 
 Manages the local apk package repository.
 
+> **Status:** `yoe repo list`, `yoe repo info`, and `yoe repo remove` are
+> implemented. `yoe repo push` and `yoe repo pull` (S3-compatible remote
+> repository sync) are _planned_ — there is no S3 backend yet.
+
 ```sh
 # List all packages in the repository
 yoe repo list
@@ -356,17 +365,24 @@ yoe repo info openssh
 yoe repo remove openssh-9.5p1-r0
 
 # Push local repository to a remote (S3-compatible)
-yoe repo push
+yoe repo push                 # planned
 
 # Pull packages from a remote repository
-yoe repo pull
+yoe repo pull                 # planned
 ```
 
 The local repository lives at `repo/<project-name>/` within the project
 directory. It's a standard apk-compatible repository — you can point `apk` on a
 running device at it directly.
 
-### `yoe cache`
+### `yoe cache` (planned)
+
+> **Status:** Not implemented. `cmd/yoe/main.go` has no `cache` case in its
+> command switch — invoking `yoe cache` prints "Unknown command". Content
+> addressing and a local build cache exist inside the build executor, but
+> there is no user-facing cache subcommand, no remote/S3 cache, no signing,
+> and no `yoe cache stats` / `gc` / `push` / `pull`. The surface below
+> describes the planned design.
 
 Manages the local and remote build caches.
 
@@ -794,7 +810,13 @@ This means:
 - Runtime dependencies are resolved by `apk` (it knows the package graph).
 - The unit author declares both; the tools handle the rest.
 
-### Config Propagation
+### Config Propagation (planned)
+
+> **Status:** Not implemented. There is no `public_config` field on units,
+> no machine-to-unit CFLAGS/optimization propagation, and no resolved-config
+> view in `yoe desc`. Units today receive architecture via the build
+> environment and nothing else is automatically propagated through the DAG.
+> The section below describes the planned GN-inspired design.
 
 Inspired by GN's `public_configs`, machine-level configuration automatically
 propagates through the dependency graph. When you build for a specific machine,
@@ -844,11 +866,13 @@ Builds are cached at multiple levels:
    skipped and the cached `.apk` is used.
 3. **Package repository** — built `.apk` files in the local repo. Once
    published, packages are available for image assembly and on-device updates.
-4. **Remote cache** (optional) — push/pull packages to an S3-compatible store so
-   CI and team members share build results. See the
-   [Caching Architecture](build-environment.md#caching-architecture) section for
-   details on S3 configuration, cache signing, and the multi-level fallback
-   chain.
+4. **Remote cache** _(planned — optional)_ — push/pull packages to an
+   S3-compatible store so CI and team members share build results. Not yet
+   implemented: there is no remote cache backend, no S3 integration, and no
+   cache signing today. See the
+   [Caching Architecture](build-environment.md#caching-architecture) section
+   for the planned S3 configuration, cache signing, and the multi-level
+   fallback chain.
 
 Cache invalidation is hash-based, not timestamp-based. Changing a unit, updating
 a source, or rebuilding a dependency all produce a new hash and trigger a
