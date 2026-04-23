@@ -147,6 +147,10 @@ type Unit struct {
 	Timezone   string
 	Locale     string
 	Partitions []Partition
+
+	// Arbitrary kwargs passed to unit() that don't map to a typed field.
+	// Used for template context and included in the unit hash.
+	Extra map[string]any
 }
 
 type Partition struct {

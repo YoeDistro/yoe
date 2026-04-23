@@ -181,6 +181,57 @@ func kwStringMap(kwargs []starlark.Tuple, key string) map[string]string {
 	return nil
 }
 
+// starlarkToGo converts a Starlark value into a Go value suitable for JSON
+// serialization and Go template rendering. Returns an error for unsupported
+// types so unit definitions fail loudly instead of silently dropping data.
+func starlarkToGo(v starlark.Value) (any, error) {
+	switch x := v.(type) {
+	case starlark.NoneType:
+		return nil, nil
+	case starlark.Bool:
+		return bool(x), nil
+	case starlark.String:
+		return string(x), nil
+	case starlark.Int:
+		n, ok := x.Int64()
+		if !ok {
+			return nil, fmt.Errorf("int value out of int64 range")
+		}
+		return n, nil
+	case starlark.Float:
+		return float64(x), nil
+	case *starlark.List:
+		out := make([]any, 0, x.Len())
+		it := x.Iterate()
+		defer it.Done()
+		var item starlark.Value
+		for it.Next(&item) {
+			g, err := starlarkToGo(item)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, g)
+		}
+		return out, nil
+	case *starlark.Dict:
+		out := make(map[string]any, x.Len())
+		for _, kv := range x.Items() {
+			ks, ok := kv[0].(starlark.String)
+			if !ok {
+				return nil, fmt.Errorf("dict key must be string, got %s", kv[0].Type())
+			}
+			g, err := starlarkToGo(kv[1])
+			if err != nil {
+				return nil, err
+			}
+			out[string(ks)] = g
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("unsupported type %s", v.Type())
+	}
+}
+
 func kwStruct(kwargs []starlark.Tuple, key string) *starlarkstruct.Struct {
 	for _, kv := range kwargs {
 		if string(kv[0].(starlark.String)) == key {
@@ -548,6 +599,33 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 				}
 			}
 		}
+	}
+
+	// Capture unrecognized kwargs into Extra (used for template context + hash).
+	reserved := map[string]bool{
+		"name": true, "version": true, "release": true, "scope": true,
+		"description": true, "license": true, "source": true, "sha256": true,
+		"tag": true, "branch": true, "patches": true, "deps": true,
+		"runtime_deps": true, "container": true, "container_arch": true,
+		"sandbox": true, "shell": true, "tasks": true, "provides": true,
+		"services": true, "conffiles": true, "environment": true,
+		"cache_dirs": true, "artifacts": true, "exclude": true,
+		"hostname": true, "timezone": true, "locale": true,
+		"partitions": true, "unit_class": true,
+	}
+	for _, kv := range kwargs {
+		k := string(kv[0].(starlark.String))
+		if reserved[k] {
+			continue
+		}
+		v, err := starlarkToGo(kv[1])
+		if err != nil {
+			return nil, fmt.Errorf("%s() kwarg %q: %w", class, k, err)
+		}
+		if r.Extra == nil {
+			r.Extra = make(map[string]any)
+		}
+		r.Extra[k] = v
 	}
 
 	r.Module = e.currentModule
