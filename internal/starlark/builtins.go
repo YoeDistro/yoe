@@ -29,6 +29,8 @@ func (e *Engine) builtins() starlark.StringDict {
 		"command":     starlark.NewBuiltin("command", e.fnCommand),
 		"arg":         starlark.NewBuiltin("arg", fnArg),
 		"run":            starlark.NewBuiltin("run", fnRunPlaceholder),
+		"install_file":     starlark.NewBuiltin("install_file", fnInstallFilePlaceholder),
+		"install_template": starlark.NewBuiltin("install_template", fnInstallTemplatePlaceholder),
 		"True":        starlark.True,
 		"False":       starlark.False,
 	}
@@ -58,6 +60,27 @@ func fnRunPlaceholder(thread *starlark.Thread, b *starlark.Builtin, args starlar
 		}
 	}
 	return nil, fmt.Errorf("run() can only be called at build time (inside a task function)")
+}
+
+// fnInstallFilePlaceholder delegates to the real install_file() registered by
+// the build package via SetTemplateContext. Same pattern as fnRunPlaceholder.
+func fnInstallFilePlaceholder(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	if fn := thread.Local("yoe.install_file"); fn != nil {
+		if callable, ok := fn.(starlark.Callable); ok {
+			return starlark.Call(thread, callable, args, kwargs)
+		}
+	}
+	return nil, fmt.Errorf("install_file() can only be called at build time (inside a task function)")
+}
+
+// fnInstallTemplatePlaceholder delegates to the real install_template().
+func fnInstallTemplatePlaceholder(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	if fn := thread.Local("yoe.install_template"); fn != nil {
+		if callable, ok := fn.(starlark.Callable); ok {
+			return starlark.Call(thread, callable, args, kwargs)
+		}
+	}
+	return nil, fmt.Errorf("install_template() can only be called at build time (inside a task function)")
 }
 
 

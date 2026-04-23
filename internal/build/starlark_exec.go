@@ -104,13 +104,10 @@ func NewBuildThread(ctx context.Context, cfg *SandboxConfig, execer Execer) *sta
 // SetTemplateContext attaches a TemplateContext to a build thread. Called by
 // the executor before invoking a task function so install_file /
 // install_template builtins can read per-unit state.
-//
-// The install_file / install_template SetLocal calls are commented out until
-// Task 3 and Task 4 add the real fnInstallFile / fnInstallTemplate functions.
 func SetTemplateContext(thread *starlark.Thread, tctx *TemplateContext) {
 	thread.SetLocal(templateKey, tctx)
-	// thread.SetLocal("yoe.install_file", starlark.NewBuiltin("install_file", fnInstallFile))
-	// thread.SetLocal("yoe.install_template", starlark.NewBuiltin("install_template", fnInstallTemplate))
+	thread.SetLocal("yoe.install_file", starlark.NewBuiltin("install_file", fnInstallFile))
+	thread.SetLocal("yoe.install_template", starlark.NewBuiltin("install_template", fnInstallTemplate))
 }
 
 // fnRun implements the run() Starlark builtin for build-time command execution.
@@ -185,9 +182,11 @@ func fnRun(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kw
 }
 
 // BuildPredeclared returns the predeclared names available in build-time
-// Starlark threads. Currently provides only run().
+// Starlark threads. Provides run(), install_file(), and install_template().
 func BuildPredeclared() starlark.StringDict {
 	return starlark.StringDict{
-		"run": starlark.NewBuiltin("run", fnRun),
+		"run":              starlark.NewBuiltin("run", fnRun),
+		"install_file":     starlark.NewBuiltin("install_file", fnInstallFile),
+		"install_template": starlark.NewBuiltin("install_template", fnInstallTemplate),
 	}
 }

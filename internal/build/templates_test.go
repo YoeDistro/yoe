@@ -1,9 +1,13 @@
 package build
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
+	"go.starlark.net/starlark"
 )
 
 func TestBuildTemplateContext_MergesFields(t *testing.T) {
@@ -50,5 +54,52 @@ func TestBuildTemplateContext_ExtraOverridesAuto(t *testing.T) {
 	ctx := BuildTemplateContext(u, "x86_64", "qemu-x86_64", "ttyS0", "e2e-project")
 	if ctx["machine"] != "override" {
 		t.Errorf("ctx[machine] = %v, want \"override\" (Extra should override auto)", ctx["machine"])
+	}
+}
+
+func TestFnInstallFile_CopiesVerbatim(t *testing.T) {
+	tmp := t.TempDir()
+	unitDir := filepath.Join(tmp, "unit-src", "my-unit")
+	if err := os.MkdirAll(unitDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	content := []byte("#!/bin/sh\necho hello\n")
+	if err := os.WriteFile(filepath.Join(unitDir, "script.sh"), content, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	destDir := filepath.Join(tmp, "destdir")
+	cfg := &SandboxConfig{
+		Arch: "x86_64",
+		Env:  map[string]string{"DESTDIR": destDir},
+	}
+	thread := NewBuildThread(context.Background(), cfg, RealExecer{})
+	SetTemplateContext(thread, &TemplateContext{
+		Unit: &yoestar.Unit{Name: "my-unit", DefinedIn: filepath.Join(tmp, "unit-src")},
+		Data: map[string]any{},
+		Env:  cfg.Env,
+	})
+
+	predeclared := BuildPredeclared()
+	if _, err := starlark.ExecFile(thread, "test.star", `
+install_file("script.sh", "$DESTDIR/usr/bin/script.sh", mode = 0o755)
+`, predeclared); err != nil {
+		t.Fatalf("ExecFile: %v", err)
+	}
+
+	destPath := filepath.Join(destDir, "usr/bin/script.sh")
+	got, err := os.ReadFile(destPath)
+	if err != nil {
+		t.Fatalf("read dest: %v", err)
+	}
+	if string(got) != string(content) {
+		t.Errorf("content = %q, want %q", got, content)
+	}
+	info, err := os.Stat(destPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0755 {
+		t.Errorf("mode = %o, want 0755", info.Mode().Perm())
 	}
 }
