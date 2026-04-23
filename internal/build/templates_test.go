@@ -103,3 +103,61 @@ install_file("script.sh", "$DESTDIR/usr/bin/script.sh", mode = 0o755)
 		t.Errorf("mode = %o, want 0755", info.Mode().Perm())
 	}
 }
+
+func TestFnInstallFile_MissingSrcErrors(t *testing.T) {
+	tmp := t.TempDir()
+	unitDir := filepath.Join(tmp, "unit-src", "my-unit")
+	if err := os.MkdirAll(unitDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	destDir := filepath.Join(tmp, "destdir")
+	cfg := &SandboxConfig{Arch: "x86_64", Env: map[string]string{"DESTDIR": destDir}}
+	thread := NewBuildThread(context.Background(), cfg, RealExecer{})
+	SetTemplateContext(thread, &TemplateContext{
+		Unit: &yoestar.Unit{Name: "my-unit", DefinedIn: filepath.Join(tmp, "unit-src")},
+		Data: map[string]any{},
+		Env:  cfg.Env,
+	})
+	_, err := starlark.ExecFile(thread, "test.star",
+		`install_file("does-not-exist.sh", "$DESTDIR/x")`, BuildPredeclared())
+	if err == nil {
+		t.Fatal("expected error when src missing, got nil")
+	}
+}
+
+func TestFnInstallFile_NonIntModeErrors(t *testing.T) {
+	tmp := t.TempDir()
+	unitDir := filepath.Join(tmp, "unit-src", "u")
+	_ = os.MkdirAll(unitDir, 0755)
+	_ = os.WriteFile(filepath.Join(unitDir, "x"), []byte("x"), 0644)
+	cfg := &SandboxConfig{Env: map[string]string{"DESTDIR": filepath.Join(tmp, "dd")}}
+	thread := NewBuildThread(context.Background(), cfg, RealExecer{})
+	SetTemplateContext(thread, &TemplateContext{
+		Unit: &yoestar.Unit{Name: "u", DefinedIn: filepath.Join(tmp, "unit-src")},
+		Data: map[string]any{},
+		Env:  cfg.Env,
+	})
+	_, err := starlark.ExecFile(thread, "test.star",
+		`install_file("x", "$DESTDIR/x", mode = "0755")`, BuildPredeclared())
+	if err == nil {
+		t.Fatal("expected error for non-int mode, got nil")
+	}
+}
+
+func TestFnInstallFile_PathTraversalRejected(t *testing.T) {
+	tmp := t.TempDir()
+	unitDir := filepath.Join(tmp, "unit-src", "u")
+	_ = os.MkdirAll(unitDir, 0755)
+	cfg := &SandboxConfig{Env: map[string]string{"DESTDIR": filepath.Join(tmp, "dd")}}
+	thread := NewBuildThread(context.Background(), cfg, RealExecer{})
+	SetTemplateContext(thread, &TemplateContext{
+		Unit: &yoestar.Unit{Name: "u", DefinedIn: filepath.Join(tmp, "unit-src")},
+		Data: map[string]any{},
+		Env:  cfg.Env,
+	})
+	_, err := starlark.ExecFile(thread, "test.star",
+		`install_file("../../../etc/passwd", "$DESTDIR/x")`, BuildPredeclared())
+	if err == nil {
+		t.Fatal("expected path traversal rejection, got nil")
+	}
+}

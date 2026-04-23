@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 	"go.starlark.net/starlark"
@@ -60,7 +61,10 @@ func fnInstallFile(thread *starlark.Thread, _ *starlark.Builtin, args starlark.T
 		return nil, fmt.Errorf("install_file: no template context on thread (called outside a task fn?)")
 	}
 
-	srcPath := resolveTemplatePath(tctx.Unit, string(src))
+	srcPath, err := resolveTemplatePath(tctx.Unit, string(src))
+	if err != nil {
+		return nil, fmt.Errorf("install_file: %w", err)
+	}
 	destPath := expandEnv(string(dest), tctx.Env)
 
 	content, err := os.ReadFile(srcPath)
@@ -82,19 +86,28 @@ func fnInstallTemplate(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple
 }
 
 // resolveTemplatePath resolves a relative path against the unit's files
-// directory: <DefinedIn>/<unit-name>/<relPath>.
-func resolveTemplatePath(u *yoestar.Unit, relPath string) string {
-	return filepath.Join(u.DefinedIn, u.Name, relPath)
+// directory: <DefinedIn>/<unit-name>/<relPath>. Rejects paths that escape
+// the unit files directory (e.g. "../../etc/passwd").
+func resolveTemplatePath(u *yoestar.Unit, relPath string) (string, error) {
+	filesDir := filepath.Join(u.DefinedIn, u.Name)
+	resolved := filepath.Join(filesDir, relPath)
+	rel, err := filepath.Rel(filesDir, resolved)
+	if err != nil {
+		return "", fmt.Errorf("resolving %q: %w", relPath, err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path %q escapes unit files directory", relPath)
+	}
+	return resolved, nil
 }
 
-// expandEnv expands $VAR and ${VAR} references using the provided build env,
-// falling back to the process environment.
+// expandEnv expands $VAR and ${VAR} references using the provided build env.
+// Unknown variables expand to the empty string — we deliberately do NOT fall
+// back to the host process environment, because that would break
+// reproducibility and content-addressed caching.
 func expandEnv(s string, env map[string]string) string {
 	return os.Expand(s, func(key string) string {
-		if v, ok := env[key]; ok {
-			return v
-		}
-		return os.Getenv(key)
+		return env[key]
 	})
 }
 
