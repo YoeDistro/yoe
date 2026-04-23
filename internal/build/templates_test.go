@@ -161,3 +161,99 @@ func TestFnInstallFile_PathTraversalRejected(t *testing.T) {
 		t.Fatal("expected path traversal rejection, got nil")
 	}
 }
+
+func TestFnInstallTemplate_RendersWithContext(t *testing.T) {
+	tmp := t.TempDir()
+	unitDir := filepath.Join(tmp, "unit-src", "base-files")
+	if err := os.MkdirAll(unitDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	tmplContent := `Machine: {{.machine}}
+Console: {{.console}}
+Version: {{.version}}
+`
+	if err := os.WriteFile(filepath.Join(unitDir, "info.tmpl"), []byte(tmplContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	destDir := filepath.Join(tmp, "destdir")
+	cfg := &SandboxConfig{
+		Arch: "x86_64",
+		Env:  map[string]string{"DESTDIR": destDir},
+	}
+	thread := NewBuildThread(context.Background(), cfg, RealExecer{})
+	SetTemplateContext(thread, &TemplateContext{
+		Unit: &yoestar.Unit{
+			Name:      "base-files",
+			Version:   "1.0.0",
+			DefinedIn: filepath.Join(tmp, "unit-src"),
+		},
+		Data: map[string]any{
+			"name":    "base-files",
+			"version": "1.0.0",
+			"machine": "qemu-x86_64",
+			"console": "ttyS0",
+		},
+		Env: cfg.Env,
+	})
+
+	predeclared := BuildPredeclared()
+	if _, err := starlark.ExecFile(thread, "test.star", `
+install_template("info.tmpl", "$DESTDIR/etc/info")
+`, predeclared); err != nil {
+		t.Fatalf("ExecFile: %v", err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(destDir, "etc/info"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `Machine: qemu-x86_64
+Console: ttyS0
+Version: 1.0.0
+`
+	if string(got) != want {
+		t.Errorf("rendered:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestFnInstallTemplate_MissingKeyIsError(t *testing.T) {
+	tmp := t.TempDir()
+	unitDir := filepath.Join(tmp, "unit-src", "u")
+	_ = os.MkdirAll(unitDir, 0755)
+	_ = os.WriteFile(filepath.Join(unitDir, "x.tmpl"), []byte(`{{.missing}}`), 0644)
+
+	cfg := &SandboxConfig{Env: map[string]string{"DESTDIR": filepath.Join(tmp, "dd")}}
+	thread := NewBuildThread(context.Background(), cfg, RealExecer{})
+	SetTemplateContext(thread, &TemplateContext{
+		Unit: &yoestar.Unit{Name: "u", DefinedIn: filepath.Join(tmp, "unit-src")},
+		Data: map[string]any{},
+		Env:  cfg.Env,
+	})
+
+	predeclared := BuildPredeclared()
+	_, err := starlark.ExecFile(thread, "test.star", `install_template("x.tmpl", "$DESTDIR/out")`, predeclared)
+	if err == nil {
+		t.Fatal("expected error on missing template key, got nil")
+	}
+}
+
+func TestFnInstallTemplate_PathTraversalRejected(t *testing.T) {
+	tmp := t.TempDir()
+	unitDir := filepath.Join(tmp, "unit-src", "u")
+	_ = os.MkdirAll(unitDir, 0755)
+	cfg := &SandboxConfig{Env: map[string]string{"DESTDIR": filepath.Join(tmp, "dd")}}
+	thread := NewBuildThread(context.Background(), cfg, RealExecer{})
+	SetTemplateContext(thread, &TemplateContext{
+		Unit: &yoestar.Unit{Name: "u", DefinedIn: filepath.Join(tmp, "unit-src")},
+		Data: map[string]any{},
+		Env:  cfg.Env,
+	})
+
+	predeclared := BuildPredeclared()
+	_, err := starlark.ExecFile(thread, "test.star",
+		`install_template("../../../etc/passwd", "$DESTDIR/x")`, predeclared)
+	if err == nil {
+		t.Fatal("expected path traversal rejection, got nil")
+	}
+}

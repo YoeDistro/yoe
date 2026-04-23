@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 	"go.starlark.net/starlark"
@@ -80,9 +81,55 @@ func fnInstallFile(thread *starlark.Thread, _ *starlark.Builtin, args starlark.T
 	return starlark.None, nil
 }
 
-// fnInstallTemplate is a stub until Task 4 provides the real implementation.
-func fnInstallTemplate(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
-	return nil, fmt.Errorf("install_template: not yet implemented")
+// fnInstallTemplate implements install_template(src, dest, mode=0o644).
+// Reads a Go text/template from the unit's files directory, renders it with
+// the unit's context map, and writes the result to dest. Missing keys in the
+// template cause an error rather than a silent empty substitution.
+func fnInstallTemplate(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	var src, dest starlark.String
+	if err := starlark.UnpackPositionalArgs("install_template", args, nil, 2, &src, &dest); err != nil {
+		return nil, err
+	}
+	mode, err := modeFromKwargs("install_template", kwargs, 0644)
+	if err != nil {
+		return nil, err
+	}
+
+	tctx, ok := thread.Local(templateKey).(*TemplateContext)
+	if !ok || tctx == nil {
+		return nil, fmt.Errorf("install_template: no template context on thread (called outside a task fn?)")
+	}
+
+	srcPath, err := resolveTemplatePath(tctx.Unit, string(src))
+	if err != nil {
+		return nil, fmt.Errorf("install_template: %w", err)
+	}
+	destPath := expandEnv(string(dest), tctx.Env)
+
+	raw, err := os.ReadFile(srcPath)
+	if err != nil {
+		return nil, fmt.Errorf("install_template: reading %s: %w", srcPath, err)
+	}
+
+	tmpl, err := template.New(filepath.Base(srcPath)).
+		Option("missingkey=error").
+		Parse(string(raw))
+	if err != nil {
+		return nil, fmt.Errorf("install_template: parsing %s: %w", srcPath, err)
+	}
+
+	var buf strings.Builder
+	if err := tmpl.Execute(&buf, tctx.Data); err != nil {
+		return nil, fmt.Errorf("install_template: rendering %s: %w", srcPath, err)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+		return nil, fmt.Errorf("install_template: creating dir for %s: %w", destPath, err)
+	}
+	if err := os.WriteFile(destPath, []byte(buf.String()), os.FileMode(mode)); err != nil {
+		return nil, fmt.Errorf("install_template: writing %s: %w", destPath, err)
+	}
+	return starlark.None, nil
 }
 
 // resolveTemplatePath resolves a relative path against the unit's files
