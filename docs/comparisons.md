@@ -210,6 +210,191 @@ transparency directly influences `[yoe]`'s design.
 for personal use and value having full manual control. Arch's philosophy works
 well for power users on general-purpose hardware.
 
+## vs. Debian
+
+Debian is the oldest and most conservative general-purpose Linux distribution.
+Many embedded projects start on Debian (or a derivative like Raspberry Pi OS)
+before hitting its limits on custom hardware.
+
+**What `[yoe]` adopts from Debian:**
+
+- **Signed binary package repositories** — apt's approach to package
+  authenticity and repository signing is the model. `[yoe]`'s apk repositories
+  follow the same principle.
+- **Policy-driven package conventions** — Debian Policy defines where files go,
+  how services are declared, and how packages relate. `[yoe]` inherits this
+  culture through Alpine's `abuild` conventions.
+- **Package metadata as data** — control files (or APKBUILDs) are declarative,
+  not imperative install scripts.
+- **Multi-arch awareness** — Debian has long taken non-x86 architectures
+  seriously. `[yoe]` does too, by design.
+
+**What `[yoe]` leaves behind:**
+
+- **dpkg/apt** in favor of apk — smaller, faster, designed for minimal systems.
+- **The stable/testing/unstable release model** — `[yoe]` is rolling by default;
+  deployed devices pin to a known-good snapshot of the repo.
+- **The maintainer-centric model** — one maintainer per package, committee-
+  driven policy. `[yoe]` units are part of the project; whoever changes the
+  build changes the unit.
+- **debconf and interactive post-install configuration** — images are assembled
+  from declarative Starlark, not from prompts during package install.
+- **Desktop/server default set** — Debian's standard install assumes a huge set
+  of tools are present. `[yoe]` starts near zero and adds only what's declared.
+- **In-place `dist-upgrade`** — `[yoe]` prefers atomic image updates with
+  rollback over mutating a running root filesystem.
+
+**Key differences:**
+
+|                   | Debian                            | `[yoe]`                         |
+| ----------------- | --------------------------------- | ------------------------------- |
+| Target            | General-purpose server/desktop    | Embedded, custom hardware       |
+| Package manager   | apt / dpkg                        | apk                             |
+| Package format    | .deb (ar + tar)                   | apk (tar.gz + .PKGINFO)         |
+| Release model     | Stable/testing/unstable + LTS     | Rolling, pinned snapshots       |
+| Build definitions | `debian/` dir (rules + control)   | Starlark units                  |
+| Image assembly    | debootstrap / live-build          | `yoe build <image>`             |
+| BSP support       | Generic kernels; no board tooling | Per-board machine definitions   |
+| Kernel management | Distro-provided kernel packages   | Per-machine kernel config + DTs |
+| OTA updates       | `apt upgrade` (in-place)          | apk + atomic image + rollback   |
+| Footprint         | Standard install ~1 GB+           | Target single-digit MB base     |
+
+**Debian derivatives (Raspberry Pi OS, Ubuntu, etc.)** inherit most of these
+properties. Teams often start on Raspberry Pi OS and hit three walls: (1) it's
+not built from source under their control, (2) it's difficult to trim below a
+couple hundred MB, and (3) there's no clean story for deploying the same
+software to a custom board.
+
+### Minimum footprint
+
+The smallest documented Debian install path is
+[`debootstrap --variant=minbase`](https://wiki.debian.org/Debootstrap), which
+installs only Essential and Priority: required packages (base-files,
+base-passwd, bash, dash, dpkg, apt, libc, perl-base, and a handful of others) —
+no systemd, no standard utilities beyond the essential set. In practice minbase
+produces a root filesystem in the ~150–250 MB range depending on release and
+architecture. A default debootstrap (which also pulls Priority: important,
+including systemd) lands closer to 300–500 MB, and a "standard" Debian install
+is well over 1 GB.
+
+Even minbase is one-to-two orders of magnitude larger than a minimal Alpine or
+`[yoe]` base, which can reach single-digit MB before application payload. The
+floor is set by the GNU userland itself: glibc + coreutils + perl-base + bash +
+dpkg + apt are ~60–80 MB combined before anything application-specific is
+installed. Dropping perl-base or coreutils breaks dpkg maintainer scripts (see
+Emdebian, below), so this floor is structural, not a tuning problem.
+
+### Embedded Debian efforts
+
+**[EmDebian (2007–2014)](https://wiki.debian.org/Embedded_Debian)** was the most
+serious attempt at a minimal, embedded-focused Debian. It shipped two variants:
+
+- **Emdebian Grip** — a binary-compatible subset of Debian with a smaller
+  curated package set, still using GNU coreutils and glibc. "Debian, but
+  smaller."
+- **Emdebian Crush** — a more aggressive variant that
+  [replaced GNU coreutils with busybox](https://wiki.debian.org/EmdebianCrush),
+  dropped optional dependencies (LDAP from curl, etc.), and cross-built
+  packages. Closer in spirit to what `[yoe]` does with Alpine-style apks.
+
+The project posted an
+[end-of-life notice on 13 July 2014](https://en.wikipedia.org/wiki/Emdebian_Grip),
+with Emdebian Grip 3.1 (tracking Debian 7 "wheezy") as the last stable release.
+The cited reasons were (1) embedded hardware had moved to expandable storage
+where full Debian's size was no longer painful, and (2) the maintenance burden
+of tracking Debian upstream while patching maintainer scripts for a busybox
+userland was unsustainable. Crush specifically documented recurring problems
+replacing coreutils components with busybox because of `.deb` postinst scripts —
+the exact ecosystem-level incompatibility that any "Debian + busybox" attempt
+runs into. Someone has already taken that path to its natural conclusion.
+
+**[debos](https://github.com/go-debos/debos)** is the modern Debian image
+builder, created by Sjoerd Simons at Collabora (introduced in 2018, Go
+codebase). It is the closest structural analogue to `[yoe]`'s image assembly in
+the Debian ecosystem:
+
+- Written in Go, like `yoe`.
+- YAML recipes describe a sequence of actions (debootstrap, apt install,
+  partition, mkfs, bootloader install, overlay files, export as
+  tarball/OSTree/disk image).
+- Runs actions without root via a `fakemachine` VM helper — similar intent to
+  `[yoe]`'s "container as build worker" model.
+- Targets ARM embedded boards as a first-class use case.
+
+`[yoe]` and debos cover overlapping ground. Key differences: debos starts from
+existing Debian `.deb`s (inheriting the size and package-model properties
+above), while `[yoe]` builds from source into content-addressed apks; debos
+recipes are flat action sequences, while `[yoe]`'s Starlark units form a
+dependency graph with a shared, content-addressed build cache.
+
+**[aptly](https://www.aptly.info/)** is the canonical tool for running a
+private, pinned Debian/Ubuntu repository. For teams that do ship Debian-based
+devices, aptly plays the role that `[yoe]`'s S3 package cache plays:
+
+- Mirror remote Debian/Ubuntu repos, partial or full, filtered by
+  component/architecture.
+- Take immutable, dated snapshots of a mirror or local repo — fixing package
+  versions at a point in time.
+- Publish snapshots as apt-consumable repositories with signed metadata.
+- CLI plus REST API for CI integration.
+
+The snapshot model is what gives a Debian-based deployment the reproducibility
+`[yoe]` gets from content-addressed apks — different mechanism, same goal.
+
+**[Gaia Build System](https://github.com/gaiaBuildSystem)** is the most active
+modern example of a full build system (not just an image builder) layered on
+Debian. It ships three reference distributions:
+
+- **DeimOS** — a base Debian-derived reference distro.
+- **PhobOS** — a [Torizon](https://www.torizon.io/)-compatible Debian derivative
+  that boots via OSTree, uses Aktualizr for OTA updates, bundles a Docker
+  runtime, and keeps native `apt-get install` available on deployed devices.
+- **PergamOS** — a library of Debian-based container images used as build and
+  application bases.
+
+Architecturally:
+
+- **Cookbook model** — a Yocto-inspired multi-repo structure where each
+  "cookbook" is a git repo and a `manifest.json` ties them together.
+- **Container-based builds** — each build runs inside a Debian Docker container,
+  matching `[yoe]`'s "container as build worker" approach.
+- **Multi-language recipes** — the `gaia` core is TypeScript (running on Bun);
+  cookbook logic is a mix of Xonsh (Python-flavored shell), plain shell, and
+  JSON distro definitions. `[yoe]` consolidates to a single config language
+  (Starlark) for units, machines, and images.
+- **Targets** — Raspberry Pi, NXP i.MX (e.g., iMX95 Verdin EVK via Toradex), and
+  QEMU x86-64/arm64.
+
+Contrast with `[yoe]`:
+
+- Gaia inherits Debian's size and package-model properties (huge archive, `.deb`
+  maintainer scripts, ~150 MB+ floor); `[yoe]` is apk-based and targets
+  single-digit MB bases.
+- Gaia's deployment model is **OSTree + Aktualizr** (Torizon-compatible);
+  `[yoe]` uses apk plus atomic image updates with rollback.
+- Gaia's recipe surface is multi-language (TS + Xonsh + Shell + JSON); `[yoe]`
+  is Starlark end-to-end.
+- Both build inside containers, both target custom ARM hardware, both aim for
+  reproducibility through pinned inputs.
+
+**When to prefer Gaia:** when you specifically want a Debian userland with
+`apt-get install` still functional on the device, and especially when targeting
+Toradex/Torizon-adjacent hardware where OSTree-based deployment is already
+established.
+
+This doesn't mean Debian is absent from embedded — it absolutely is present —
+but the pattern is "Debian/Ubuntu-on-an-x86-or-Jetson-box," not "Debian in a
+consumer electronics device with a custom SoC." That second case is where Yocto
+and `[yoe]` live.
+
+**When to use Debian instead:** when you're targeting general-purpose hardware
+where the standard package archive _is_ the product ("I need a server with
+Postgres, Nginx, and our application"), when long-term security support from a
+volunteer organization matters more than image size, or when your team already
+runs Debian in production and wants consistency between infrastructure and edge
+devices. For early prototyping on a Raspberry Pi before moving to custom
+hardware, Raspberry Pi OS is often the right starting point.
+
 ## vs. NixOS / Nix
 
 Nix is the most intellectually ambitious of the systems `[yoe]` draws from. Its
@@ -431,19 +616,19 @@ Buildroot is too limited.
 
 ## Summary Matrix
 
-| Feature                 | Yocto    | Buildroot | Alpine   | Arch     | NixOS   | **`[yoe]`** |
-| ----------------------- | -------- | --------- | -------- | -------- | ------- | ----------- |
-| Embedded focus          | Yes      | Yes       | Partial  | No       | No      | **Yes**     |
-| Simple config           | No       | Moderate  | Moderate | Yes      | No      | **Yes**     |
-| Native builds           | No       | No        | Yes      | Yes      | Yes     | **Yes**     |
-| On-device packages      | Optional | No        | Yes      | Yes      | Yes     | **Yes**     |
-| Content-addressed cache | Partial  | No        | No       | No       | Yes     | **Yes**     |
-| Remote shared cache     | Complex  | No        | No       | No       | Yes     | **Yes**     |
-| Pre-built package cache | No       | No        | Yes      | Yes      | Yes     | **Yes**     |
-| Declarative images      | Yes      | Partial   | No       | No       | Yes     | **Yes**     |
-| Multi-image support     | Yes      | No        | No       | No       | Yes     | **Yes**     |
-| Image inheritance       | Partial  | No        | No       | No       | Yes     | **Yes**     |
-| Custom BSP support      | Yes      | Yes       | No       | No       | Minimal | **Yes**     |
-| Incremental updates     | Complex  | No        | Yes      | Yes      | Yes     | **Yes**     |
-| Hermetic builds         | Partial  | No        | No       | No       | Yes     | **Yes**     |
-| Fast package ops        | N/A      | N/A       | Yes      | Moderate | Slow    | **Yes**     |
+| Feature                 | Yocto    | Buildroot | Alpine   | Arch     | Debian   | NixOS   | **`[yoe]`** |
+| ----------------------- | -------- | --------- | -------- | -------- | -------- | ------- | ----------- |
+| Embedded focus          | Yes      | Yes       | Partial  | No       | No       | No      | **Yes**     |
+| Simple config           | No       | Moderate  | Moderate | Yes      | Moderate | No      | **Yes**     |
+| Native builds           | No       | No        | Yes      | Yes      | Yes      | Yes     | **Yes**     |
+| On-device packages      | Optional | No        | Yes      | Yes      | Yes      | Yes     | **Yes**     |
+| Content-addressed cache | Partial  | No        | No       | No       | No       | Yes     | **Yes**     |
+| Remote shared cache     | Complex  | No        | No       | No       | No       | Yes     | **Yes**     |
+| Pre-built package cache | No       | No        | Yes      | Yes      | Yes      | Yes     | **Yes**     |
+| Declarative images      | Yes      | Partial   | No       | No       | Partial  | Yes     | **Yes**     |
+| Multi-image support     | Yes      | No        | No       | No       | No       | Yes     | **Yes**     |
+| Image inheritance       | Partial  | No        | No       | No       | No       | Yes     | **Yes**     |
+| Custom BSP support      | Yes      | Yes       | No       | No       | Minimal  | Minimal | **Yes**     |
+| Incremental updates     | Complex  | No        | Yes      | Yes      | Yes      | Yes     | **Yes**     |
+| Hermetic builds         | Partial  | No        | No       | No       | No       | Yes     | **Yes**     |
+| Fast package ops        | N/A      | N/A       | Yes      | Moderate | Moderate | Slow    | **Yes**     |
