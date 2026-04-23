@@ -711,18 +711,39 @@ Buildroot is too limited.
 3. **Shared build cache** — the S3-backed package cache is a major advantage
    over Buildroot. Make it trivial to set up so teams see the value immediately.
 
-4. **AI unit generation** — lean into the AI-native angle. If generating a new
-   unit is a conversation rather than a manual porting exercise, the package
-   count gap closes fast.
+4. **Size discipline.** The summary matrix shows `[yoe]`'s single-digit-MB base
+   as a structural advantage against Ubuntu Core (~2,500 MB), NixOS (~1,500 MB),
+   and Debian (~150 MB minbase). That floor bloats silently — one "convenient
+   default," one "might as well include it" at a time. Every new feature, class,
+   and base-system addition should survive an explicit size review. Losing the
+   size story means losing the most defensible position on the matrix.
 
-5. **Board support** — start with popular, accessible boards (Raspberry Pi,
+5. **Atomic update + rollback story.** Ubuntu Core's pitch is "signed
+   transactional updates with rollback"; Gaia's is "OSTree + Aktualizr"; Yocto's
+   is RAUC/SWUpdate. `[yoe]`'s equivalent — apk plus atomic image update with
+   A/B partitions and rollback — has to be a first-class, opinionated,
+   documented workflow, not a "you can wire this up yourself" footnote. For any
+   team shipping a product, this is table stakes.
+
+6. **AI unit generation + Alpine aports conversion.** Lean into the AI-native
+   angle: generating a new unit from a project URL should be a conversation, not
+   a manual porting exercise. _Also_ ship a mechanical APKBUILD → Starlark
+   converter — Alpine has ~36,000 ready-to-port APKBUILDs, and a reliable
+   converter closes the package-count gap faster and more predictably than pure
+   AI generation. AI for novel cases, mechanical conversion for the long tail.
+
+7. **Board support** — start with popular, accessible boards (Raspberry Pi,
    BeagleBone, common QEMU targets). Every board that works out of the box is a
    potential user who doesn't need Yocto.
 
-6. **Don't chase Yocto's tail** — resist the urge to add Yocto-like features
-   (task-level DAGs, unit splitting, bbappend equivalents) to win over Yocto
-   users. Instead, make the simple path so good that teams choose `[yoe]`
-   because it fits their workflow, not because it replicates Yocto's.
+8. **Don't chase Yocto's or Canonical's tails.** Resist adding Yocto-like
+   features (task-level DAGs, unit splitting, bbappend equivalents) to win Yocto
+   users, and equally resist Canonical-style add-ons (brand store, snap-style
+   confinement, a Landscape clone) to win Ubuntu Core users. Both directions
+   lead away from the minimal, single-language, AI-tractable design that is
+   `[yoe]`'s actual positioning. Make the simple path so good that teams choose
+   `[yoe]` because it fits their workflow, not because it mimics something they
+   already have.
 
 ## Summary Matrix
 
