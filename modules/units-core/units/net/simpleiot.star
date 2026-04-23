@@ -16,16 +16,10 @@ go_binary(
             + " && CGO_ENABLED=0 GOOS=linux GOARCH=$goarch"
             + " go build -o $DESTDIR$PREFIX/bin/siot ./cmd/siot",
         ]),
-        task("init-script", steps=[
+        task("init-script", steps = [
             "mkdir -p $DESTDIR/etc/init.d",
-            """cat > $DESTDIR/etc/init.d/simpleiot << 'INIT'
-#!/bin/sh
-case "$1" in
-    start) /usr/bin/siot &;;
-    stop) killall siot;;
-esac
-INIT""",
-            "chmod +x $DESTDIR/etc/init.d/simpleiot",
+            install_file("simpleiot.init",
+                         "$DESTDIR/etc/init.d/simpleiot", mode = 0o755),
         ]),
     ],
 )
