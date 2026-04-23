@@ -395,6 +395,107 @@ runs Debian in production and wants consistency between infrastructure and edge
 devices. For early prototyping on a Raspberry Pi before moving to custom
 hardware, Raspberry Pi OS is often the right starting point.
 
+## vs. Ubuntu Core
+
+[Ubuntu Core](https://ubuntu.com/core) is Canonical's IoT- and embedded-focused
+Ubuntu variant. Architecturally it's a sharp departure from classic
+Debian/Ubuntu: every component on the device — kernel, board support, base OS,
+applications — is delivered as a [snap](https://snapcraft.io/) package, mounted
+read-only via squashfs-over-loopback, and updated transactionally with rollback.
+Ubuntu Core 24 (the current LTS) carries a 12-year support commitment and
+targets production IoT, edge, and appliance devices.
+
+**What `[yoe]` adopts from Ubuntu Core:**
+
+- **Immutable root filesystem** — the shipping OS is never mutated in place;
+  changes flow through an update mechanism with rollback.
+- **Gadget-snap-style board config** — Ubuntu Core's
+  [gadget snap](https://documentation.ubuntu.com/core/how-to-guides/image-creation/build-a-gadget-snap/)
+  bundles bootloader assets, partition layout, and device-specific defaults.
+  `[yoe]`'s machine definitions cover the same ground (kernel config, device
+  tree, partition schema, bootloader choice).
+- **Model assertion as device identity** — UC's signed model assertion declares
+  exactly which snaps constitute a device. `[yoe]`'s image + machine Starlark is
+  the structural analogue (which packages + which hardware = which shipping
+  image).
+- **Atomic updates with rollback** — shared goal, different mechanism (snap
+  revisions plus a recovery seed system vs. `[yoe]`'s apk + atomic image
+  update).
+
+**What `[yoe]` leaves behind:**
+
+- **Snaps** — the squashfs-per-app loopback model. `[yoe]` uses apk, which
+  installs into a shared FHS root.
+- **snapd** — UC's always-running daemon mediating confinement, updates, and
+  interfaces. Significant runtime footprint and attack surface.
+- **Brand store requirement** — commercial UC deployments require a
+  [Canonical-hosted dedicated snap store](https://documentation.ubuntu.com/core/explanation/stores/dedicated-snap-store/)
+  to control what runs on devices. This is a commercial gate. `[yoe]` ships its
+  own signed apk repository with no vendor lock-in.
+- **Default-strict AppArmor confinement** — UC apps run in a sandbox with
+  explicit interfaces. Valuable for general-purpose appliances, often
+  heavyweight for single-purpose embedded where the whole image is already
+  curated.
+- **Canonical-centric tooling** — ubuntu-image, snapcraft, Launchpad, Landscape.
+  `[yoe]` is self-hostable end to end.
+
+### Size: Ubuntu Core's snap model has a floor
+
+The snap delivery model has a real footprint cost. From Canonical's own
+[partition-sizing guidance](https://documentation.ubuntu.com/core/how-to-guides/image-creation/calculate-partition-sizes/),
+a minimum Ubuntu Core 24 installation with no additional application snaps lands
+at approximately **2,493 MiB (~2.5 GiB)** of on-disk layout:
+
+| Partition     | Minimum size | Purpose                                         |
+| ------------- | ------------ | ----------------------------------------------- |
+| `system-seed` | 457 MiB      | Recovery boot loader plus recovery system snaps |
+| `system-save` | 32 MiB       | Device identity and recovery data               |
+| `system-boot` | 160 MiB      | Kernel EFI image(s), boot loader state          |
+| `system-data` | Variable     | Writable — snaps, retained revisions, user data |
+
+The 2.5 GiB floor is driven by the snap refresh model: UC keeps
+`refresh.retain + 1` old revisions of each snap plus a temporary copy during
+updates — effectively **4× per-snap storage** with the default
+`refresh.retain = 2`. Each "revision" is a full squashfs image, not a delta. The
+kernel snap alone is around 52 MiB and is retained four times over.
+
+For comparison:
+
+| Target                   | Minimum image size |
+| ------------------------ | ------------------ |
+| Ubuntu Core 24 (no apps) | ~2,500 MiB         |
+| Debian `minbase` rootfs  | ~150–250 MiB       |
+| Alpine minimal rootfs    | ~5–10 MiB          |
+| `[yoe]` base target      | Single-digit MiB   |
+
+Ubuntu Core is in a different footprint class. For devices with tens of GiB of
+storage this is irrelevant; for cost-sensitive embedded products with 128–512
+MiB of flash it's disqualifying before any application code is added.
+
+### Key differences
+
+|                  | Ubuntu Core                           | `[yoe]`                                |
+| ---------------- | ------------------------------------- | -------------------------------------- |
+| Packaging format | Snaps (squashfs, loopback-mounted)    | apk (installed into shared rootfs)     |
+| Root filesystem  | Composed read-only snap mounts        | Standard FHS, shipped read-only        |
+| Package daemon   | snapd (always running)                | apk (run at build + update time only)  |
+| Board config     | Gadget snap                           | Machine definition (Starlark)          |
+| Image metadata   | Signed model assertion                | Image + machine Starlark               |
+| Updates          | Snap revisions + recovery seed system | Atomic image update + rollback         |
+| Confinement      | AppArmor interfaces (default strict)  | Standard Linux DAC; sandboxing per app |
+| Distribution     | Canonical brand store (hosted)        | Self-hosted signed apk repository      |
+| Size floor       | ~2.5 GiB                              | Single-digit MiB                       |
+| Build tool       | `ubuntu-image`, `snapcraft`           | `yoe build <image>`                    |
+| Recipe language  | YAML (snapcraft.yaml, model, gadget)  | Starlark                               |
+| LTS              | 12 years (Canonical)                  | N/A — project is pre-1.0               |
+
+**When to use Ubuntu Core instead:** when you want Canonical's 12-year LTS
+commitment, when strict per-app confinement via snaps/AppArmor is a product
+requirement, when your team already operates a Canonical stack (Landscape for
+fleet management, brand store for distribution, Anbox Cloud, etc.), or when your
+device has ample storage (tens of GiB+) and the 2.5 GiB floor is an acceptable
+trade for the operational simplicity of signed transactional updates.
+
 ## vs. NixOS / Nix
 
 Nix is the most intellectually ambitious of the systems `[yoe]` draws from. Its
@@ -616,19 +717,22 @@ Buildroot is too limited.
 
 ## Summary Matrix
 
-| Feature                 | Yocto    | Buildroot | Alpine   | Arch     | Debian   | NixOS   | **`[yoe]`** |
-| ----------------------- | -------- | --------- | -------- | -------- | -------- | ------- | ----------- |
-| Embedded focus          | Yes      | Yes       | Partial  | No       | No       | No      | **Yes**     |
-| Simple config           | No       | Moderate  | Moderate | Yes      | Moderate | No      | **Yes**     |
-| Native builds           | No       | No        | Yes      | Yes      | Yes      | Yes     | **Yes**     |
-| On-device packages      | Optional | No        | Yes      | Yes      | Yes      | Yes     | **Yes**     |
-| Content-addressed cache | Partial  | No        | No       | No       | No       | Yes     | **Yes**     |
-| Remote shared cache     | Complex  | No        | No       | No       | No       | Yes     | **Yes**     |
-| Pre-built package cache | No       | No        | Yes      | Yes      | Yes      | Yes     | **Yes**     |
-| Declarative images      | Yes      | Partial   | No       | No       | Partial  | Yes     | **Yes**     |
-| Multi-image support     | Yes      | No        | No       | No       | No       | Yes     | **Yes**     |
-| Image inheritance       | Partial  | No        | No       | No       | No       | Yes     | **Yes**     |
-| Custom BSP support      | Yes      | Yes       | No       | No       | Minimal  | Minimal | **Yes**     |
-| Incremental updates     | Complex  | No        | Yes      | Yes      | Yes      | Yes     | **Yes**     |
-| Hermetic builds         | Partial  | No        | No       | No       | No       | Yes     | **Yes**     |
-| Fast package ops        | N/A      | N/A       | Yes      | Moderate | Moderate | Slow    | **Yes**     |
+| Feature                 | Yocto    | Buildroot | Alpine   | Arch     | Debian   | UC      | NixOS   | **`[yoe]`** |
+| ----------------------- | -------- | --------- | -------- | -------- | -------- | ------- | ------- | ----------- |
+| Embedded focus          | Yes      | Yes       | Partial  | No       | No       | Yes     | No      | **Yes**     |
+| Simple config           | No       | Moderate  | Moderate | Yes      | Moderate | No      | No      | **Yes**     |
+| Native builds           | No       | No        | Yes      | Yes      | Yes      | Yes     | Yes     | **Yes**     |
+| On-device packages      | Optional | No        | Yes      | Yes      | Yes      | Yes     | Yes     | **Yes**     |
+| Content-addressed cache | Partial  | No        | No       | No       | No       | No      | Yes     | **Yes**     |
+| Remote shared cache     | Complex  | No        | No       | No       | No       | No      | Yes     | **Yes**     |
+| Pre-built package cache | No       | No        | Yes      | Yes      | Yes      | Yes     | Yes     | **Yes**     |
+| Declarative images      | Yes      | Partial   | No       | No       | Partial  | Yes     | Yes     | **Yes**     |
+| Multi-image support     | Yes      | No        | No       | No       | No       | Partial | Yes     | **Yes**     |
+| Image inheritance       | Partial  | No        | No       | No       | No       | No      | Yes     | **Yes**     |
+| Custom BSP support      | Yes      | Yes       | No       | No       | Minimal  | Yes     | Minimal | **Yes**     |
+| Incremental updates     | Complex  | No        | Yes      | Yes      | Yes      | Yes     | Yes     | **Yes**     |
+| Hermetic builds         | Partial  | No        | No       | No       | No       | Partial | Yes     | **Yes**     |
+| Fast package ops        | N/A      | N/A       | Yes      | Moderate | Moderate | Slow    | Slow    | **Yes**     |
+| Single-digit MB base    | No       | Yes       | Yes      | No       | No       | No      | No      | **Yes**     |
+
+_UC = Ubuntu Core._
