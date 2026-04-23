@@ -21,72 +21,108 @@ device**.
 Units are inputs to the build system. Packages are outputs. A developer edits
 units; a device only ever sees packages.
 
-### Sub-packages
+### Sub-packages (planned; not yet implemented)
 
-A single unit can produce multiple `.apk` packages. This is the same concept as
-Yocto's `PACKAGES` splitting and Debian's binary packages — one source build
-produces granular installable units:
+> **Status:** Design-ahead. Today `[yoe]` produces exactly one `.apk` per unit —
+> `internal/artifact/apk.go` packages `$DESTDIR` into a single archive, and the
+> Starlark `subpackages =` field is not yet parsed. This section describes the
+> intended future model so units and classes can be written with it in mind.
 
-| Sub-package | Contents                               | Typical consumer        |
-| ----------- | -------------------------------------- | ----------------------- |
-| `openssh`   | Binaries, default config               | Production images       |
-| `-dev`      | Headers, pkg-config files, static libs | Build-time dependencies |
-| `-doc`      | Man pages, info pages                  | Development images      |
-| `-dbg`      | Debug symbols (DWARF)                  | Debug/development       |
+A single unit will be able to produce a small number of `.apk` packages from one
+source build. The goal is targeted — keep runtime images lean — not exhaustive
+like Yocto's auto-split of every recipe into 7+ packages.
 
-**In a unit:**
+**The only two splits `[yoe]` plans to support as subpackages:**
+
+| Sub-package | Contents                             | Why it's a subpackage                                                     |
+| ----------- | ------------------------------------ | ------------------------------------------------------------------------- |
+| `<name>`    | Binaries, runtime libs, default conf | The default artifact                                                      |
+| `-dev`      | Headers, `.a`, `.pc`, CMake configs  | Never wanted at runtime on a constrained device; needed on build hosts    |
+| `-dbg`      | Detached DWARF debug info            | Installable after a field incident; should not occupy flash on the device |
+
+**What is deliberately _not_ a subpackage:**
+
+- **Docs, man pages, info pages, locale data, examples.** Classes strip these
+  from `$DESTDIR` by default (e.g., `autotools` removes
+  `/usr/share/{doc,man,info,locale,gtk-doc,bash-completion}` and
+  `/usr/share/*/examples`). A unit that genuinely needs man pages on the device
+  can opt out of the strip; most don't.
+- **`-src`, `-staticdev`, `-locale-*`, `-bin` / `-common` style splits.** Yocto
+  produces these automatically; `[yoe]` does not. The cognitive cost
+  (which-of-seven-packages-holds-this-file) and per-unit metadata surface isn't
+  worth it for yoe's target audience.
+- **Library SONAME splits (`libfoo0` separate from `foo`).** Debian splits these
+  to allow multiple ABI versions to coexist; `[yoe]` is rolling and ships one
+  ABI at a time, so the split is unnecessary.
+
+**Rationale.** Yocto's auto-split-everything model exists because recipe authors
+cannot be trusted to strip docs/locale/staticdev consistently, so the build
+system does it mechanically. That logic doesn't apply to `[yoe]`: the class
+library is small, AI-written units follow the class, and the image is already
+targeting single-digit MB. A `rm -rf $DESTDIR/usr/share/{doc,man,…}` in the
+class does what Yocto's `-doc` subpackage does, with one package instead of two.
+
+**Planned unit surface:**
 
 ```python
 load("//classes/autotools.star", "autotools")
 
 autotools(
+    name = "openssl",
+    version = "3.2.1",
+    source = "https://www.openssl.org/source/openssl-3.2.1.tar.gz",
+    deps = ["zlib"],
+    # Opt in to the two subpackages that matter on constrained devices.
+    subpackages = ["dev", "dbg"],
+)
+```
+
+With no `subpackages` field, the unit produces a single `.apk` containing
+everything in `$DESTDIR` after the class's default strip. That is the expected
+case for most units.
+
+**Planned split rules:**
+
+- `-dev` claims `/usr/include/**`, `/usr/lib/*.a`, `/usr/lib/pkgconfig/**`,
+  `/usr/lib/cmake/**`, `/usr/share/aclocal/**`, `/usr/share/pkgconfig/**`,
+  `/usr/bin/*-config` (e.g., `xml2-config`).
+- `-dbg` claims `/usr/lib/debug/**` (produced by running
+  `objcopy --only-keep-debug` / `strip --only-keep-debug` on ELF binaries in
+  `$DESTDIR` before packaging).
+- Everything else stays in the main package.
+
+**For custom splits** (e.g., separating `openssh-server` from `openssh-client`
+because an image ships one but not both), the plan is to allow explicit file
+lists:
+
+```python
+autotools(
     name = "openssh",
-    version = "9.6p1",
-    source = "https://cdn.openbsd.org/.../openssh-9.6p1.tar.gz",
-    deps = ["zlib", "openssl"],
-    # Sub-package splitting — default splits are automatic, but can be
-    # customized or disabled per unit.
-    subpackages = {
-        "dev": auto(),          # headers + pkg-config (automatic)
-        "doc": auto(),          # man pages (automatic)
-        "dbg": auto(),          # debug symbols (automatic)
-        "server": subunit(   # custom split
-            description = "OpenSSH server",
-            files = ["/usr/sbin/sshd", "/etc/ssh/sshd_config"],
-            services = ["sshd"],
+    subpackages = ["dev", "dbg"],
+    extra_subpackages = {
+        "server": files(
+            "/usr/sbin/sshd",
+            "/etc/ssh/sshd_config",
         ),
-        "client": subunit(
-            description = "OpenSSH client utilities",
-            files = ["/usr/bin/ssh", "/usr/bin/scp", "/usr/bin/sftp"],
+        "client": files(
+            "/usr/bin/ssh",
+            "/usr/bin/scp",
+            "/usr/bin/sftp",
         ),
     },
 )
 ```
 
-**How it works:**
+This path is lower priority; most services can be shipped as one package and
+enabled/disabled by the image.
 
-1. The unit builds once, installing everything into `$DESTDIR`.
-2. After the build, the `yoe` engine splits `$DESTDIR` into sub-packages based
-   on the `subpackages` declaration.
-3. `auto()` splits use file-path conventions (same as Alpine's apk and Yocto's
-   `PACKAGES_DYNAMIC`):
-   - `-dev`: `/usr/include/**`, `/usr/lib/*.a`, `/usr/lib/pkgconfig/**`
-   - `-doc`: `/usr/share/man/**`, `/usr/share/doc/**`, `/usr/share/info/**`
-   - `-dbg`: `/usr/lib/debug/**` (debug symbols separated by `strip`)
-4. Custom splits use explicit file lists.
-5. Each sub-package becomes a separate `.apk` in the repository.
-
-**Default behavior:** If `subpackages` is omitted, automatic `-dev`, `-doc`, and
-`-dbg` splits are applied. To produce a single unsplit package, set
-`subpackages = {}`.
-
-**In image units:**
+**In image units (planned consumption):**
 
 ```python
 image(
     name = "production-image",
     artifacts = [
-        "openssh-server",       # just the server, not the full openssh
+        "openssh",
         "networkmanager",
     ],
 )
@@ -94,22 +130,80 @@ image(
 image(
     name = "dev-image",
     artifacts = [
-        "openssh",              # full package
-        "openssh-dev",          # headers for on-device compilation
-        "openssh-doc",          # man pages
+        "openssh",
+        "openssh-dev",          # headers for on-device development
         "gdb",
     ],
 )
 ```
 
-Sub-packages keep production images small (no headers, no man pages, no debug
-symbols) while making development images fully featured. This is the same
-tradeoff Yocto and Debian make — granular packaging trades a small amount of
-unit complexity for significant control over image contents.
+Alpine's apk already supports subpackages natively (Alpine's `openssl` APKBUILD
+produces `openssl`, `openssl-dev`, `openssl-dbg`, etc.), so the plumbing in apk
+is already proven — what `[yoe]` needs to build is the Starlark surface, the
+split engine, and the default strip logic in the shared classes.
 
-Alpine's apk already supports sub-packages natively (Alpine's `openssh` APKBUILD
-produces `openssh`, `openssh-doc`, `openssh-dev`, etc.), so `[yoe]` follows a
-proven pattern.
+### Dependency resolution at image time
+
+There are two places dependency information lives in `[yoe]`, and they serve
+different phases:
+
+- **Unit metadata** (`deps`, `runtime_deps` in `.star` files) — drives the
+  **build** graph. Tells the build executor what order to compile things in and
+  what goes into each unit's sysroot.
+- **Package metadata** (`.PKGINFO` inside each `.apk`; aggregated into an
+  `APKINDEX`) — drives the **install** graph. Tells apk what to pull in when a
+  package is added to a rootfs.
+
+The unit author writes `runtime_deps = [...]` once; the build emits those into
+`.PKGINFO` as `depend =` lines. From that point the package metadata is
+authoritative for installation.
+
+**Status today.** Image assembly currently reads the unit metadata, not the
+package metadata. `internal/image/rootfs.go` walks `unit.RuntimeDeps`
+recursively from the in-memory Starlark project and then extracts each resolved
+`.apk` with `tar xzf --exclude=.PKGINFO` — bypassing apk's resolver entirely.
+`.PKGINFO` is written (`internal/artifact/apk.go` emits `depend =` lines) but
+not consulted during image assembly.
+
+**Planned: move image-time resolution to package metadata.** Image assembly will
+resolve dependencies by reading the `APKINDEX` / `.PKGINFO` of the already-built
+packages — either by parsing directly or by invoking
+`apk --root <rootfs> add <pkgs>` inside the build container. The unit's
+`runtime_deps` field stays authoritative for _generating_ PKGINFO; PKGINFO
+becomes authoritative for _installing_.
+
+**Why change:**
+
+- **Subpackages need it.** Once `openssl` splits into `openssl` and
+  `openssl-dev`, the unit graph no longer has a node named `openssl-dev`. The
+  dep `openssl-dev → openssl = ${version}` lives only in the generated PKGINFO.
+  A unit-graph walker cannot see it.
+- **`provides:` / `replaces:` / `conflicts:`.** apk's metadata supports virtual
+  packages and alternatives (e.g., two SSH implementations both
+  `provides = ssh`, one `replaces` the other). A Starlark-only walker would have
+  to re-implement apk's resolver to honor these.
+- **External repositories compose cleanly.** If a project pulls packages from an
+  Alpine aports mirror or a vendor BSP repo, there is no Starlark unit to walk —
+  only APKINDEX metadata. Delegating to apk makes these interchangeable with
+  yoe-built packages.
+- **Single source of truth on the device.** What the image builder sees is what
+  the on-device `apk upgrade` sees: same metadata, same resolver.
+
+**Tradeoff.** `apk` becomes a required tool during image assembly. In practice
+this is a non-issue because apk already runs inside the build container for
+other operations; the change is "also invoke it here" rather than a new host
+dependency.
+
+**Migration sketch** (future work):
+
+1. Generate an `APKINDEX` in the local repo (`yoe repo index` already exists for
+   this).
+2. Replace the `tar xzf` loop in `internal/image/rootfs.go` with
+   `apk add --root <rootfs> --repository <localrepo> --repository <others> ...`.
+3. Drop the Starlark-side runtime-dep walker in `resolvePackageDeps`; keep the
+   build-side walker (for build ordering and per-unit sysroots) unchanged.
+4. Allow `artifacts = [...]` in image units to reference subpackage names
+   (`openssl-dev`) and external-repo packages (`alpine:curl`) uniformly.
 
 ## Why Starlark
 
