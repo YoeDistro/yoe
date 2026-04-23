@@ -181,6 +181,24 @@ func kwStringMap(kwargs []starlark.Tuple, key string) map[string]string {
 	return nil
 }
 
+// reservedUnitKwargs lists the kwargs that unit() and image() map to typed
+// fields on the Unit struct. Kwargs not in this set are captured into
+// Unit.Extra for template context rendering.
+//
+// When a new typed field is added to the Unit struct, add its kwarg name here
+// too so it isn't double-captured into Extra.
+var reservedUnitKwargs = map[string]bool{
+	"name": true, "version": true, "release": true, "scope": true,
+	"description": true, "license": true, "source": true, "sha256": true,
+	"tag": true, "branch": true, "patches": true, "deps": true,
+	"runtime_deps": true, "container": true, "container_arch": true,
+	"sandbox": true, "shell": true, "tasks": true, "provides": true,
+	"services": true, "conffiles": true, "environment": true,
+	"cache_dirs": true, "artifacts": true, "exclude": true,
+	"hostname": true, "timezone": true, "locale": true,
+	"partitions": true, "unit_class": true,
+}
+
 // starlarkToGo converts a Starlark value into a Go value suitable for JSON
 // serialization and Go template rendering. Returns an error for unsupported
 // types so unit definitions fail loudly instead of silently dropping data.
@@ -602,20 +620,9 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 	}
 
 	// Capture unrecognized kwargs into Extra (used for template context + hash).
-	reserved := map[string]bool{
-		"name": true, "version": true, "release": true, "scope": true,
-		"description": true, "license": true, "source": true, "sha256": true,
-		"tag": true, "branch": true, "patches": true, "deps": true,
-		"runtime_deps": true, "container": true, "container_arch": true,
-		"sandbox": true, "shell": true, "tasks": true, "provides": true,
-		"services": true, "conffiles": true, "environment": true,
-		"cache_dirs": true, "artifacts": true, "exclude": true,
-		"hostname": true, "timezone": true, "locale": true,
-		"partitions": true, "unit_class": true,
-	}
 	for _, kv := range kwargs {
 		k := string(kv[0].(starlark.String))
-		if reserved[k] {
+		if reservedUnitKwargs[k] {
 			continue
 		}
 		v, err := starlarkToGo(kv[1])

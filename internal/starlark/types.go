@@ -149,7 +149,8 @@ type Unit struct {
 	Partitions []Partition
 
 	// Arbitrary kwargs passed to unit() that don't map to a typed field.
-	// Used for template context and included in the unit hash.
+	// Used for template context rendering and will be included in the unit
+	// hash (see docs/superpowers/plans/2026-04-23-file-templates.md Task 6).
 	Extra map[string]any
 }
 
