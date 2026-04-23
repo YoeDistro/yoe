@@ -162,10 +162,20 @@ type Partition struct {
 	Contents []string
 }
 
-// Step is a single build action — either a shell command or a Starlark function.
+// Step is a single build action — shell command, Starlark function, or install step.
 type Step struct {
-	Command string            // shell command (set when step is a string)
-	Fn      starlark.Callable // Starlark function (set when step is callable)
+	Command string            // shell command
+	Fn      starlark.Callable // Starlark function
+	Install *InstallStep      // install_file / install_template step
+}
+
+// InstallStep describes a file installation action produced by the Starlark
+// install_file() / install_template() builtins. Executed by the build executor.
+type InstallStep struct {
+	Kind string // "file" or "template"
+	Src  string // path relative to <DefinedIn>/<unit-name>/
+	Dest string // env-expanded at execution time
+	Mode int
 }
 
 // Task is a named build phase containing one or more steps.
