@@ -1,11 +1,15 @@
-# 🐧 Yoe Next Generation
+<p align="center">
+  <img src="docs/yoe-logo-amber-on-black.svg" alt="Yoe" width="360">
+</p>
+
+# `[yoe]` Next Generation
 
 **For teams building edge products in Go, Rust, Zig, Python, etc. who need Linux
 on ARM/RISC-V without the complexity of Yocto.**
 
 We have maintained the [Yoe Distribution](https://yoedistro.org/) for many years
 which is a Yocto based Embedded Linux distribution designed for product
-development. Yoe-NG is a fresh take on building software for edge devices. Your
+development. `[yoe]` is a fresh take on building software for edge devices. Your
 application is written in modern language. Your target is embedded/edge
 hardware. You need a minimal Linux image with your app, the right kernel, and
 nothing else. You shouldn't need to learn complex build systems, manage
@@ -18,18 +22,18 @@ cloud CI — same tool, same config, same results.
 Note: Not everything in the documentation has been implemented yet as this
 project is in the early stages.
 
-## Is Yoe-NG Right for You?
+## Is `[yoe]` Right for You?
 
-Yoe-NG is not for everyone. If you are building a mission-critical system that
+`[yoe]` is not for everyone. If you are building a mission-critical system that
 requires bit-for-bit reproducible builds, long-term release freezes, or
 extensive compliance certification, use [Yocto](https://www.yoctoproject.org/) —
 it is battle-tested for those requirements.
 
-Yoe-NG is designed for edge systems that behave more like cloud systems: AI
+`[yoe]` is designed for edge systems that behave more like cloud systems: AI
 workloads, applications written in modern languages, systems that track upstream
 closely, and teams that prioritize fast iteration over strict reproducibility.
 If your product ships frequent updates, runs containerized services, or depends
-heavily on Go/Rust/Python ecosystems, Yoe-NG may be a better fit.
+heavily on Go/Rust/Python ecosystems, `[yoe]` may be a better fit.
 
 ## 🚀 Getting Started
 
@@ -129,7 +133,7 @@ developers configured everything by hand. Three things have changed:
    this only works if the build metadata is structured and queryable, not buried
    in shell scripts and environment variables.
 
-Yoe-NG is built for this new world: native builds, language-native package
+`[yoe]` is built for this new world: native builds, language-native package
 managers, structured Starlark metadata, and AI as a first-class interface.
 
 ## 🧭 Principles
@@ -152,7 +156,7 @@ managers, structured Starlark metadata, and AI as a first-class interface.
    Generating SDKs is a waste of time if everyone can use the same tool.
 6. **Track upstream closely.** Modern edge systems are more like the cloud than
    traditional embedded systems — they are connected, updated regularly, and
-   expected to receive security patches throughout their lifetime. Yoe-NG
+   expected to receive security patches throughout their lifetime. `[yoe]`
    assumes you will track upstream releases closely rather than freezing on a
    version for years. Updating a package should be easy and routine, not a
    high-risk event that requires a dedicated engineering effort.
@@ -165,7 +169,7 @@ snapshot of the sysroot, toolchain, and headers — and hands it to application
 developers. From that point on, the two worlds drift: the SDK ages, libraries
 diverge, and "it works on my machine" becomes "it works with my SDK version."
 
-Yoe-NG eliminates this boundary by recognizing that there are distinct kinds of
+`[yoe]` eliminates this boundary by recognizing that there are distinct kinds of
 build dependencies, and they should be managed differently:
 
 - **Host tools** (compilers, build utilities, code generators) — these come from
@@ -185,7 +189,7 @@ build dependencies, and they should be managed differently:
   packages) — these are managed by the language's own package manager, not the
   sysroot. A Go unit runs `go build` and Go fetches its own modules. A Node unit
   runs `npm install`. Cargo handles Rust crates. These ecosystems already solve
-  dependency resolution, caching, and reproducibility — Yoe-NG doesn't
+  dependency resolution, caching, and reproducibility — `[yoe]` doesn't
   reimplement any of that. The container provides the language runtime (Go
   compiler, Node, rustc), and the language's package manager handles the rest.
   When a language unit _also_ needs a C library (e.g., a Rust crate linking
@@ -203,14 +207,14 @@ person rebuilding a Rust unit is the developer actively working on it, and their
 local Cargo cache handles repeat builds. Go builds so fast it does not matter.
 Some ecosystems go further: PyPI distributes pre-compiled wheels globally, so
 `pip install` pulls binaries for most packages without compiling anything.
-Yoe-NG doesn't need to replicate what these ecosystems already provide.
+`[yoe]` doesn't need to replicate what these ecosystems already provide.
 
 **Native builds unlock existing package ecosystems.** This is especially clear
 with Python. In traditional cross-compilation systems like Yocto or Buildroot,
 PyPI wheels are useless — pip runs on the x86_64 host but the target is ARM, so
 pre-compiled `aarch64` wheels can't be installed. Instead, every Python package
 needs a custom recipe that cross-compiles C extensions against the target
-sysroot, effectively reimplementing pip. In Yoe-NG, pip runs inside a
+sysroot, effectively reimplementing pip. In `[yoe]`, pip runs inside a
 native-arch container (real ARM64 or QEMU-emulated), so `pip install numpy` just
 downloads the `aarch64` wheel from PyPI and unpacks it — no compilation, no
 custom recipe. The same advantage applies to any language ecosystem that
@@ -229,7 +233,7 @@ container — that's how you stay in sync. A new developer clones the repo, runs
 `yoe build`, and gets working build environments pulled automatically.
 
 Docker containers are already the standard way teams manage development
-environments. Yoe-NG leans into this rather than inventing a parallel universe
+environments. `[yoe]` leans into this rather than inventing a parallel universe
 of SDKs.
 
 ## 🤖 Why AI-Native
@@ -240,7 +244,7 @@ dependency ordering, kernel configuration, package splitting, module
 composition, image assembly, device trees, bootloaders. Traditional build
 systems manage this complexity through complexity.
 
-Yoe-NG takes a different approach: **Simplify things as much as possible.**
+`[yoe]` takes a different approach: **Simplify things as much as possible.**
 Starlark units are readable by both humans and AI. The dependency graph is
 queryable. Build logs are structured. An AI assistant that understands all of
 this can:
@@ -312,9 +316,9 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
   configuration spec
 - [Build Environment](docs/build-environment.md) — bootstrap, host tools, and
   build isolation
-- [SDK Management](docs/sdk.md) — development environments, container-based SDK,
-  pre-built binary packages
-- [Comparisons](docs/comparisons.md) — how Yoe-NG relates to Yocto, Buildroot,
+- [Development Environments](docs/dev-env.md) — the no-SDK model, `yoe shell`
+  for interactive dev, and `yoe bundle` for air-gapped distribution
+- [Comparisons](docs/comparisons.md) — how `[yoe]` relates to Yocto, Buildroot,
   Alpine, Arch, and NixOS
 - [Build Languages](docs/build-languages.md) — analysis of Starlark, CUE, Nix,
   and other embeddable languages for unit definitions
@@ -323,7 +327,7 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
 
 ## 💡 Inspirations
 
-Yoe-NG draws selectively from five existing systems, taking the best ideas from
+`[yoe]` draws selectively from five existing systems, taking the best ideas from
 each while avoiding their respective pain points:
 
 - **Yocto** — machine abstraction, image composition, module architecture, OTA
@@ -342,14 +346,14 @@ each while avoiding their respective pain points:
   references for composability. Leave behind the C++-specific build model and
   Ninja generation.
 
-See [Comparisons](docs/comparisons.md) for detailed analysis of how Yoe-NG
+See [Comparisons](docs/comparisons.md) for detailed analysis of how `[yoe]`
 relates to each of these systems, including when you should use them instead.
 
 ## ⚙️ Design Principles
 
 ### 🚫 No Cross Compilation
 
-Instead of maintaining cross-toolchains, Yoe-NG targets native builds:
+Instead of maintaining cross-toolchains, `[yoe]` targets native builds:
 
 - **QEMU user-mode emulation** — build ARM64 or RISC-V images on any x86_64
   workstation. The build runs inside a genuine foreign-arch Docker container,
@@ -376,8 +380,8 @@ Each language ecosystem manages its own dependencies:
 | JavaScript | npm / pnpm      | `package-lock.json` |
 | Zig        | Zig build       | `build.zig.zon`     |
 
-Yoe-NG provides caching infrastructure (a shared module proxy for Go, a registry
-mirror for Cargo/npm, etc.) so builds are fast and repeatable without
+`[yoe]` provides caching infrastructure (a shared module proxy for Go, a
+registry mirror for Cargo/npm, etc.) so builds are fast and repeatable without
 re-downloading the internet.
 
 ### 🖥️ Kernel and System Image Tooling
@@ -392,12 +396,12 @@ still need orchestration:
 - **OTA / update support** — integration with update frameworks (RAUC, SWUpdate,
   etc.).
 
-This is where Yoe-NG tooling (written in Go) provides value — similar to what
+This is where `[yoe]` tooling (written in Go) provides value — similar to what
 `bitbake` and `wic` do in Yocto, but simpler and more opinionated.
 
 ### 🏗️ Go-Based Tooling
 
-The Yoe-NG CLI tool handles:
+The `[yoe]` CLI tool handles:
 
 - **TUI** — run `yoe` with no arguments for an interactive unit list with inline
   build status, background builds, search, and quick actions (edit, diagnose,
@@ -420,7 +424,7 @@ Why Go:
 
 ### 📋 Package Management: apk
 
-Yoe-NG uses [apk](https://wiki.alpinelinux.org/wiki/Alpine_Package_Keeper)
+`[yoe]` uses [apk](https://wiki.alpinelinux.org/wiki/Alpine_Package_Keeper)
 (Alpine Package Keeper) as its package manager. It is important to distinguish
 between **units** and **packages** — these are separate concepts:
 
@@ -442,47 +446,47 @@ Why apk over pacman or opkg:
   metadata file. No complex archive-in-archive wrapping.
 - **Small footprint** — apk-tools is tiny, appropriate for embedded targets.
 - **Active development** — apk 3.x adds content-addressed storage and atomic
-  transactions, aligning with Yoe-NG's Nix-inspired reproducibility goals.
-- **Works with glibc** — apk is not tied to musl; it works with any libc. Yoe-NG
-  runs its own package repositories, not Alpine's.
-- **On-device package management** — devices can pull updates from a Yoe-NG
+  transactions, aligning with `[yoe]`'s Nix-inspired reproducibility goals.
+- **Works with glibc** — apk is not tied to musl; it works with any libc.
+  `[yoe]` runs its own package repositories, not Alpine's.
+- **On-device package management** — devices can pull updates from a `[yoe]`
   package repository, enabling incremental OTA updates (install only changed
   packages) alongside full image updates.
 
-The Yoe-NG build tooling invokes units to produce `.apk` packages, which are
+The `[yoe]` build tooling invokes units to produce `.apk` packages, which are
 published to a repository. Image assembly then uses `apk` to install packages
 into a root filesystem, just as Alpine does.
 
 ### 🧱 Base System
 
-_Currently running musl busybox/init for simplicity, but hope to eventually move
-to glibc/systemd._
+_Currently running musl busybox/init for simplicity. glibc and systemd are
+potential future options but the project has not committed to them yet._
 
-The base userspace is **glibc + busybox + systemd**:
+The base userspace today is **busybox** on top of a C library (musl today, glibc
+targeted), with busybox's built-in init as PID 1:
 
-- **glibc** — the standard C library. Maximizes compatibility with pre-built
-  binaries, language runtimes (Go, Rust, Python, Node.js), and third-party
-  libraries. musl is lighter but introduces subtle compatibility issues that
-  aren't worth fighting in a system that already includes systemd.
-- **busybox** — provides the core userspace utilities (sh, coreutils, etc.) in a
-  single small binary. Keeps the base image minimal while still having a
-  functional shell environment for debugging and scripting.
-- **systemd** — the init system and service manager. Despite its size, systemd
-  is the pragmatic choice:
-  - Well-understood by developers and ops teams.
-  - Rich ecosystem of unit files for common services.
-  - Built-in support for journal logging, network management, device management
-    (udev), and container integration.
-  - Required or assumed by many modern Linux components.
+- **C library** — the project currently uses musl (inherited from Alpine's
+  toolchain), with a planned move to glibc for maximum compatibility with
+  pre-built binaries, language runtimes (Go, Rust, Python, Node.js), and
+  third-party libraries.
+- **busybox** — provides the core userspace utilities (sh, coreutils, etc.) and
+  init in a single small binary. Keeps the base image minimal while still giving
+  a functional shell environment for debugging and scripting.
+- **Init (current: busybox init)** — busybox's built-in init handles PID 1
+  duties today. **systemd may become an option in the future**: it is
+  well-understood, has rich service management, and provides integrated journal
+  logging, network management, device management (udev), and container
+  integration. The trade-off is size and complexity; the project has not yet
+  committed to shipping it as part of the base.
 
 This combination gives a small but fully functional base system that can run
 real-world services without surprises.
 
 ### 🔒 Reproducibility
 
-Yoe-NG targets **functional equivalence**, not bit-for-bit reproducibility. Same
-inputs produce functionally identical outputs — same behavior, same files, same
-permissions — but the bytes may differ due to embedded timestamps, archive
+`[yoe]` targets **functional equivalence**, not bit-for-bit reproducibility.
+Same inputs produce functionally identical outputs — same behavior, same files,
+same permissions — but the bytes may differ due to embedded timestamps, archive
 member ordering, or compiler non-determinism.
 
 This is a deliberate trade-off:

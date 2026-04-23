@@ -1,10 +1,10 @@
 # Build Environment
 
-How Yoe-NG manages host tools, build isolation, and the bootstrap process.
+How `[yoe]` manages host tools, build isolation, and the bootstrap process.
 
 ## Architecture
 
-Yoe-NG uses a tiered build environment with three tiers:
+`[yoe]` uses a tiered build environment with three tiers:
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -12,10 +12,10 @@ Yoe-NG uses a tiered build environment with three tiers:
 │  Provides: apk-tools, bubblewrap, yoe (Go binary)  │
 │  libc: doesn't matter (musl or glibc)              │
 ├─────────────────────────────────────────────────────┤
-│  Tier 1: Yoe-NG Build Root (chroot/bwrap)           │
-│  Populated by: apk from Yoe-NG's package repo       │
+│  Tier 1: `[yoe]` Build Root (chroot/bwrap)           │
+│  Populated by: apk from `[yoe]`'s package repo       │
 │  Provides: glibc, gcc, make, cmake, language SDKs   │
-│  libc: glibc (Yoe-NG's own packages)               │
+│  libc: glibc (`[yoe]`'s own packages)               │
 ├─────────────────────────────────────────────────────┤
 │  Tier 2: Per-Unit Build Environment               │
 │  Populated by: apk with only declared build deps    │
@@ -124,9 +124,9 @@ That's it. Everything else is inside the container.
   shell commands
 - `ctx.shell()` in custom commands can invoke any host tool
 
-### Tier 1: Yoe-NG Build Root
+### Tier 1: `[yoe]` Build Root
 
-A glibc-based environment populated from Yoe-NG's own package repository. This
+A glibc-based environment populated from `[yoe]`'s own package repository. This
 is where the actual compilers, toolchains, and language SDKs live.
 
 ```sh
@@ -138,7 +138,7 @@ apk --root /var/yoe/buildroot \
 
 This build root is:
 
-- **glibc-based** — Yoe-NG's own packages, not Alpine's.
+- **glibc-based** — `[yoe]`'s own packages, not Alpine's.
 - **Persistent** — created once, updated as needed. Not torn down between
   builds.
 - **Architecture-native** — on an ARM64 machine, it's an ARM64 build root. No
@@ -194,15 +194,15 @@ and you have a working environment. But for the build system itself, bubblewrap
 
 ## Bootstrap Process
 
-There is a chicken-and-egg problem: Yoe-NG needs glibc, gcc, and other base
-packages in its repository before it can build anything inside a Yoe-NG chroot.
+There is a chicken-and-egg problem: `[yoe]` needs glibc, gcc, and other base
+packages in its repository before it can build anything inside a `[yoe]` chroot.
 This is solved with a staged bootstrap, the same approach used by Alpine, Arch,
 Gentoo, and every other self-hosting distribution.
 
 ### Stage 0: Cross-Pollination
 
 Build the initial base packages using an existing distribution's toolchain.
-Alpine's gcc (or any host gcc) builds the first generation of Yoe-NG packages.
+Alpine's gcc (or any host gcc) builds the first generation of `[yoe]` packages.
 
 ```sh
 # Inside Alpine (or any Linux with gcc)
@@ -219,28 +219,29 @@ yoe bootstrap stage0
 ```
 
 These packages are built with Alpine's musl-based gcc targeting glibc. The
-output is a minimal set of `.apk` files — enough to create a self-hosting Yoe-NG
-build root.
+output is a minimal set of `.apk` files — enough to create a self-hosting
+`[yoe]` build root.
 
 ### Stage 1: Self-Hosting
 
-Rebuild the base packages using the Stage 0 packages. Now the Yoe-NG build root
+Rebuild the base packages using the Stage 0 packages. Now the `[yoe]` build root
 is building itself.
 
 ```sh
 yoe bootstrap stage1
 
-# Creates a Yoe-NG build root from Stage 0 packages, then rebuilds:
-#   glibc, gcc, binutils, etc. — now built with Yoe-NG's own gcc + glibc
+# Creates a `[yoe]` build root from Stage 0 packages, then rebuilds:
+#   glibc, gcc, binutils, etc. — now built with `[yoe]`'s own gcc + glibc
 ```
 
 After Stage 1, the bootstrap is complete. All packages in the repository were
-built by Yoe-NG's own toolchain. The Alpine dependency is gone.
+built by `[yoe]`'s own toolchain. The Alpine dependency is gone.
 
 ### Stage 2: Normal Operation
 
-From this point on, all builds use the Yoe-NG build root. New units build inside
-Tier 2 isolated environments. The bootstrap is a one-time cost per architecture.
+From this point on, all builds use the `[yoe]` build root. New units build
+inside Tier 2 isolated environments. The bootstrap is a one-time cost per
+architecture.
 
 ```sh
 # Normal development — no bootstrap needed
@@ -251,17 +252,17 @@ yoe flash base-image /dev/sdX
 
 ### Pre-Built Bootstrap
 
-For most users, the bootstrap is not needed at all. Yoe-NG publishes pre-built
+For most users, the bootstrap is not needed at all. `[yoe]` publishes pre-built
 base packages for each supported architecture:
 
 - `x86_64` — built in CI
 - `aarch64` — built on ARM64 CI runners
 - `riscv64` — built on RISC-V hardware or QEMU
 
-A new project pulls these from the Yoe-NG package repository and starts building
-immediately. The bootstrap process is only needed by:
+A new project pulls these from the `[yoe]` package repository and starts
+building immediately. The bootstrap process is only needed by:
 
-- Yoe-NG distribution developers maintaining the base packages.
+- `[yoe]` distribution developers maintaining the base packages.
 - Users who need to verify the full build chain for compliance/traceability.
 - Users targeting a new architecture.
 
@@ -278,7 +279,7 @@ intercept libc calls. These approaches are fragile:
 | pseudo (Yocto)      | LD_PRELOAD + SQLite | Yes                        | Yes (known issue)   | Better          |
 | **User namespaces** | **Kernel**          | **No**                     | **N/A (stateless)** | **Yes**         |
 
-Yoe-NG uses **user namespaces** (via bubblewrap, already in the stack for build
+`[yoe]` uses **user namespaces** (via bubblewrap, already in the stack for build
 isolation) for all operations that need pseudo-root access. Inside a user
 namespace, the process sees itself as uid 0 and can perform all root-like
 filesystem operations — no LD_PRELOAD, no daemon, no database.
@@ -294,7 +295,7 @@ bwrap --unshare-user --uid 0 --gid 0 \
     --proc /proc \
     -- sh -c '
         # Install packages — apk sets ownership to root:root
-        apk --root /rootfs add glibc busybox systemd openssh myapp
+        apk --root /rootfs add musl busybox openssh myapp
 
         # Create device nodes
         mknod /rootfs/dev/null c 1 3
@@ -321,18 +322,20 @@ Because this is kernel-native:
 ### Disk Image Partitioning
 
 For the final step of creating a partitioned disk image (GPT/MBR with boot and
-rootfs partitions), `yoe` can use **systemd-repart** as a complementary tool.
-Since Yoe-NG already uses systemd, `systemd-repart` is a natural fit:
-
-- Declarative partition definitions (aligns with the partition definitions in
-  image units).
-- Handles GPT, MBR, filesystem creation, and image sizing.
-- Runs unprivileged with user namespaces.
-- Maintained by the systemd project.
+rootfs partitions), `yoe` needs a partitioning tool on the host or inside the
+build container.
+**[systemd-repart](https://www.freedesktop.org/software/systemd/man/systemd-repart.html)**
+is a candidate if `[yoe]` ever ships systemd as part of the base system — its
+declarative partition definitions align well with the partition definitions in
+image units, it handles GPT/MBR/filesystem creation in one step, and it runs
+unprivileged with user namespaces. Today, `[yoe]` does **not** use systemd, so
+disk image assembly uses the standard `sfdisk`/`mkfs.*` tools from the build
+container.
 
 The combination is: **bubblewrap** for rootfs population (installing packages,
-setting ownership, creating device nodes) and **systemd-repart** for disk image
-assembly (partitioning, filesystem creation, writing the final `.img`).
+setting ownership, creating device nodes) and a partitioning tool (`sfdisk` +
+`mkfs.*` today, `systemd-repart` as a future option) for disk image assembly
+(partitioning, filesystem creation, writing the final `.img`).
 
 ## Build Environment Lifecycle
 
@@ -360,7 +363,7 @@ Updating the base toolchain:
 
 ## Caching Architecture
 
-Yoe-NG uses a unified, content-addressed object store for both source archives
+`[yoe]` uses a unified, content-addressed object store for both source archives
 and built packages. The design is inspired by Nix's `/nix/store` and Git's
 object database: immutable blobs keyed by cryptographic hashes, with a
 multi-level fallback chain for local and remote storage.
@@ -513,7 +516,7 @@ S3 API, and works in air-gapped environments.
 
 ### Comparison with Nix and Yocto
 
-|                   | Nix                          | Yocto sstate               | Yoe-NG                          |
+|                   | Nix                          | Yocto sstate               | `[yoe]`                         |
 | ----------------- | ---------------------------- | -------------------------- | ------------------------------- |
 | Cache granularity | Per derivation output        | Per task                   | Per unit                        |
 | Key computation   | Full derivation hash         | Task hash + signatures     | Unit input hash (SHA256)        |
@@ -530,7 +533,7 @@ at an S3 bucket and it works. Signing is optional and adds one config line.
 ### Language Package Manager Caches
 
 Language-native package managers (Go modules, Cargo crates, npm packages, pip
-wheels) have their own download caches. Yoe-NG shares these across builds:
+wheels) have their own download caches. `[yoe]` shares these across builds:
 
 - **Go** — `GOMODCACHE` is set to a shared directory; the Go module proxy
   (`GOPROXY`) can point to a local Athens instance or the public
@@ -542,8 +545,8 @@ wheels) have their own download caches. Yoe-NG shares these across builds:
   proxy the npm registry.
 - **Python** — `PIP_CACHE_DIR` is shared; a local devpi instance can proxy PyPI.
 
-These caches are **not** content-addressed by Yoe-NG — they are managed by the
-language toolchains themselves. Yoe-NG ensures the cache directories persist
+These caches are **not** content-addressed by `[yoe]` — they are managed by the
+language toolchains themselves. `[yoe]` ensures the cache directories persist
 across builds and are shared across units that use the same language.
 
 ### Cache Signing and Verification
@@ -559,7 +562,7 @@ read-only public key for verification only.
 
 ## Multi-Target Builds
 
-A single Yoe-NG project can define multiple machines and multiple images,
+A single `[yoe]` project can define multiple machines and multiple images,
 building any combination from the same source tree. This is similar to Yocto's
 multi-machine/multi-image capability but with simpler mechanics.
 
@@ -628,14 +631,14 @@ Packages from different architectures never mix. The build roots are:
 ```
 
 In practice, multi-architecture builds from a single workstation are uncommon
-since Yoe-NG uses native builds. A developer typically builds for the
+since `[yoe]` uses native builds. A developer typically builds for the
 architecture of their machine. Multi-arch is more relevant in CI, where
 different runners handle different architectures and share results via the
 remote cache.
 
 ## Supported Host Architectures
 
-Since Yoe-NG uses native builds (no cross-compilation), the host architecture
+Since `[yoe]` uses native builds (no cross-compilation), the host architecture
 **is** the target architecture. All three supported architectures have viable
 build environments:
 

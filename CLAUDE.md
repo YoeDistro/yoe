@@ -5,7 +5,7 @@ code in this repository.
 
 ## Project Overview
 
-Yoe-NG is a next-generation embedded Linux distribution builder — a simpler
+`[yoe]` is a next-generation embedded Linux distribution builder — a simpler
 alternative to Yocto. The project has a working Go CLI (`yoe`) that builds
 artifacts from Starlark units inside a Docker container, creates bootable disk
 images, and runs them in QEMU. A `units-core` module provides Starlark classes
@@ -169,3 +169,13 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
 - **Silent failures are bugs.** If something can fail, it should fail loudly
   with a clear error. Never swallow errors or degrade silently in ways that make
   debugging harder later.
+- **Mark unimplemented docs as (planned).** Any design, feature, command, class,
+  builtin, kwarg, or subcommand described in `docs/` that does not yet exist in
+  the code must be marked `(planned)` in its section heading and carry a
+  `> **Status:** …` blockquote under the heading that describes what exists
+  today (with file/path pointers where useful) and what the section is
+  describing as future work. When adding a new design-ahead section, mark it
+  planned from the start; when implementation lands, remove the `(planned)`
+  suffix and the Status blockquote in the same change that ships the code. The
+  goal: a reader of `docs/` can never confuse aspirational design with what
+  `yoe` actually does today.

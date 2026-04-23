@@ -1,7 +1,7 @@
 # Comparisons
 
-How Yoe-NG relates to existing embedded Linux build systems and distributions.
-For each, we identify what Yoe-NG adopts, what it leaves behind, and where it
+How `[yoe]` relates to existing embedded Linux build systems and distributions.
+For each, we identify what `[yoe]` adopts, what it leaves behind, and where it
 differs.
 
 ## vs. Yocto / OpenEmbedded
@@ -9,7 +9,7 @@ differs.
 Yocto is the industry standard for custom embedded Linux. It is extremely
 capable but carries significant complexity.
 
-**What Yoe-NG adopts from Yocto:**
+**What `[yoe]` adopts from Yocto:**
 
 - **Machine abstraction** — a declarative way to define board-specific
   configuration (kernel defconfig, device tree, bootloader, partition layout).
@@ -20,12 +20,12 @@ capable but carries significant complexity.
 - **OTA integration** — first-class support for update frameworks (RAUC,
   SWUpdate).
 
-**What Yoe-NG leaves behind:**
+**What `[yoe]` leaves behind:**
 
 - BitBake and the task-level dependency graph.
 - The unit/bbappend/bbclass metadata system.
 - sstate-cache complexity — Yocto's sstate is per-task and requires careful
-  configuration of mirrors, hash equivalence servers, and signing. Yoe-NG's
+  configuration of mirrors, hash equivalence servers, and signing. `[yoe]`'s
   cache is per-unit, stored in S3-compatible object storage, and needs only a
   bucket URL.
 - Cross-compilation toolchains.
@@ -39,10 +39,10 @@ layer conditional string operations on top. The result is powerful but
 notoriously hard to debug (you need `bitbake -e` to see what a variable actually
 resolved to).
 
-Yoe-NG's model is function-based, which covers the same use cases more
+`[yoe]`'s model is function-based, which covers the same use cases more
 explicitly:
 
-| Yocto override                     | Yoe-NG equivalent                                         |
+| Yocto override                     | `[yoe]` equivalent                                        |
 | ---------------------------------- | --------------------------------------------------------- |
 | `DEPENDS:append:raspberrypi4`      | `if MACHINE == "raspberrypi4": extra_deps = [...]`        |
 | `SRC_URI:append:aarch64`           | `if ARCH == "aarch64": ...` in the unit                   |
@@ -56,7 +56,7 @@ hidden layering of string operations.
 
 **Key differences:**
 
-|                     | Yocto                                        | Yoe-NG                                        |
+|                     | Yocto                                        | `[yoe]`                                       |
 | ------------------- | -------------------------------------------- | --------------------------------------------- |
 | Build system        | BitBake (Python)                             | `yoe` (Go)                                    |
 | Package format      | rpm / deb / ipk                              | apk                                           |
@@ -77,14 +77,14 @@ and tooling invested.
 ## vs. Buildroot
 
 Buildroot is the simplest of the established embedded Linux build systems. It
-shares Yoe-NG's preference for simplicity.
+shares `[yoe]`'s preference for simplicity.
 
-**What Yoe-NG adopts from Buildroot:**
+**What `[yoe]` adopts from Buildroot:**
 
 - The principle that simpler is better.
 - Minimal base system approach.
 
-**What Yoe-NG leaves behind:**
+**What `[yoe]` leaves behind:**
 
 - Kconfig as the configuration interface.
 - Make as the build engine.
@@ -93,7 +93,7 @@ shares Yoe-NG's preference for simplicity.
 
 **Key differences:**
 
-|                    | Buildroot                                     | Yoe-NG                                              |
+|                    | Buildroot                                     | `[yoe]`                                             |
 | ------------------ | --------------------------------------------- | --------------------------------------------------- |
 | Configuration      | Kconfig (menuconfig)                          | Starlark files                                      |
 | Build engine       | Make                                          | `yoe` (Go)                                          |
@@ -116,12 +116,12 @@ rootfs. This means:
 **Caching gap:** Buildroot has no output caching at all — every developer and
 every CI run rebuilds from source. `ccache` can help with C/C++ compilation but
 doesn't help with configure steps, language-native builds, or package assembly.
-Yoe-NG's S3-backed cache means a typical developer build pulls pre-built
+`[yoe]`'s S3-backed cache means a typical developer build pulls pre-built
 packages for everything except the component they're actively changing.
 
 **Multi-image gap:** Buildroot produces a single image per configuration. To
 build a "dev" variant and a "production" variant, you need separate build
-directories with separate configs. With Yoe-NG, both images share the same
+directories with separate configs. With `[yoe]`, both images share the same
 package repository — only the package lists differ.
 
 **When to use Buildroot instead:** when you want the absolute simplest build
@@ -132,10 +132,10 @@ Buildroot's simplicity is hard to beat.
 
 ## vs. Alpine Linux
 
-Alpine is the closest existing distribution to what Yoe-NG's target runtime
+Alpine is the closest existing distribution to what `[yoe]`'s target runtime
 looks like.
 
-**What Yoe-NG adopts from Alpine:**
+**What `[yoe]` adopts from Alpine:**
 
 - **apk as the package manager** — adopted directly. Fast, simple, proven.
 - **busybox as coreutils** — minimal userspace in a single binary.
@@ -145,19 +145,26 @@ looks like.
   setuid binaries unless explicitly required.
 - **Fast package operations** — install/remove measured in milliseconds.
 
-**What Yoe-NG leaves behind:**
+**What `[yoe]` leaves behind:**
 
-- **musl** — using glibc instead for maximum compatibility with language
-  runtimes and pre-built binaries.
-- **No systemd** — Alpine uses OpenRC; Yoe-NG uses systemd.
+- **musl** — planning to use glibc instead for maximum compatibility with
+  language runtimes and pre-built binaries (`[yoe]` currently still inherits
+  musl from Alpine's toolchain; the move is pending).
 - **Limited BSP/hardware story** — Alpine doesn't target custom embedded boards.
+
+**On the init system:** Alpine uses OpenRC. `[yoe]` currently uses busybox init,
+the same as Alpine's minirootfs default. **systemd may become an option in the
+future** — it's the pragmatic choice for developer-facing systems with rich
+service management, journal logging, and udev — but the project has not
+committed to shipping it as part of the base. Today, service management is
+whatever busybox init + plain scripts give you.
 
 **Key differences:**
 
-|                   | Alpine                            | Yoe-NG                                               |
+|                   | Alpine                            | `[yoe]`                                              |
 | ----------------- | --------------------------------- | ---------------------------------------------------- |
-| C library         | musl                              | glibc                                                |
-| Init system       | OpenRC                            | systemd                                              |
+| C library         | musl                              | musl today; glibc planned                            |
+| Init system       | OpenRC                            | busybox init today; systemd a future option          |
 | Target            | Containers, small servers         | Custom embedded hardware                             |
 | BSP support       | Generic x86/ARM images            | Per-board machine definitions                        |
 | Image assembly    | `alpine-make-rootfs`              | `yoe build <image>` with machine + partition support |
@@ -173,21 +180,21 @@ VMs.
 ## vs. Arch Linux
 
 Arch is a philosophy as much as a distribution. Its commitment to simplicity and
-transparency directly influences Yoe-NG's design.
+transparency directly influences `[yoe]`'s design.
 
-**What Yoe-NG adopts from Arch:**
+**What `[yoe]` adopts from Arch:**
 
 - **Rolling release model** — no big-bang version upgrades; packages update
   continuously against a single branch.
 - **Minimal base, user-assembled** — ship the smallest useful system and let the
   integrator compose what they need.
 - **PKGBUILD-style simplicity** — build definitions should be concise, readable
-  shell-like scripts, not complex metadata. Yoe-NG's Starlark units aim for
+  shell-like scripts, not complex metadata. `[yoe]`'s Starlark units aim for
   similar auditability — simple units read like declarative config.
 - **Documentation culture** — invest in clear, practical docs rather than tribal
   knowledge.
 
-**What Yoe-NG leaves behind:**
+**What `[yoe]` leaves behind:**
 
 - x86-centric assumptions.
 - pacman (using apk instead).
@@ -196,7 +203,7 @@ transparency directly influences Yoe-NG's design.
 
 **Key differences:**
 
-|                   | Arch                      | Yoe-NG                          |
+|                   | Arch                      | `[yoe]`                         |
 | ----------------- | ------------------------- | ------------------------------- |
 | Target            | Desktop/server, x86-first | Embedded, multi-arch            |
 | Package manager   | pacman                    | apk                             |
@@ -210,13 +217,299 @@ transparency directly influences Yoe-NG's design.
 for personal use and value having full manual control. Arch's philosophy works
 well for power users on general-purpose hardware.
 
+## vs. Debian
+
+Debian is the oldest and most conservative general-purpose Linux distribution.
+Many embedded projects start on Debian (or a derivative like Raspberry Pi OS)
+before hitting its limits on custom hardware.
+
+**What `[yoe]` adopts from Debian:**
+
+- **Signed binary package repositories** — apt's approach to package
+  authenticity and repository signing is the model. `[yoe]`'s apk repositories
+  follow the same principle.
+- **Policy-driven package conventions** — Debian Policy defines where files go,
+  how services are declared, and how packages relate. `[yoe]` inherits this
+  culture through Alpine's `abuild` conventions.
+- **Package metadata as data** — control files (or APKBUILDs) are declarative,
+  not imperative install scripts.
+- **Multi-arch awareness** — Debian has long taken non-x86 architectures
+  seriously. `[yoe]` does too, by design.
+
+**What `[yoe]` leaves behind:**
+
+- **dpkg/apt** in favor of apk — smaller, faster, designed for minimal systems.
+- **The stable/testing/unstable release model** — `[yoe]` is rolling by default;
+  deployed devices pin to a known-good snapshot of the repo.
+- **The maintainer-centric model** — one maintainer per package, committee-
+  driven policy. `[yoe]` units are part of the project; whoever changes the
+  build changes the unit.
+- **debconf and interactive post-install configuration** — images are assembled
+  from declarative Starlark, not from prompts during package install.
+- **Desktop/server default set** — Debian's standard install assumes a huge set
+  of tools are present. `[yoe]` starts near zero and adds only what's declared.
+- **In-place `dist-upgrade`** — `[yoe]` prefers atomic image updates with
+  rollback over mutating a running root filesystem.
+
+**Key differences:**
+
+|                   | Debian                            | `[yoe]`                         |
+| ----------------- | --------------------------------- | ------------------------------- |
+| Target            | General-purpose server/desktop    | Embedded, custom hardware       |
+| Package manager   | apt / dpkg                        | apk                             |
+| Package format    | .deb (ar + tar)                   | apk (tar.gz + .PKGINFO)         |
+| Release model     | Stable/testing/unstable + LTS     | Rolling, pinned snapshots       |
+| Build definitions | `debian/` dir (rules + control)   | Starlark units                  |
+| Image assembly    | debootstrap / live-build          | `yoe build <image>`             |
+| BSP support       | Generic kernels; no board tooling | Per-board machine definitions   |
+| Kernel management | Distro-provided kernel packages   | Per-machine kernel config + DTs |
+| OTA updates       | `apt upgrade` (in-place)          | apk + atomic image + rollback   |
+| Footprint         | Standard install ~1 GB+           | Target single-digit MB base     |
+
+**Debian derivatives (Raspberry Pi OS, Ubuntu, etc.)** inherit most of these
+properties. Teams often start on Raspberry Pi OS and hit three walls: (1) it's
+not built from source under their control, (2) it's difficult to trim below a
+couple hundred MB, and (3) there's no clean story for deploying the same
+software to a custom board.
+
+### Minimum footprint
+
+The smallest documented Debian install path is
+[`debootstrap --variant=minbase`](https://wiki.debian.org/Debootstrap), which
+installs only Essential and Priority: required packages (base-files,
+base-passwd, bash, dash, dpkg, apt, libc, perl-base, and a handful of others) —
+no systemd, no standard utilities beyond the essential set. In practice minbase
+produces a root filesystem in the ~150–250 MB range depending on release and
+architecture. A default debootstrap (which also pulls Priority: important,
+including systemd) lands closer to 300–500 MB, and a "standard" Debian install
+is well over 1 GB.
+
+Even minbase is one-to-two orders of magnitude larger than a minimal Alpine or
+`[yoe]` base, which can reach single-digit MB before application payload. The
+floor is set by the GNU userland itself: glibc + coreutils + perl-base + bash +
+dpkg + apt are ~60–80 MB combined before anything application-specific is
+installed. Dropping perl-base or coreutils breaks dpkg maintainer scripts (see
+Emdebian, below), so this floor is structural, not a tuning problem.
+
+### Embedded Debian efforts
+
+**[EmDebian (2007–2014)](https://wiki.debian.org/Embedded_Debian)** was the most
+serious attempt at a minimal, embedded-focused Debian. It shipped two variants:
+
+- **Emdebian Grip** — a binary-compatible subset of Debian with a smaller
+  curated package set, still using GNU coreutils and glibc. "Debian, but
+  smaller."
+- **Emdebian Crush** — a more aggressive variant that
+  [replaced GNU coreutils with busybox](https://wiki.debian.org/EmdebianCrush),
+  dropped optional dependencies (LDAP from curl, etc.), and cross-built
+  packages. Closer in spirit to what `[yoe]` does with Alpine-style apks.
+
+The project posted an
+[end-of-life notice on 13 July 2014](https://en.wikipedia.org/wiki/Emdebian_Grip),
+with Emdebian Grip 3.1 (tracking Debian 7 "wheezy") as the last stable release.
+The cited reasons were (1) embedded hardware had moved to expandable storage
+where full Debian's size was no longer painful, and (2) the maintenance burden
+of tracking Debian upstream while patching maintainer scripts for a busybox
+userland was unsustainable. Crush specifically documented recurring problems
+replacing coreutils components with busybox because of `.deb` postinst scripts —
+the exact ecosystem-level incompatibility that any "Debian + busybox" attempt
+runs into. Someone has already taken that path to its natural conclusion.
+
+**[debos](https://github.com/go-debos/debos)** is the modern Debian image
+builder, created by Sjoerd Simons at Collabora (introduced in 2018, Go
+codebase). It is the closest structural analogue to `[yoe]`'s image assembly in
+the Debian ecosystem:
+
+- Written in Go, like `yoe`.
+- YAML recipes describe a sequence of actions (debootstrap, apt install,
+  partition, mkfs, bootloader install, overlay files, export as
+  tarball/OSTree/disk image).
+- Runs actions without root via a `fakemachine` VM helper — similar intent to
+  `[yoe]`'s "container as build worker" model.
+- Targets ARM embedded boards as a first-class use case.
+
+`[yoe]` and debos cover overlapping ground. Key differences: debos starts from
+existing Debian `.deb`s (inheriting the size and package-model properties
+above), while `[yoe]` builds from source into content-addressed apks; debos
+recipes are flat action sequences, while `[yoe]`'s Starlark units form a
+dependency graph with a shared, content-addressed build cache.
+
+**[aptly](https://www.aptly.info/)** is the canonical tool for running a
+private, pinned Debian/Ubuntu repository. For teams that do ship Debian-based
+devices, aptly plays the role that `[yoe]`'s S3 package cache plays:
+
+- Mirror remote Debian/Ubuntu repos, partial or full, filtered by
+  component/architecture.
+- Take immutable, dated snapshots of a mirror or local repo — fixing package
+  versions at a point in time.
+- Publish snapshots as apt-consumable repositories with signed metadata.
+- CLI plus REST API for CI integration.
+
+The snapshot model is what gives a Debian-based deployment the reproducibility
+`[yoe]` gets from content-addressed apks — different mechanism, same goal.
+
+**[Gaia Build System](https://github.com/gaiaBuildSystem)** is the most active
+modern example of a full build system (not just an image builder) layered on
+Debian. It ships three reference distributions:
+
+- **DeimOS** — a base Debian-derived reference distro.
+- **PhobOS** — a [Torizon](https://www.torizon.io/)-compatible Debian derivative
+  that boots via OSTree, uses Aktualizr for OTA updates, bundles a Docker
+  runtime, and keeps native `apt-get install` available on deployed devices.
+- **PergamOS** — a library of Debian-based container images used as build and
+  application bases.
+
+Architecturally:
+
+- **Cookbook model** — a Yocto-inspired multi-repo structure where each
+  "cookbook" is a git repo and a `manifest.json` ties them together.
+- **Container-based builds** — each build runs inside a Debian Docker container,
+  matching `[yoe]`'s "container as build worker" approach.
+- **Multi-language recipes** — the `gaia` core is TypeScript (running on Bun);
+  cookbook logic is a mix of Xonsh (Python-flavored shell), plain shell, and
+  JSON distro definitions. `[yoe]` consolidates to a single config language
+  (Starlark) for units, machines, and images.
+- **Targets** — Raspberry Pi, NXP i.MX (e.g., iMX95 Verdin EVK via Toradex), and
+  QEMU x86-64/arm64.
+
+Contrast with `[yoe]`:
+
+- Gaia inherits Debian's size and package-model properties (huge archive, `.deb`
+  maintainer scripts, ~150 MB+ floor); `[yoe]` is apk-based and targets
+  single-digit MB bases.
+- Gaia's deployment model is **OSTree + Aktualizr** (Torizon-compatible);
+  `[yoe]` uses apk plus atomic image updates with rollback.
+- Gaia's recipe surface is multi-language (TS + Xonsh + Shell + JSON); `[yoe]`
+  is Starlark end-to-end.
+- Both build inside containers, both target custom ARM hardware, both aim for
+  reproducibility through pinned inputs.
+
+**When to prefer Gaia:** when you specifically want a Debian userland with
+`apt-get install` still functional on the device, and especially when targeting
+Toradex/Torizon-adjacent hardware where OSTree-based deployment is already
+established.
+
+This doesn't mean Debian is absent from embedded — it absolutely is present —
+but the pattern is "Debian/Ubuntu-on-an-x86-or-Jetson-box," not "Debian in a
+consumer electronics device with a custom SoC." That second case is where Yocto
+and `[yoe]` live.
+
+**When to use Debian instead:** when you're targeting general-purpose hardware
+where the standard package archive _is_ the product ("I need a server with
+Postgres, Nginx, and our application"), when long-term security support from a
+volunteer organization matters more than image size, or when your team already
+runs Debian in production and wants consistency between infrastructure and edge
+devices. For early prototyping on a Raspberry Pi before moving to custom
+hardware, Raspberry Pi OS is often the right starting point.
+
+## vs. Ubuntu Core
+
+[Ubuntu Core](https://ubuntu.com/core) is Canonical's IoT- and embedded-focused
+Ubuntu variant. Architecturally it's a sharp departure from classic
+Debian/Ubuntu: every component on the device — kernel, board support, base OS,
+applications — is delivered as a [snap](https://snapcraft.io/) package, mounted
+read-only via squashfs-over-loopback, and updated transactionally with rollback.
+Ubuntu Core 24 (the current LTS) carries a 12-year support commitment and
+targets production IoT, edge, and appliance devices.
+
+**What `[yoe]` adopts from Ubuntu Core:**
+
+- **Immutable root filesystem** — the shipping OS is never mutated in place;
+  changes flow through an update mechanism with rollback.
+- **Gadget-snap-style board config** — Ubuntu Core's
+  [gadget snap](https://documentation.ubuntu.com/core/how-to-guides/image-creation/build-a-gadget-snap/)
+  bundles bootloader assets, partition layout, and device-specific defaults.
+  `[yoe]`'s machine definitions cover the same ground (kernel config, device
+  tree, partition schema, bootloader choice).
+- **Model assertion as device identity** — UC's signed model assertion declares
+  exactly which snaps constitute a device. `[yoe]`'s image + machine Starlark is
+  the structural analogue (which packages + which hardware = which shipping
+  image).
+- **Atomic updates with rollback** — shared goal, different mechanism (snap
+  revisions plus a recovery seed system vs. `[yoe]`'s apk + atomic image
+  update).
+
+**What `[yoe]` leaves behind:**
+
+- **Snaps** — the squashfs-per-app loopback model. `[yoe]` uses apk, which
+  installs into a shared FHS root.
+- **snapd** — UC's always-running daemon mediating confinement, updates, and
+  interfaces. Significant runtime footprint and attack surface.
+- **Brand store requirement** — commercial UC deployments require a
+  [Canonical-hosted dedicated snap store](https://documentation.ubuntu.com/core/explanation/stores/dedicated-snap-store/)
+  to control what runs on devices. This is a commercial gate. `[yoe]` ships its
+  own signed apk repository with no vendor lock-in.
+- **Default-strict AppArmor confinement** — UC apps run in a sandbox with
+  explicit interfaces. Valuable for general-purpose appliances, often
+  heavyweight for single-purpose embedded where the whole image is already
+  curated.
+- **Canonical-centric tooling** — ubuntu-image, snapcraft, Launchpad, Landscape.
+  `[yoe]` is self-hostable end to end.
+
+### Size: Ubuntu Core's snap model has a floor
+
+The snap delivery model has a real footprint cost. From Canonical's own
+[partition-sizing guidance](https://documentation.ubuntu.com/core/how-to-guides/image-creation/calculate-partition-sizes/),
+a minimum Ubuntu Core 24 installation with no additional application snaps lands
+at approximately **2,493 MiB (~2.5 GiB)** of on-disk layout:
+
+| Partition     | Minimum size | Purpose                                         |
+| ------------- | ------------ | ----------------------------------------------- |
+| `system-seed` | 457 MiB      | Recovery boot loader plus recovery system snaps |
+| `system-save` | 32 MiB       | Device identity and recovery data               |
+| `system-boot` | 160 MiB      | Kernel EFI image(s), boot loader state          |
+| `system-data` | Variable     | Writable — snaps, retained revisions, user data |
+
+The 2.5 GiB floor is driven by the snap refresh model: UC keeps
+`refresh.retain + 1` old revisions of each snap plus a temporary copy during
+updates — effectively **4× per-snap storage** with the default
+`refresh.retain = 2`. Each "revision" is a full squashfs image, not a delta. The
+kernel snap alone is around 52 MiB and is retained four times over.
+
+For comparison:
+
+| Target                   | Minimum image size |
+| ------------------------ | ------------------ |
+| Ubuntu Core 24 (no apps) | ~2,500 MiB         |
+| Debian `minbase` rootfs  | ~150–250 MiB       |
+| Alpine minimal rootfs    | ~5–10 MiB          |
+| `[yoe]` base target      | Single-digit MiB   |
+
+Ubuntu Core is in a different footprint class. For devices with tens of GiB of
+storage this is irrelevant; for cost-sensitive embedded products with 128–512
+MiB of flash it's disqualifying before any application code is added.
+
+### Key differences
+
+|                  | Ubuntu Core                           | `[yoe]`                                |
+| ---------------- | ------------------------------------- | -------------------------------------- |
+| Packaging format | Snaps (squashfs, loopback-mounted)    | apk (installed into shared rootfs)     |
+| Root filesystem  | Composed read-only snap mounts        | Standard FHS, shipped read-only        |
+| Package daemon   | snapd (always running)                | apk (run at build + update time only)  |
+| Board config     | Gadget snap                           | Machine definition (Starlark)          |
+| Image metadata   | Signed model assertion                | Image + machine Starlark               |
+| Updates          | Snap revisions + recovery seed system | Atomic image update + rollback         |
+| Confinement      | AppArmor interfaces (default strict)  | Standard Linux DAC; sandboxing per app |
+| Distribution     | Canonical brand store (hosted)        | Self-hosted signed apk repository      |
+| Size floor       | ~2.5 GiB                              | Single-digit MiB                       |
+| Build tool       | `ubuntu-image`, `snapcraft`           | `yoe build <image>`                    |
+| Recipe language  | YAML (snapcraft.yaml, model, gadget)  | Starlark                               |
+| LTS              | 12 years (Canonical)                  | N/A — project is pre-1.0               |
+
+**When to use Ubuntu Core instead:** when you want Canonical's 12-year LTS
+commitment, when strict per-app confinement via snaps/AppArmor is a product
+requirement, when your team already operates a Canonical stack (Landscape for
+fleet management, brand store for distribution, Anbox Cloud, etc.), or when your
+device has ample storage (tens of GiB+) and the 2.5 GiB floor is an acceptable
+trade for the operational simplicity of signed transactional updates.
+
 ## vs. NixOS / Nix
 
-Nix is the most intellectually ambitious of the systems Yoe-NG draws from. Its
+Nix is the most intellectually ambitious of the systems `[yoe]` draws from. Its
 ideas about reproducibility and declarative configuration are adopted wholesale;
 its implementation complexity is not.
 
-**What Yoe-NG adopts from Nix:**
+**What `[yoe]` adopts from Nix:**
 
 - **Content-addressed build cache** — build outputs keyed by their inputs so
   identical builds produce cache hits regardless of when or where they run.
@@ -227,7 +520,7 @@ its implementation complexity is not.
 - **Atomic system updates and rollback** — deploy new system images atomically
   with the ability to boot into the previous version.
 
-**What Yoe-NG leaves behind:**
+**What `[yoe]` leaves behind:**
 
 - The Nix expression language.
 - The `/nix/store` path model and its massive closure sizes.
@@ -236,7 +529,7 @@ its implementation complexity is not.
 
 **Key differences:**
 
-|                 | NixOS                                | Yoe-NG                                     |
+|                 | NixOS                                | `[yoe]`                                    |
 | --------------- | ------------------------------------ | ------------------------------------------ |
 | Config language | Nix (custom functional language)     | Starlark (Python-like)                     |
 | Store model     | Content-addressed `/nix/store` paths | Standard FHS with apk                      |
@@ -245,16 +538,16 @@ its implementation complexity is not.
 | BSP support     | Minimal                              | Per-board machine definitions              |
 | Package manager | Nix                                  | apk                                        |
 | Reproducibility | Bit-for-bit (aspirational)           | Content-addressed, functionally equivalent |
-| Rollback        | Via Nix generations                  | Via A/B partitions or apk                  |
+| Rollback        | Via Nix generations                  | Planned; mechanism TBD (apk, A/B, RAUC, …) |
 | Learning curve  | Steep (must learn Nix language)      | Shallow (Starlark, Python-like)            |
 
 **Caching comparison:** Nix's binary cache (Cachix, or self-hosted with
-`nix-serve`) is conceptually similar to Yoe-NG's remote cache — both store
+`nix-serve`) is conceptually similar to `[yoe]`'s remote cache — both store
 content-addressed build outputs in S3-compatible storage. The key differences:
 Nix caches _closures_ (a package plus all its transitive runtime dependencies),
-which can be very large. Yoe-NG caches individual `.apk` packages, which are
+which can be very large. `[yoe]` caches individual `.apk` packages, which are
 smaller and more granular. Nix's content addressing is based on the full
-derivation hash (all inputs); Yoe-NG uses a similar scheme but at unit
+derivation hash (all inputs); `[yoe]` uses a similar scheme but at unit
 granularity rather than Nix's per-output granularity.
 
 **When to use Nix instead:** when you need the strongest possible
@@ -265,36 +558,36 @@ system management on general-purpose hardware.
 ## vs. Google GN
 
 GN is not a Linux distribution — it's a meta-build system used by Chromium and
-Fuchsia. But several of its architectural ideas directly influenced Yoe-NG's
+Fuchsia. But several of its architectural ideas directly influenced `[yoe]`'s
 tooling design.
 
-**What Yoe-NG adopts from GN:**
+**What `[yoe]` adopts from GN:**
 
 - **Two-phase resolve-then-build** — GN fully resolves and validates the
   dependency graph before generating any build files. `yoe build` does the same:
   resolve the entire unit DAG, check for errors, then build. No partial builds
   from graph errors discovered mid-way.
 - **Config propagation** — GN's `public_configs` automatically apply compiler
-  flags to anything that depends on a target. Yoe-NG propagates machine-level
+  flags to anything that depends on a target. `[yoe]` propagates machine-level
   settings (arch flags, optimization, kernel headers) through the unit graph.
 - **Build introspection** — GN provides `gn desc` (what does this target do?)
-  and `gn refs` (what depends on this?). Yoe-NG provides `yoe desc`, `yoe refs`,
-  and `yoe graph` for the same purpose.
+  and `gn refs` (what depends on this?). `[yoe]` provides `yoe desc`,
+  `yoe refs`, and `yoe graph` for the same purpose.
 - **Label-based references** — GN uses `//path/to:target` for unambiguous target
-  identification. Yoe-NG uses a similar scheme for composable unit references
+  identification. `[yoe]` uses a similar scheme for composable unit references
   across repositories.
 
-**What Yoe-NG leaves behind:**
+**What `[yoe]` leaves behind:**
 
-- Ninja file generation — Yoe-NG's unit builds are coarse-grained enough that
+- Ninja file generation — `[yoe]`'s unit builds are coarse-grained enough that
   `yoe` orchestrates directly.
-- GN's custom scripting language — Starlark serves the same purpose for Yoe-NG.
+- GN's custom scripting language — Starlark serves the same purpose for `[yoe]`.
 - C/C++ build model specifics — GN is deeply tied to source-file-level
   dependency tracking, which isn't relevant for unit-level builds.
 
 **Key differences:**
 
-|                        | GN                      | Yoe-NG                              |
+|                        | GN                      | `[yoe]`                             |
 | ---------------------- | ----------------------- | ----------------------------------- |
 | Purpose                | C/C++ meta-build system | Embedded Linux distribution builder |
 | Output                 | Ninja build files       | `.apk` packages and disk images     |
@@ -303,9 +596,9 @@ tooling design.
 | Build execution        | Ninja                   | `yoe` directly                      |
 | Introspection          | `gn desc`, `gn refs`    | `yoe desc`, `yoe refs`, `yoe graph` |
 
-GN is not an alternative to Yoe-NG — they solve different problems. But GN's
+GN is not an alternative to `[yoe]` — they solve different problems. But GN's
 approach to graph resolution, config propagation, and introspection are
-well-proven patterns that Yoe-NG applies to the embedded Linux domain.
+well-proven patterns that `[yoe]` applies to the embedded Linux domain.
 
 ## Value Proposition and Strategic Positioning
 
@@ -326,13 +619,13 @@ already knows about — `SRC_URI` with checksums for each crate,
 `LIC_FILES_CHKSUM` for each module. This is busywork that duplicates what
 `Cargo.lock` and `go.sum` already guarantee.
 
-Yoe-NG's position: **let the language package manager do its job.** A Go unit
+`[yoe]`'s position: **let the language package manager do its job.** A Go unit
 should declare _what_ to build, not _how to resolve every transitive
 dependency_. Content-addressed caching hashes the output — if inputs haven't
 changed, the output is the same. You get reproducibility without micromanaging
 the build.
 
-### Where Yoe-NG Cannot Compete (Yet)
+### Where `[yoe]` Cannot Compete (Yet)
 
 Be honest about the gaps:
 
@@ -342,26 +635,28 @@ This is not a technology problem — it's an ecosystem problem that Linux
 Foundation backing solves. No amount of technical superiority overcomes "the
 silicon vendor gives us a Yocto BSP and supports it."
 
-**Package count.** Yocto has thousands of units, Buildroot has ~2800. Yoe-NG has
-a handful. Need curl, dbus, python3, or ffmpeg? You have to write the unit.
+**Package count.** Yocto has ~5,000 recipes across oe-core + meta-openembedded,
+Buildroot has ~2,800 packages, Alpine has ~36,000, Debian has ~35,000, and
+Nixpkgs has ~142,000. `[yoe]` has dozens. Need curl, dbus, python3, or ffmpeg?
+You have to write the unit.
 
 **Configuration UX.** Buildroot's `make menuconfig` is a killer feature —
 visual, discoverable, searchable. You can explore what's available without
-reading unit files. Yoe-NG requires editing Starlark by hand.
+reading unit files. `[yoe]` requires editing Starlark by hand.
 
 **Documentation and community.** Yocto has comprehensive manuals, Bootlin
 training materials, and years of mailing list archives. Buildroot has a
-well-maintained manual and active list. Problems are googleable. Yoe-NG has
+well-maintained manual and active list. Problems are googleable. `[yoe]` has
 design docs and a small team.
 
 **Legal compliance tooling.** Yocto's `do_populate_lic` and Buildroot's
 `make legal-info` generate license manifests and source archives. This is
-required for shipping products in many industries. Yoe-NG has nothing here yet.
+required for shipping products in many industries. `[yoe]` has nothing here yet.
 
 **Proven production track record.** Thousands of products ship with Yocto.
-Buildroot runs on millions of devices. Yoe-NG is a prototype.
+Buildroot runs on millions of devices. `[yoe]` is a prototype.
 
-### Where Yoe-NG Can Win
+### Where `[yoe]` Can Win
 
 **Target audience:** Teams building Go/Rust/Zig services for embedded Linux —
 edge computing, IoT gateways, network appliances. Teams where the application
@@ -380,12 +675,12 @@ touch.
 **Custom hardware without desktop distro limitations.** Desktop distros (Debian,
 Fedora, Alpine) have great package management but no story for custom kernels,
 device trees, bootloaders, board-specific firmware, or flash/deploy workflows.
-This is the entire reason Yocto and Buildroot exist. Yoe-NG should provide BSP
+This is the entire reason Yocto and Buildroot exist. `[yoe]` should provide BSP
 tooling (machine definitions, kernel units, `yoe flash`, `yoe run`) that is
 simpler than Yocto's but more capable than anything desktop distros offer.
 
 **Incremental builds and shared caching.** Buildroot rebuilds everything from
-scratch. Yocto's sstate is powerful but complex to set up. Yoe-NG's
+scratch. Yocto's sstate is powerful but complex to set up. `[yoe]`'s
 content-addressed `.apk` cache in S3-compatible storage is conceptually simpler:
 push packages to a bucket, pull them on other machines. CI builds once,
 developers reuse the output.
@@ -398,7 +693,7 @@ format.
 ### The Alpine Linux Precedent
 
 Alpine didn't supplant Debian — it became the default for containers because it
-was radically smaller and simpler for that specific use case. Yoe-NG doesn't
+was radically smaller and simpler for that specific use case. `[yoe]` doesn't
 need to replace Yocto for automotive or aerospace. It needs to be the obvious
 choice for a specific class of embedded product where Yocto is overkill and
 Buildroot is too limited.
@@ -410,40 +705,77 @@ Buildroot is too limited.
    have a binary" to "I have a bootable image on custom hardware" in minutes.
 
 2. **BSP tooling** — machine definitions, kernel/bootloader units, `yoe flash`,
-   `yoe run`. This is what desktop distros lack and what justifies Yoe-NG's
+   `yoe run`. This is what desktop distros lack and what justifies `[yoe]`'s
    existence as a build system rather than just another distro.
 
 3. **Shared build cache** — the S3-backed package cache is a major advantage
    over Buildroot. Make it trivial to set up so teams see the value immediately.
 
-4. **AI unit generation** — lean into the AI-native angle. If generating a new
-   unit is a conversation rather than a manual porting exercise, the package
-   count gap closes fast.
+4. **Size discipline.** The summary matrix shows `[yoe]`'s single-digit-MB base
+   as a structural advantage against Ubuntu Core (~2,500 MB), NixOS (~1,500 MB),
+   and Debian (~150 MB minbase). That floor bloats silently — one "convenient
+   default," one "might as well include it" at a time. Every new feature, class,
+   and base-system addition should survive an explicit size review. Losing the
+   size story means losing the most defensible position on the matrix.
 
-5. **Board support** — start with popular, accessible boards (Raspberry Pi,
+5. **Atomic update + rollback story.** Ubuntu Core's pitch is "signed
+   transactional updates with rollback"; Gaia's is "OSTree + Aktualizr"; Yocto's
+   is RAUC/SWUpdate. `[yoe]` needs an equivalent first-class, opinionated,
+   documented update workflow — not a "you can wire this up yourself" footnote.
+   The underlying mechanism is still an open design decision — candidates
+   include apk upgrade with snapshot/rollback, A/B partition swap, RAUC-style
+   bundle updates, and OSTree-style file trees. The commitment is to _some_
+   well-integrated shippable story, not to any specific mechanism. For any team
+   shipping a product, this is table stakes.
+
+6. **AI unit generation + Alpine aports conversion.** Lean into the AI-native
+   angle: generating a new unit from a project URL should be a conversation, not
+   a manual porting exercise. _Also_ ship a mechanical APKBUILD → Starlark
+   converter — Alpine has ~36,000 ready-to-port APKBUILDs, and a reliable
+   converter closes the package-count gap faster and more predictably than pure
+   AI generation. AI for novel cases, mechanical conversion for the long tail.
+
+7. **Board support** — start with popular, accessible boards (Raspberry Pi,
    BeagleBone, common QEMU targets). Every board that works out of the box is a
    potential user who doesn't need Yocto.
 
-6. **Don't chase Yocto's tail** — resist the urge to add Yocto-like features
-   (task-level DAGs, unit splitting, bbappend equivalents) to win over Yocto
-   users. Instead, make the simple path so good that teams choose Yoe-NG because
-   it fits their workflow, not because it replicates Yocto's.
+8. **Don't chase Yocto's or Canonical's tails.** Resist adding Yocto-like
+   features (task-level DAGs, unit splitting, bbappend equivalents) to win Yocto
+   users, and equally resist Canonical-style add-ons (brand store, snap-style
+   confinement, a Landscape clone) to win Ubuntu Core users. Both directions
+   lead away from the minimal, single-language, AI-tractable design that is
+   `[yoe]`'s actual positioning. Make the simple path so good that teams choose
+   `[yoe]` because it fits their workflow, not because it mimics something they
+   already have.
 
 ## Summary Matrix
 
-| Feature                 | Yocto    | Buildroot | Alpine   | Arch     | NixOS   | **Yoe-NG** |
-| ----------------------- | -------- | --------- | -------- | -------- | ------- | ---------- |
-| Embedded focus          | Yes      | Yes       | Partial  | No       | No      | **Yes**    |
-| Simple config           | No       | Moderate  | Moderate | Yes      | No      | **Yes**    |
-| Native builds           | No       | No        | Yes      | Yes      | Yes     | **Yes**    |
-| On-device packages      | Optional | No        | Yes      | Yes      | Yes     | **Yes**    |
-| Content-addressed cache | Partial  | No        | No       | No       | Yes     | **Yes**    |
-| Remote shared cache     | Complex  | No        | No       | No       | Yes     | **Yes**    |
-| Pre-built package cache | No       | No        | Yes      | Yes      | Yes     | **Yes**    |
-| Declarative images      | Yes      | Partial   | No       | No       | Yes     | **Yes**    |
-| Multi-image support     | Yes      | No        | No       | No       | Yes     | **Yes**    |
-| Image inheritance       | Partial  | No        | No       | No       | Yes     | **Yes**    |
-| Custom BSP support      | Yes      | Yes       | No       | No       | Minimal | **Yes**    |
-| Incremental updates     | Complex  | No        | Yes      | Yes      | Yes     | **Yes**    |
-| Hermetic builds         | Partial  | No        | No       | No       | Yes     | **Yes**    |
-| Fast package ops        | N/A      | N/A       | Yes      | Moderate | Slow    | **Yes**    |
+| Feature                 | Yocto    | Buildroot | Alpine   | Arch     | Debian   | UC        | NixOS     | **`[yoe]`** |
+| ----------------------- | -------- | --------- | -------- | -------- | -------- | --------- | --------- | ----------- |
+| Embedded focus          | Yes      | Yes       | Partial  | No       | No       | Yes       | No        | **Yes**     |
+| Simple config           | No       | Moderate  | Moderate | Yes      | Moderate | No        | No        | **Yes**     |
+| Native builds           | No       | No        | Yes      | Yes      | Yes      | Yes       | Yes       | **Yes**     |
+| On-device packages      | Optional | No        | Yes      | Yes      | Yes      | Yes       | Yes       | **Yes**     |
+| Content-addressed cache | Partial  | No        | No       | No       | No       | No        | Yes       | **Yes**     |
+| Remote shared cache     | Complex  | No        | No       | No       | No       | No        | Yes       | **Yes**     |
+| Pre-built package cache | No       | No        | Yes      | Yes      | Yes      | Yes       | Yes       | **Yes**     |
+| Declarative images      | Yes      | Partial   | No       | No       | Partial  | Yes       | Yes       | **Yes**     |
+| Multi-image support     | Yes      | No        | No       | No       | No       | Partial   | Yes       | **Yes**     |
+| Image inheritance       | Partial  | No        | No       | No       | No       | No        | Yes       | **Yes**     |
+| Custom BSP support      | Yes      | Yes       | No       | No       | Minimal  | Yes       | Minimal   | **Yes**     |
+| Incremental updates     | Complex  | No        | Yes      | Yes      | Yes      | Yes       | Yes       | **Yes**     |
+| Hermetic builds         | Partial  | No        | No       | No       | No       | Partial   | Yes       | **Yes**     |
+| Fast package ops        | N/A      | N/A       | Yes      | Moderate | Moderate | Slow      | Slow      | **Yes**     |
+| Min base image size     | ~15 MB   | ~5 MB     | ~5 MB    | ~500 MB  | ~150 MB  | ~2,500 MB | ~1,500 MB | **~5 MB**   |
+| Packages available      | ~5,000   | ~2,800    | ~36,000  | ~15,000  | ~35,000  | ~10,000   | ~142,000  | **Dozens**  |
+
+_UC = Ubuntu Core. "Min base image size" is the approximate on-disk footprint of
+the smallest practical bootable/usable root filesystem (core-image-minimal for
+Yocto, `minbase` debootstrap for Debian, minirootfs for Alpine, a minimal Ubuntu
+Core 24 model with no app snaps, a minimal NixOS closure). Actual sizes vary
+with architecture, kernel, and configuration. "Packages available" is the rough
+count of ready-to-use packages/recipes in the standard/common repositories;
+Yocto counts typical oe-core + meta-openembedded, Arch excludes the ~90,000 AUR
+packages, UC counts snaps in the public store — a different delivery model that
+is not directly comparable. Sources: project documentation,
+[repology.org](https://repology.org/repositories/packages)._

@@ -1,9 +1,9 @@
-# AI-First Tooling for Yoe-NG
+# AI-First Tooling for `[yoe]`
 
-Yoe-NG is designed as an **AI-first build system**. While every operation has a
+`[yoe]` is designed as an **AI-first build system**. While every operation has a
 CLI equivalent, the primary interface for many workflows is a conversation with
 an AI assistant that understands the build system deeply. This document defines
-the skills (AI-driven workflows) that ship with Yoe-NG.
+the skills (AI-driven workflows) that ship with `[yoe]`.
 
 ## Why AI-First
 
@@ -200,24 +200,27 @@ what new units were added, and what was removed.
 /module-diff @units-core v1.0.0 v1.1.0
 ```
 
-### SDK & Development
+### Development Environment
 
-#### `/sdk-setup`
+`[yoe]` does not ship a separate SDK — `yoe` itself is the dev environment. See
+[Development Environments](dev-env.md) for the full model.
 
-Guide a developer through setting up their development environment. Detect their
-host OS, suggest the right SDK, configure their editor for Starlark syntax
-highlighting, and verify the toolchain works.
+#### `/dev-setup`
+
+Guide a developer through getting `yoe` + Docker installed and their editor
+configured for Starlark (syntax highlighting, language server, formatters).
+Verify the toolchain works by building a small unit end to end.
 
 ```
-/sdk-setup
-/sdk-setup --for rust  # set up Rust cross-development
+/dev-setup
+/dev-setup --for rust  # also install Rust-native tooling on the workstation
 ```
 
 #### `/devshell <unit>`
 
-Drop into an interactive development shell for a unit — the same build
-environment that `yoe build` uses, but interactive. Useful for debugging
-configure issues or testing build commands manually.
+Wrapper over `yoe shell` — drops into the unit's build sandbox with the same env
+vars, container, and mounted sysroot that `yoe build` uses. Useful for debugging
+configure issues, probing deps, or testing build commands manually.
 
 ```
 /devshell openssh
@@ -228,7 +231,7 @@ configure issues or testing build commands manually.
 
 #### `/explain <concept>`
 
-Explain a Yoe-NG concept in context. Not just documentation — the AI reads the
+Explain a `[yoe]` concept in context. Not just documentation — the AI reads the
 project's actual configuration and explains how the concept applies to this
 specific project.
 
@@ -240,7 +243,7 @@ specific project.
 
 #### `/diff-from-yocto`
 
-For developers coming from Yocto, explain how a Yocto concept maps to Yoe-NG.
+For developers coming from Yocto, explain how a Yocto concept maps to `[yoe]`.
 References the actual Yocto documentation and provides side-by-side comparisons.
 
 ```
