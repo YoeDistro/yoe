@@ -538,7 +538,7 @@ its implementation complexity is not.
 | BSP support     | Minimal                              | Per-board machine definitions              |
 | Package manager | Nix                                  | apk                                        |
 | Reproducibility | Bit-for-bit (aspirational)           | Content-addressed, functionally equivalent |
-| Rollback        | Via Nix generations                  | Via A/B partitions or apk                  |
+| Rollback        | Via Nix generations                  | Planned; mechanism TBD (apk, A/B, RAUC, …) |
 | Learning curve  | Steep (must learn Nix language)      | Shallow (Starlark, Python-like)            |
 
 **Caching comparison:** Nix's binary cache (Cachix, or self-hosted with
@@ -720,10 +720,13 @@ Buildroot is too limited.
 
 5. **Atomic update + rollback story.** Ubuntu Core's pitch is "signed
    transactional updates with rollback"; Gaia's is "OSTree + Aktualizr"; Yocto's
-   is RAUC/SWUpdate. `[yoe]`'s equivalent — apk plus atomic image update with
-   A/B partitions and rollback — has to be a first-class, opinionated,
-   documented workflow, not a "you can wire this up yourself" footnote. For any
-   team shipping a product, this is table stakes.
+   is RAUC/SWUpdate. `[yoe]` needs an equivalent first-class, opinionated,
+   documented update workflow — not a "you can wire this up yourself" footnote.
+   The underlying mechanism is still an open design decision — candidates
+   include apk upgrade with snapshot/rollback, A/B partition swap, RAUC-style
+   bundle updates, and OSTree-style file trees. The commitment is to _some_
+   well-integrated shippable story, not to any specific mechanism. For any team
+   shipping a product, this is table stakes.
 
 6. **AI unit generation + Alpine aports conversion.** Lean into the AI-native
    angle: generating a new unit from a project URL should be a conversation, not
