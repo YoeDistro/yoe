@@ -8,14 +8,17 @@ and this project adheres to
 
 ## [Unreleased]
 
-- **Install-step executor dispatch** — the build executor now dispatches
-  `install_file` / `install_template` steps via a new `step.Install` branch
-  that calls `doInstallStep` directly. Removed the thread-local
-  `TemplateContext` / `templateKey` / `SetTemplateContext` wiring and the
-  side-effecting `fnInstallFile` / `fnInstallTemplate` Starlark builtins from
-  `internal/build/`; the pure `InstallStepValue` builtins in
-  `internal/starlark/` materialize directly into `Step{Install: ...}` and the
-  executor performs the filesystem I/O on the host.
+- **File templates** — units can declare external template files (`.tmpl`) and
+  static files in a directory alongside the `.star` file and install them via
+  new `install_template()` and `install_file()` step-value constructors placed
+  directly in `task(..., steps=[...])` alongside shell strings. Templates render
+  through Go `text/template` with a unified `map[string]any` context
+  auto-populated with
+  `name`/`version`/`release`/`arch`/`machine`/`console`/`project` and any extra
+  kwargs passed to `unit()`. The context map and the contents of the unit's
+  files directory are hashed so template edits and extra-kwarg changes
+  invalidate the cache. `base-files`, `network-config`, and `simpleiot` migrated
+  off inline heredocs. See `docs/file-templates.md`.
 - **CLI flag parsing with flag.NewFlagSet** — refactored all subcommands
   (`build`, `run`, `flash`, `init`, `clean`, `log`, `refs`, `graph`) from manual
   switch-based parsing to Go's `flag.NewFlagSet`. Adds free `--help` for every

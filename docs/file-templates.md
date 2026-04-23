@@ -4,8 +4,6 @@ Move inline file content out of Starlark units into external template files
 processed by Go's `text/template`. A unified `map[string]any` context serves as
 both the template data and the hash input — one source of truth.
 
-## Status: Spec
-
 ## Problem
 
 Units currently embed multi-line file content as heredocs inside shell step
