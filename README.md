@@ -316,8 +316,8 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
   configuration spec
 - [Build Environment](docs/build-environment.md) — bootstrap, host tools, and
   build isolation
-- [SDK Management](docs/sdk.md) — development environments, container-based SDK,
-  pre-built binary packages
+- [Development Environments](docs/dev-env.md) — the no-SDK model, `yoe shell`
+  for interactive dev, and `yoe bundle` for air-gapped distribution
 - [Comparisons](docs/comparisons.md) — how `[yoe]` relates to Yocto, Buildroot,
   Alpine, Arch, and NixOS
 - [Build Languages](docs/build-languages.md) — analysis of Starlark, CUE, Nix,

@@ -25,12 +25,14 @@ workstation, run on an ARM build server.
 yoe                 Launch the interactive TUI
 yoe init            Create a new `[yoe]` project
 yoe build           Build units (packages and images)
+yoe shell           Open an interactive shell in a unit's build sandbox  [planned]
 yoe dev             Manage source modifications (extract, diff, status)
 yoe flash           Write an image to a device/SD card
 yoe run             Run an image in QEMU
 yoe module          Manage external modules (fetch, sync, list)
 yoe repo            Manage the local apk package repository
 yoe cache           Manage the build cache (local and remote)  [planned]
+yoe bundle          Export/import content-addressed bundles (air-gapped)  [planned]
 yoe source          Download and manage source archives/repos
 yoe config          View and edit project configuration
 yoe desc            Describe a unit, package, or target
@@ -292,8 +294,8 @@ provide units, classes, and machine definitions.
 
 > **Status:** `yoe module sync` and `yoe module list` are implemented.
 > `yoe module info`, `yoe module check-updates`, and `yoe module list --tree`
-> (transitive tree output) are _planned_ — the CLI dispatches them today
-> with a "not yet implemented" stub message.
+> (transitive tree output) are _planned_ — the CLI dispatches them today with a
+> "not yet implemented" stub message.
 
 ```sh
 # Fetch/update all modules to the refs declared in PROJECT.star
@@ -379,10 +381,10 @@ running device at it directly.
 
 > **Status:** Not implemented. `cmd/yoe/main.go` has no `cache` case in its
 > command switch — invoking `yoe cache` prints "Unknown command". Content
-> addressing and a local build cache exist inside the build executor, but
-> there is no user-facing cache subcommand, no remote/S3 cache, no signing,
-> and no `yoe cache stats` / `gc` / `push` / `pull`. The surface below
-> describes the planned design.
+> addressing and a local build cache exist inside the build executor, but there
+> is no user-facing cache subcommand, no remote/S3 cache, no signing, and no
+> `yoe cache stats` / `gc` / `push` / `pull`. The surface below describes the
+> planned design.
 
 Manages the local and remote build caches.
 
@@ -763,6 +765,69 @@ yoe dev extract openssh         # re-extract clean patches
 - Extracting patches is `git format-patch` — a command developers already know
 - Each patch = one git commit, so the patch series is the git log
 
+### `yoe shell` (planned)
+
+> **Status:** Not implemented. The command below describes the intended
+> interactive entry point into a unit's build sandbox — the piece that makes the
+> no-SDK model (see [Development Environments](dev-env.md)) complete.
+
+Opens an interactive shell inside the build sandbox for a unit. The shell
+attaches to the same container, environment variables, and mounted sysroot that
+`yoe build` uses — but with a TTY and no automatic build steps.
+
+```sh
+# Shell into the sandbox for a unit (uses the unit's container + default machine)
+yoe shell myapp
+
+# For a specific machine (cross-arch via QEMU)
+yoe shell myapp --machine raspberrypi4
+
+# Shell without targeting a unit — uses the machine's default toolchain container
+yoe shell --machine beaglebone-black
+```
+
+Inside the shell, `$SRCDIR`, `$DESTDIR`, `$PREFIX`, `$ARCH`, and `$NPROC` are
+set exactly as `yoe build` would set them, and the unit's resolved `-dev`
+dependencies are already installed into the sandbox via `apk`. Exiting the shell
+tears down the sandbox — it is not persistent, so probing with `apk add <pkg>`
+for exploration does not pollute subsequent builds.
+
+This replaces the traditional SDK shell (Yocto's `environment-setup-*`). See
+[Development Environments](dev-env.md#yoe-shell) for the full model.
+
+### `yoe bundle` (planned)
+
+> **Status:** Not implemented. The `yoe bundle` subcommand below is the
+> air-gapped distribution story described in
+> [Development Environments](dev-env.md#yoe-bundle-for-air-gapped-distribution).
+> Today there is no export/import path, no bundle format, and no signing.
+
+Exports and imports content-addressed bundles — the subset of the build cache,
+source cache, module checkouts, and container images needed to reproduce a set
+of targets without network access.
+
+```sh
+# Export a bundle for a specific image (includes all transitive deps)
+yoe bundle export base-image --out bundle-base-v1.0.tar
+
+# Export everything reachable from PROJECT.star
+yoe bundle export --all --out bundle-full.tar
+
+# Sign the bundle with the project's cache signing key
+yoe bundle export base-image --sign keys/bundle.key --out bundle.tar
+
+# Import on an air-gapped machine (verifies signatures if present)
+yoe bundle import bundle-base-v1.0.tar --verify keys/bundle.pub
+
+# Show the contents of a bundle without importing
+yoe bundle inspect bundle.tar
+```
+
+A bundle contains built `.apk`s, source archives, module checkouts, and
+toolchain container OCI archives — all keyed by content hash. After
+`yoe bundle import`, subsequent `yoe build` runs resolve everything from the
+local cache with no network access required.
+
 ### `yoe clean`
 
 Removes build artifacts.
@@ -812,11 +877,11 @@ This means:
 
 ### Config Propagation (planned)
 
-> **Status:** Not implemented. There is no `public_config` field on units,
-> no machine-to-unit CFLAGS/optimization propagation, and no resolved-config
-> view in `yoe desc`. Units today receive architecture via the build
-> environment and nothing else is automatically propagated through the DAG.
-> The section below describes the planned GN-inspired design.
+> **Status:** Not implemented. There is no `public_config` field on units, no
+> machine-to-unit CFLAGS/optimization propagation, and no resolved-config view
+> in `yoe desc`. Units today receive architecture via the build environment and
+> nothing else is automatically propagated through the DAG. The section below
+> describes the planned GN-inspired design.
 
 Inspired by GN's `public_configs`, machine-level configuration automatically
 propagates through the dependency graph. When you build for a specific machine,
@@ -870,9 +935,9 @@ Builds are cached at multiple levels:
    S3-compatible store so CI and team members share build results. Not yet
    implemented: there is no remote cache backend, no S3 integration, and no
    cache signing today. See the
-   [Caching Architecture](build-environment.md#caching-architecture) section
-   for the planned S3 configuration, cache signing, and the multi-level
-   fallback chain.
+   [Caching Architecture](build-environment.md#caching-architecture) section for
+   the planned S3 configuration, cache signing, and the multi-level fallback
+   chain.
 
 Cache invalidation is hash-based, not timestamp-based. Changing a unit, updating
 a source, or rebuilding a dependency all produce a new hash and trigger a

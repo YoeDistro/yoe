@@ -200,24 +200,27 @@ what new units were added, and what was removed.
 /module-diff @units-core v1.0.0 v1.1.0
 ```
 
-### SDK & Development
+### Development Environment
 
-#### `/sdk-setup`
+`[yoe]` does not ship a separate SDK — `yoe` itself is the dev environment. See
+[Development Environments](dev-env.md) for the full model.
 
-Guide a developer through setting up their development environment. Detect their
-host OS, suggest the right SDK, configure their editor for Starlark syntax
-highlighting, and verify the toolchain works.
+#### `/dev-setup`
+
+Guide a developer through getting `yoe` + Docker installed and their editor
+configured for Starlark (syntax highlighting, language server, formatters).
+Verify the toolchain works by building a small unit end to end.
 
 ```
-/sdk-setup
-/sdk-setup --for rust  # set up Rust cross-development
+/dev-setup
+/dev-setup --for rust  # also install Rust-native tooling on the workstation
 ```
 
 #### `/devshell <unit>`
 
-Drop into an interactive development shell for a unit — the same build
-environment that `yoe build` uses, but interactive. Useful for debugging
-configure issues or testing build commands manually.
+Wrapper over `yoe shell` — drops into the unit's build sandbox with the same env
+vars, container, and mounted sysroot that `yoe build` uses. Useful for debugging
+configure issues, probing deps, or testing build commands manually.
 
 ```
 /devshell openssh

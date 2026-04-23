@@ -24,10 +24,9 @@ units; a device only ever sees packages.
 ### Sub-packages (planned)
 
 > **Status:** Today `[yoe]` produces exactly one `.apk` per unit —
-> `internal/artifact/apk.go` packages `$DESTDIR` into a single archive, and
-> the Starlark `subpackages =` field is not yet parsed. This section
-> describes the intended future model so units and classes can be written
-> with it in mind.
+> `internal/artifact/apk.go` packages `$DESTDIR` into a single archive, and the
+> Starlark `subpackages =` field is not yet parsed. This section describes the
+> intended future model so units and classes can be written with it in mind.
 
 A single unit will be able to produce a small number of `.apk` packages from one
 source build. The goal is targeted — keep runtime images lean — not exhaustive
@@ -145,13 +144,13 @@ split engine, and the default strip logic in the shared classes.
 
 ### Dependency resolution at image time (planned)
 
-> **Status:** Image assembly currently reads the unit metadata, not the
-> package metadata. `internal/image/rootfs.go` walks `unit.RuntimeDeps`
-> recursively from the in-memory Starlark project and then extracts each
-> resolved `.apk` with `tar xzf --exclude=.PKGINFO` — bypassing apk's
-> resolver entirely. `.PKGINFO` is written (`internal/artifact/apk.go` emits
-> `depend =` lines) but not consulted during image assembly. This section
-> describes the planned move to package-metadata-driven resolution.
+> **Status:** Image assembly currently reads the unit metadata, not the package
+> metadata. `internal/image/rootfs.go` walks `unit.RuntimeDeps` recursively from
+> the in-memory Starlark project and then extracts each resolved `.apk` with
+> `tar xzf --exclude=.PKGINFO` — bypassing apk's resolver entirely. `.PKGINFO`
+> is written (`internal/artifact/apk.go` emits `depend =` lines) but not
+> consulted during image assembly. This section describes the planned move to
+> package-metadata-driven resolution.
 
 There are two places dependency information lives in `[yoe]`, and they serve
 different phases:
@@ -455,8 +454,8 @@ busybox(extra_patches=["patches/vendor-busybox-audit.patch"])
 > executor (`internal/build/executor.go`) runs each task's steps inside the
 > unit's resolved container. The _per-task_ `container=` override described
 > below is _planned_: the task struct in Starlark accepts the field but the
-> executor currently ignores it and uses the unit-level container for every
-> task in the unit. Wire-through is the remaining work.
+> executor currently ignores it and uses the unit-level container for every task
+> in the unit. Wire-through is the remaining work.
 
 Units can define named build tasks via `task()`, each with an optional Docker
 container. This replaces the flat `build = [...]` string list with structured
@@ -611,19 +610,19 @@ _what to build_.
 These ship with the `units-core` module (at `modules/units-core/classes/`) or
 are under the `(planned)` roadmap:
 
-| Class             | Status    | Description                                   |
-| ----------------- | --------- | --------------------------------------------- |
-| `unit()`          | shipped   | Generic package — custom build steps as shell |
-| `autotools()`     | shipped   | configure / make / make install               |
-| `cmake()`         | shipped   | CMake build                                   |
-| `go_binary()`     | shipped   | Go application                                |
-| `container()`     | shipped   | Build a Docker/OCI container image            |
-| `image()`         | shipped   | Root filesystem image assembly                |
-| `meson()`         | planned   | Meson + Ninja build                           |
-| `rust_binary()`   | planned   | Rust application (Cargo)                      |
-| `zig_binary()`    | planned   | Zig application                               |
-| `python_unit()`   | planned   | Python package (pip/uv)                       |
-| `node_unit()`     | planned   | Node.js package (npm/pnpm)                    |
+| Class           | Status  | Description                                   |
+| --------------- | ------- | --------------------------------------------- |
+| `unit()`        | shipped | Generic package — custom build steps as shell |
+| `autotools()`   | shipped | configure / make / make install               |
+| `cmake()`       | shipped | CMake build                                   |
+| `go_binary()`   | shipped | Go application                                |
+| `container()`   | shipped | Build a Docker/OCI container image            |
+| `image()`       | shipped | Root filesystem image assembly                |
+| `meson()`       | planned | Meson + Ninja build                           |
+| `rust_binary()` | planned | Rust application (Cargo)                      |
+| `zig_binary()`  | planned | Zig application                               |
+| `python_unit()` | planned | Python package (pip/uv)                       |
+| `node_unit()`   | planned | Node.js package (npm/pnpm)                    |
 
 ### Class Composition
 
@@ -816,12 +815,11 @@ set) or the URL.
 ### Module Manifests (MODULE.star) (planned)
 
 > **Status:** The `module_info()` Starlark builtin is wired up in
-> `internal/starlark/builtins.go` and the `ModuleInfo` struct is populated
-> when a `MODULE.star` is evaluated, but the module resolver in
-> `internal/module/` never reads those declared `deps`. Transitive module
-> resolution — both the v1 "error on missing" and v2 "auto-fetch" behaviors
-> below — is _planned_. Today only the top-level `modules = [...]` list in
-> `PROJECT.star` is fetched.
+> `internal/starlark/builtins.go` and the `ModuleInfo` struct is populated when
+> a `MODULE.star` is evaluated, but the module resolver in `internal/module/`
+> never reads those declared `deps`. Transitive module resolution — both the v1
+> "error on missing" and v2 "auto-fetch" behaviors below — is _planned_. Today
+> only the top-level `modules = [...]` list in `PROJECT.star` is fetched.
 
 Modules can declare their own dependencies via a `MODULE.star` file in the
 repository root. This enables BSP vendors to ship self-contained modules without
