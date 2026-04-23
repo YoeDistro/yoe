@@ -48,7 +48,6 @@ conventions and verify the information is current.
 Fetch and inspect the upstream source to determine:
 
 1. **Build system** — look for these files in priority order:
-
    - `configure.ac` / `Makefile.am` → autotools class
    - `CMakeLists.txt` → cmake class
    - `go.mod` → go class (go_binary)
