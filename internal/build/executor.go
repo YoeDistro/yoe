@@ -321,6 +321,15 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		}
 	}
 
+	// Build the template context data map for install_file / install_template.
+	// Unit identity fields + auto-populated machine/arch/console/project,
+	// with unit.Extra kwargs overriding on collision.
+	projectName := ""
+	if proj != nil {
+		projectName = proj.Name
+	}
+	tctxData := BuildTemplateContext(unit, opts.Arch, opts.Machine, console, projectName)
+
 	// Execute tasks
 	for ti, t := range unit.Tasks {
 		fmt.Fprintf(w, "  [%d/%d] task: %s\n", ti+1, len(unit.Tasks), t.Name)
@@ -382,6 +391,11 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 					Stderr:     logW,
 				}
 				thread := NewBuildThread(ctx, cfg, RealExecer{})
+				SetTemplateContext(thread, &TemplateContext{
+					Unit: unit,
+					Data: tctxData,
+					Env:  env,
+				})
 				if _, err := starlark.Call(thread, step.Fn, nil, nil); err != nil {
 					if !opts.Verbose {
 						fmt.Fprintf(w, "  build log: %s\n", logPath)
