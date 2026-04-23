@@ -8,6 +8,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Install-step executor dispatch** — the build executor now dispatches
+  `install_file` / `install_template` steps via a new `step.Install` branch
+  that calls `doInstallStep` directly. Removed the thread-local
+  `TemplateContext` / `templateKey` / `SetTemplateContext` wiring and the
+  side-effecting `fnInstallFile` / `fnInstallTemplate` Starlark builtins from
+  `internal/build/`; the pure `InstallStepValue` builtins in
+  `internal/starlark/` materialize directly into `Step{Install: ...}` and the
+  executor performs the filesystem I/O on the host.
 - **CLI flag parsing with flag.NewFlagSet** — refactored all subcommands
   (`build`, `run`, `flash`, `init`, `clean`, `log`, `refs`, `graph`) from manual
   switch-based parsing to Go's `flag.NewFlagSet`. Adds free `--help` for every

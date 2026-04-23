@@ -8,20 +8,7 @@ import (
 	"text/template"
 
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
-	"go.starlark.net/starlark"
 )
-
-// templateKey is the thread-local key under which the build executor stores
-// the per-unit TemplateContext for install_file / install_template to read.
-const templateKey = "yoe.template"
-
-// TemplateContext carries the per-unit state needed to resolve template
-// paths, render templates, and write output files during a task's fn step.
-type TemplateContext struct {
-	Unit *yoestar.Unit     // for DefinedIn and Name (path resolution)
-	Data map[string]any    // rendered as Go template data
-	Env  map[string]string // DESTDIR, PREFIX, etc. for destination path expansion
-}
 
 // BuildTemplateContext builds the context map passed to Go templates, merging
 // auto-populated fields (arch, machine, console, project) and unit identity
@@ -43,93 +30,59 @@ func BuildTemplateContext(u *yoestar.Unit, arch, machine, console, project strin
 	return m
 }
 
-// fnInstallFile implements install_file(src, dest, mode=0o644).
-// Copies src verbatim from the unit's files directory to dest. Relative
-// paths are resolved under <DefinedIn>/<unit-name>/. Environment variables
-// like $DESTDIR are expanded in the destination path using the build env.
-func fnInstallFile(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	var src, dest starlark.String
-	if err := starlark.UnpackPositionalArgs("install_file", args, nil, 2, &src, &dest); err != nil {
-		return nil, err
-	}
-	mode, err := modeFromKwargs("install_file", kwargs, 0644)
+// doInstallStep executes a single install-step against the filesystem. It is
+// called from the executor's task step loop when step.Install != nil. The
+// template data map and env are the same ones used for shell and fn steps in
+// the enclosing task, so variable semantics stay consistent across step kinds.
+func doInstallStep(u *yoestar.Unit, step *yoestar.InstallStep, data map[string]any, env map[string]string) error {
+	srcPath, err := resolveTemplatePath(u, step.Src)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("install %s: %w", step.Src, err)
 	}
-
-	tctx, ok := thread.Local(templateKey).(*TemplateContext)
-	if !ok || tctx == nil {
-		return nil, fmt.Errorf("install_file: no template context on thread (called outside a task fn?)")
-	}
-
-	srcPath, err := resolveTemplatePath(tctx.Unit, string(src))
-	if err != nil {
-		return nil, fmt.Errorf("install_file: %w", err)
-	}
-	destPath := expandEnv(string(dest), tctx.Env)
-
-	content, err := os.ReadFile(srcPath)
-	if err != nil {
-		return nil, fmt.Errorf("install_file: reading %s: %w", srcPath, err)
-	}
-	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
-		return nil, fmt.Errorf("install_file: creating dir for %s: %w", destPath, err)
-	}
-	if err := os.WriteFile(destPath, content, os.FileMode(mode)); err != nil {
-		return nil, fmt.Errorf("install_file: writing %s: %w", destPath, err)
-	}
-	return starlark.None, nil
-}
-
-// fnInstallTemplate implements install_template(src, dest, mode=0o644).
-// Reads a Go text/template from the unit's files directory, renders it with
-// the unit's context map, and writes the result to dest. Missing keys in the
-// template cause an error rather than a silent empty substitution.
-func fnInstallTemplate(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	var src, dest starlark.String
-	if err := starlark.UnpackPositionalArgs("install_template", args, nil, 2, &src, &dest); err != nil {
-		return nil, err
-	}
-	mode, err := modeFromKwargs("install_template", kwargs, 0644)
-	if err != nil {
-		return nil, err
-	}
-
-	tctx, ok := thread.Local(templateKey).(*TemplateContext)
-	if !ok || tctx == nil {
-		return nil, fmt.Errorf("install_template: no template context on thread (called outside a task fn?)")
-	}
-
-	srcPath, err := resolveTemplatePath(tctx.Unit, string(src))
-	if err != nil {
-		return nil, fmt.Errorf("install_template: %w", err)
-	}
-	destPath := expandEnv(string(dest), tctx.Env)
+	destPath := expandEnv(step.Dest, env)
 
 	raw, err := os.ReadFile(srcPath)
 	if err != nil {
-		return nil, fmt.Errorf("install_template: reading %s: %w", srcPath, err)
+		return fmt.Errorf("install %s: reading %s: %w", step.Src, srcPath, err)
 	}
 
-	tmpl, err := template.New(filepath.Base(srcPath)).
-		Option("missingkey=error").
-		Parse(string(raw))
-	if err != nil {
-		return nil, fmt.Errorf("install_template: parsing %s: %w", srcPath, err)
+	var out []byte
+	switch step.Kind {
+	case "file":
+		out = raw
+	case "template":
+		tmpl, err := template.New(filepath.Base(srcPath)).
+			Option("missingkey=error").
+			Parse(string(raw))
+		if err != nil {
+			return fmt.Errorf("install_template %s: parsing: %w", srcPath, err)
+		}
+		var buf strings.Builder
+		if err := tmpl.Execute(&buf, data); err != nil {
+			return fmt.Errorf("install_template %s: rendering: %w", srcPath, err)
+		}
+		out = []byte(buf.String())
+	default:
+		return fmt.Errorf("install %s: unknown kind %q", step.Src, step.Kind)
 	}
 
-	var buf strings.Builder
-	if err := tmpl.Execute(&buf, tctx.Data); err != nil {
-		return nil, fmt.Errorf("install_template: rendering %s: %w", srcPath, err)
+	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
+		return fmt.Errorf("install %s: creating dest dir: %w", step.Src, err)
 	}
+	if err := os.WriteFile(destPath, out, os.FileMode(step.Mode)); err != nil {
+		return fmt.Errorf("install %s: writing %s: %w", step.Src, destPath, err)
+	}
+	return nil
+}
 
-	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
-		return nil, fmt.Errorf("install_template: creating dir for %s: %w", destPath, err)
+// installStepLabel returns a short human-readable label for an install step,
+// used in the build log to identify which install action is executing.
+func installStepLabel(s *yoestar.InstallStep) string {
+	fn := "install_file"
+	if s.Kind == "template" {
+		fn = "install_template"
 	}
-	if err := os.WriteFile(destPath, []byte(buf.String()), os.FileMode(mode)); err != nil {
-		return nil, fmt.Errorf("install_template: writing %s: %w", destPath, err)
-	}
-	return starlark.None, nil
+	return fmt.Sprintf("%s: %s -> %s", fn, s.Src, s.Dest)
 }
 
 // resolveTemplatePath resolves a relative path against the unit's files
@@ -156,24 +109,4 @@ func expandEnv(s string, env map[string]string) string {
 	return os.Expand(s, func(key string) string {
 		return env[key]
 	})
-}
-
-// modeFromKwargs extracts the `mode` kwarg from a builtin's kwargs list,
-// returning def if not set. Errors if present but not an int.
-func modeFromKwargs(name string, kwargs []starlark.Tuple, def int) (int, error) {
-	for _, kv := range kwargs {
-		if string(kv[0].(starlark.String)) != "mode" {
-			continue
-		}
-		n, ok := kv[1].(starlark.Int)
-		if !ok {
-			return 0, fmt.Errorf("%s: mode must be int, got %s", name, kv[1].Type())
-		}
-		v, ok := n.Int64()
-		if !ok {
-			return 0, fmt.Errorf("%s: mode out of range", name)
-		}
-		return int(v), nil
-	}
-	return def, nil
 }

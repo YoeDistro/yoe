@@ -130,21 +130,45 @@ debug = {{.debug}}
 
 ### Starlark API
 
-Two new builtins callable from task functions:
+Two new builtins are **step-value constructors**, not side-effecting calls. They
+return a value that the build executor recognises and dispatches when the task
+runs, in the same step list as shell strings and Starlark callables:
 
 ```python
-# install_template(src, dest, mode=0o644)
-# Reads Go template from unit's files directory, renders with context, writes to dest.
-install_template("inittab.tmpl", "$DESTDIR/etc/inittab")
+# install_file(src, dest, mode=0o644) -> InstallStep
+# Copies src verbatim from the unit's files directory to dest.
 
-# install_file(src, dest, mode=0o644)
-# Copies file verbatim from unit's files directory to dest.
-install_file("rcS", "$DESTDIR/etc/init.d/rcS", mode=0o755)
+# install_template(src, dest, mode=0o644) -> InstallStep
+# Renders src through Go text/template with the unit's context map, then
+# writes the result to dest.
 ```
 
-Paths are relative to the unit's directory (e.g., `"inittab.tmpl"` resolves to
-`units/base/base-files/inittab.tmpl` for a unit defined in
-`units/base/base-files.star`).
+They are used directly in `task(..., steps=[...])`, no `fn=lambda:` wrapper
+required:
+
+```python
+task("build", steps = [
+    "mkdir -p $DESTDIR/etc $DESTDIR/etc/init.d $DESTDIR/boot/extlinux",
+    install_template("inittab.tmpl", "$DESTDIR/etc/inittab"),
+    install_file("rcS", "$DESTDIR/etc/init.d/rcS", mode = 0o755),
+    install_template("os-release.tmpl", "$DESTDIR/etc/os-release"),
+])
+```
+
+`src` paths are relative to the unit's files directory
+(`<DefinedIn>/<unit-name>/`). For a unit defined in
+`units/base/base-files.star`, `"inittab.tmpl"` resolves to
+`units/base/base-files/inittab.tmpl`. Paths that escape the files directory
+(`"../../etc/passwd"`) are rejected.
+
+`dest` has environment variables (`$DESTDIR`, `$PREFIX`, etc.) expanded from the
+task's build environment. Unknown variables expand to the empty string — there
+is no fallback to the host process environment, to preserve reproducibility.
+
+Install steps are pure data — `install_template(...)` can be bound to a name,
+stored in a list, or generated from a helper function before being placed in
+`steps=[...]`. They evaluate at unit-load time; execution happens later, in the
+executor, when the step is reached.
 
 ### Example: base-files with templates
 
@@ -206,17 +230,18 @@ unit(
     name = "base-files",
     version = "1.0.0",
     tasks = [
-        task("build", fn=lambda: _build()),
+        task("build", steps = [
+            "mkdir -p $DESTDIR/etc $DESTDIR/root $DESTDIR/proc $DESTDIR/sys"
+                + " $DESTDIR/dev $DESTDIR/tmp $DESTDIR/run"
+                + " $DESTDIR/etc/init.d $DESTDIR/boot/extlinux",
+            install_template("inittab.tmpl", "$DESTDIR/etc/inittab"),
+            install_file("rcS", "$DESTDIR/etc/init.d/rcS", mode = 0o755),
+            install_template("os-release.tmpl", "$DESTDIR/etc/os-release"),
+            install_template("extlinux.conf.tmpl",
+                             "$DESTDIR/boot/extlinux/extlinux.conf"),
+        ]),
     ],
 )
-
-def _build():
-    run("mkdir -p $DESTDIR/etc $DESTDIR/root $DESTDIR/proc $DESTDIR/sys"
-        + " $DESTDIR/dev $DESTDIR/tmp $DESTDIR/run")
-    install_template("inittab.tmpl", "$DESTDIR/etc/inittab")
-    install_template("os-release.tmpl", "$DESTDIR/etc/os-release")
-    install_file("rcS", "$DESTDIR/etc/init.d/rcS", mode=0o755)
-    install_template("extlinux.conf.tmpl", "$DESTDIR/boot/extlinux/extlinux.conf")
 ```
 
 ### Example: simpleiot init script
@@ -237,9 +262,12 @@ go_binary(
     version = "0.18.5",
     services = ["simpleiot"],
     tasks = [
-        task("build", steps=[...]),
-        task("init-script", fn=lambda: install_file(
-            "simpleiot.init", "$DESTDIR/etc/init.d/simpleiot", mode=0o755)),
+        task("build", steps = [...]),
+        task("init-script", steps = [
+            "mkdir -p $DESTDIR/etc/init.d",
+            install_file("simpleiot.init",
+                         "$DESTDIR/etc/init.d/simpleiot", mode = 0o755),
+        ]),
     ],
 )
 ```
@@ -254,12 +282,12 @@ unit(
     workers = 4,
     enable_tls = True,
     tasks = [
-        task("config", fn=lambda: _config()),
+        task("config", steps = [
+            "mkdir -p $DESTDIR/etc/my-app",
+            install_template("app.conf.tmpl", "$DESTDIR/etc/my-app/app.conf"),
+        ]),
     ],
 )
-
-def _config():
-    install_template("app.conf.tmpl", "$DESTDIR/etc/my-app/app.conf")
 ```
 
 `my-app/app.conf.tmpl`:
@@ -305,40 +333,66 @@ This matches the existing container convention:
 
 ### Go Implementation
 
+Install steps are **pure data values** produced at Starlark evaluation time and
+executed by the build executor. There is no thread-local wiring, no placeholder
+builtins, and no "must be called inside a task fn" error path — they're
+third-class steps alongside shell strings and Starlark callables.
+
 **New file: `internal/build/templates.go`**
 
-- `TemplateContext` — carries `map[string]any` context
-- `fnInstallTemplate` — Starlark builtin: read template, render, write
-- `fnInstallFile` — Starlark builtin: copy file verbatim
-- `resolveTemplatePath` — resolve `<DefinedIn>/<unit-name>/<relPath>`
-- `expandEnv` — expand `$DESTDIR` etc. in destination paths
-- `templateFuncs` — custom Go template functions (`sizeMB`, `sfdiskType`)
+- `BuildTemplateContext` — build the per-unit `map[string]any` from unit
+  identity fields, `Extra`, and auto-populated
+  `arch`/`machine`/`console`/`project`
+- `doInstallStep` — execute a resolved `InstallStep` against a unit: read from
+  `<DefinedIn>/<unit-name>/<src>`, render (if template) or copy, write to
+  expanded dest
+- `resolveTemplatePath` — resolve `<DefinedIn>/<unit-name>/<relPath>` with
+  escape protection
+- `expandEnv` — expand `$DESTDIR` etc. in destination paths using the task's
+  build env (no host fallback, for reproducibility)
 
-**Modified: `internal/build/executor.go`**
-
-- Build the `map[string]any` context from unit fields, machine, and project
-- Pass context to build thread via thread-local storage
-
-**Modified: `internal/build/starlark_exec.go`**
-
-- Store template context on build thread
-- Register `install_template` and `install_file` builtins
+Custom Go template functions (e.g. `sizeMB`, `sfdiskType`) are out of scope for
+this spec and belong to the `starlark-packaging-images` work that migrates
+`image.star` partition templates.
 
 **Modified: `internal/starlark/builtins.go`**
 
-- Add `install_template` and `install_file` placeholders (same pattern as
-  `run()`)
-- Capture unrecognized kwargs in `registerUnit()` into `Extra map[string]any`
-  on the Unit struct
+- Register `install_file` and `install_template` as ordinary global builtins
+  that return `*InstallStepValue`. No placeholder-delegate pattern needed — they
+  have no side effects.
+- Capture unrecognized `unit()` kwargs into `Extra map[string]any` on the Unit
+  struct.
 
 **Modified: `internal/starlark/types.go`**
 
-- Add `Extra map[string]any` field to Unit struct for unrecognized kwargs
+- New `InstallStepValue` — a `starlark.Value` implementation carrying
+  `(Kind, Src, Dest, Mode)`. Frozen on construction; implements `Hash` so tasks
+  containing install steps are deterministic.
+- New `InstallStep` — Go-native mirror of the above, referenced by `Step`.
+- `Step` gains an `Install *InstallStep` field.
+- `Unit` gains an `Extra map[string]any` field.
+- `ParseTaskList` recognises `*InstallStepValue` entries in `steps=[...]` and
+  converts each to `Step{Install: &InstallStep{...}}`.
+
+**Modified: `internal/build/executor.go`**
+
+- Build a per-unit `map[string]any` template context via `BuildTemplateContext`.
+- Task step loop gains a third case: `step.Install != nil` →
+  `doInstallStep(unit, step.Install, ctxData, env)`. Command and Fn cases are
+  unchanged.
 
 **Modified: `internal/resolve/hash.go`**
 
-- JSON-serialize the context map and include in hash
-- Hash contents of all files in unit's files directory
+- JSON-serialize the context map (sorted keys) and include in the unit hash.
+- Hash contents of all files in the unit's files directory.
+
+### What is NOT needed (vs. an earlier side-effecting design)
+
+- No thread-local `TemplateContext` key on the build thread
+- No `SetTemplateContext` helper
+- No placeholder/delegate builtins in `internal/starlark/builtins.go`
+- No `BuildPredeclared` entries for `install_file` / `install_template`
+- No `fn=lambda: _install()` boilerplate in unit files
 
 ### What Stays in Go
 
@@ -349,15 +403,21 @@ directory, then the container mounts them.
 
 ## Implementation Order
 
-1. **`Extra` field on Unit** — capture unrecognized kwargs in `registerUnit()`
-2. **`install_file()` builtin** — copy static files
-3. **`install_template()` builtin** — Go template rendering with context map
-4. **Context map and hashing** — build context from unit fields + extra +
-   machine/project, hash it and unit files directory
-5. **Migrate base-files** — move inittab, rcS, os-release, extlinux.conf to
-   template files
-6. **Migrate network-config** — move udhcpc script and init script to files
-7. **Migrate simpleiot** — move init script to file
+1. **`Extra` field on Unit** — capture unrecognized kwargs in `registerUnit()`.
+2. **`InstallStepValue` + constructors** — Starlark value type and the
+   `install_file` / `install_template` global builtins. Pure, side-effect-free.
+3. **`Step.Install` + `ParseTaskList` dispatch** — extend the Go `Step` type and
+   recognise install-step values inside `steps=[...]`.
+4. **Executor dispatch + `doInstallStep`** — `BuildTemplateContext`, executor
+   case for `step.Install`, and `doInstallStep` I/O. This step also removes the
+   earlier thread-local wiring (`TemplateContext` thread key,
+   `SetTemplateContext`) now that it is dead.
+5. **Hashing** — include context map JSON (sorted keys) and files-directory
+   contents in the unit hash.
+6. **Migrate base-files** — inittab, rcS, os-release, extlinux.conf as install
+   steps.
+7. **Migrate network-config** — udhcpc script and `S10network` as install steps.
+8. **Migrate simpleiot** — init-script task becomes a one-line install step.
 
 ## Non-Goals
 

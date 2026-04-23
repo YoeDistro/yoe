@@ -348,6 +348,17 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 				return fmt.Errorf("build cancelled")
 			}
 
+			if step.Install != nil {
+				fmt.Fprintf(logW, "    [%d/%d] %s\n", i+1, len(t.Steps), installStepLabel(step.Install))
+				if err := doInstallStep(unit, step.Install, tctxData, env); err != nil {
+					if !opts.Verbose {
+						fmt.Fprintf(w, "  build log: %s\n", logPath)
+					}
+					return fmt.Errorf("task %s: %w", t.Name, err)
+				}
+				continue
+			}
+
 			if step.Command != "" {
 				fmt.Fprintf(logW, "    [%d/%d] %s\n", i+1, len(t.Steps), step.Command)
 				cfg := &SandboxConfig{
@@ -391,11 +402,6 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 					Stderr:     logW,
 				}
 				thread := NewBuildThread(ctx, cfg, RealExecer{})
-				SetTemplateContext(thread, &TemplateContext{
-					Unit: unit,
-					Data: tctxData,
-					Env:  env,
-				})
 				if _, err := starlark.Call(thread, step.Fn, nil, nil); err != nil {
 					if !opts.Verbose {
 						fmt.Fprintf(w, "  build log: %s\n", logPath)
