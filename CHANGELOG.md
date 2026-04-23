@@ -9,18 +9,18 @@ and this project adheres to
 ## [Unreleased]
 
 - **CLI flag parsing with flag.NewFlagSet** — refactored all subcommands
-  (`build`, `run`, `flash`, `init`, `clean`, `log`, `refs`, `graph`) from
-  manual switch-based parsing to Go's `flag.NewFlagSet`. Adds free `--help` for
-  every subcommand, consistent `-flag`/`--flag` support, and repeatable flags
-  (e.g., `--port`). Net reduction of ~70 lines.
+  (`build`, `run`, `flash`, `init`, `clean`, `log`, `refs`, `graph`) from manual
+  switch-based parsing to Go's `flag.NewFlagSet`. Adds free `--help` for every
+  subcommand, consistent `-flag`/`--flag` support, and repeatable flags (e.g.,
+  `--port`). Net reduction of ~70 lines.
 - **Go module cache** — Go units now persist module and build caches across
-  builds via `cache_dirs = {"/go/cache": "go"}`. The executor mounts
-  `cache/go/` from the project directory into the container, and `GOMODCACHE`
-  and `GOCACHE` point to it. Subsequent builds skip module downloads.
-- **Fix service enablement for S-prefixed init scripts** — services declared with
-  an `S<NN>` prefix (like `S10network`) no longer get a symlink created on top of
-  the actual script, which was causing a symlink loop and breaking networking at
-  boot.
+  builds via `cache_dirs = {"/go/cache": "go"}`. The executor mounts `cache/go/`
+  from the project directory into the container, and `GOMODCACHE` and `GOCACHE`
+  point to it. Subsequent builds skip module downloads.
+- **Fix service enablement for S-prefixed init scripts** — services declared
+  with an `S<NN>` prefix (like `S10network`) no longer get a symlink created on
+  top of the actual script, which was causing a symlink loop and breaking
+  networking at boot.
 - **Unit environment field** — units can declare `environment = {"KEY": "VAL"}`
   which the executor merges into the build environment for all tasks. The Go
   class uses this for `GOMODCACHE`/`GOCACHE` so custom tasks (like simpleiot)
@@ -38,8 +38,8 @@ and this project adheres to
   The `services` parameter on `image()` is removed.
 - **Design specs** — added `docs/starlark-packaging-images.md` (move packaging
   and image assembly to composable Starlark tasks) and `docs/file-templates.md`
-  (external template files using Go `text/template`, replacing inline heredocs in
-  units).
+  (external template files using Go `text/template`, replacing inline heredocs
+  in units).
 - **Go class uses golang container** — `go_binary()` now defaults to the
   `golang:1.24` external container image instead of `toolchain-musl`.
   Cross-compilation is handled via `GOARCH`/`GOOS` environment variables with
@@ -48,8 +48,8 @@ and this project adheres to
 - **Per-unit sandbox and shell selection** — units now have `sandbox` (bool,
   default false) and `shell` (string, default "sh") fields. The autotools,
   cmake, and image classes set `sandbox=True, shell="bash"` for bwrap isolation.
-  External containers (like `golang:1.24`) use the defaults — no bwrap, POSIX
-  sh — since they don't ship bwrap or bash.
+  External containers (like `golang:1.24`) use the defaults — no bwrap, POSIX sh
+  — since they don't ship bwrap or bash.
 - **simpleiot unit** — new `go_binary` unit for SimpleIoT v0.18.5, an IoT
   application for sensor data, telemetry, and device management.
 - **ca-certificates unit** — Mozilla CA bundle for TLS verification. Added to
