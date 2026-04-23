@@ -459,25 +459,25 @@ into a root filesystem, just as Alpine does.
 
 ### 🧱 Base System
 
-_Currently running musl busybox/init for simplicity, but hope to eventually move
-to glibc/systemd._
+_Currently running musl busybox/init for simplicity. glibc and systemd are
+potential future options but the project has not committed to them yet._
 
-The base userspace is **glibc + busybox + systemd**:
+The base userspace today is **busybox** on top of a C library (musl today, glibc
+targeted), with busybox's built-in init as PID 1:
 
-- **glibc** — the standard C library. Maximizes compatibility with pre-built
-  binaries, language runtimes (Go, Rust, Python, Node.js), and third-party
-  libraries. musl is lighter but introduces subtle compatibility issues that
-  aren't worth fighting in a system that already includes systemd.
-- **busybox** — provides the core userspace utilities (sh, coreutils, etc.) in a
-  single small binary. Keeps the base image minimal while still having a
-  functional shell environment for debugging and scripting.
-- **systemd** — the init system and service manager. Despite its size, systemd
-  is the pragmatic choice:
-  - Well-understood by developers and ops teams.
-  - Rich ecosystem of unit files for common services.
-  - Built-in support for journal logging, network management, device management
-    (udev), and container integration.
-  - Required or assumed by many modern Linux components.
+- **C library** — the project currently uses musl (inherited from Alpine's
+  toolchain), with a planned move to glibc for maximum compatibility with
+  pre-built binaries, language runtimes (Go, Rust, Python, Node.js), and
+  third-party libraries.
+- **busybox** — provides the core userspace utilities (sh, coreutils, etc.) and
+  init in a single small binary. Keeps the base image minimal while still giving
+  a functional shell environment for debugging and scripting.
+- **Init (current: busybox init)** — busybox's built-in init handles PID 1
+  duties today. **systemd may become an option in the future**: it is
+  well-understood, has rich service management, and provides integrated journal
+  logging, network management, device management (udev), and container
+  integration. The trade-off is size and complexity; the project has not yet
+  committed to shipping it as part of the base.
 
 This combination gives a small but fully functional base system that can run
 real-world services without surprises.

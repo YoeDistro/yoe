@@ -185,7 +185,7 @@ image(
     version = "1.0.0",
     description = "Minimal bootable system",
     # Packages installed into the rootfs.
-    # The base system (glibc, busybox, systemd) is implicit unless excluded.
+    # The base system (C library + busybox + init) is implicit unless excluded.
     artifacts = [
         "openssh",
         "networkmanager",

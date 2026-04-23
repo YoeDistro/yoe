@@ -147,17 +147,24 @@ looks like.
 
 **What `[yoe]` leaves behind:**
 
-- **musl** — using glibc instead for maximum compatibility with language
-  runtimes and pre-built binaries.
-- **No systemd** — Alpine uses OpenRC; `[yoe]` uses systemd.
+- **musl** — planning to use glibc instead for maximum compatibility with
+  language runtimes and pre-built binaries (`[yoe]` currently still inherits
+  musl from Alpine's toolchain; the move is pending).
 - **Limited BSP/hardware story** — Alpine doesn't target custom embedded boards.
+
+**On the init system:** Alpine uses OpenRC. `[yoe]` currently uses busybox init,
+the same as Alpine's minirootfs default. **systemd may become an option in the
+future** — it's the pragmatic choice for developer-facing systems with rich
+service management, journal logging, and udev — but the project has not
+committed to shipping it as part of the base. Today, service management is
+whatever busybox init + plain scripts give you.
 
 **Key differences:**
 
 |                   | Alpine                            | `[yoe]`                                              |
 | ----------------- | --------------------------------- | ---------------------------------------------------- |
-| C library         | musl                              | glibc                                                |
-| Init system       | OpenRC                            | systemd                                              |
+| C library         | musl                              | musl today; glibc planned                            |
+| Init system       | OpenRC                            | busybox init today; systemd a future option          |
 | Target            | Containers, small servers         | Custom embedded hardware                             |
 | BSP support       | Generic x86/ARM images            | Per-board machine definitions                        |
 | Image assembly    | `alpine-make-rootfs`              | `yoe build <image>` with machine + partition support |
@@ -628,8 +635,10 @@ This is not a technology problem — it's an ecosystem problem that Linux
 Foundation backing solves. No amount of technical superiority overcomes "the
 silicon vendor gives us a Yocto BSP and supports it."
 
-**Package count.** Yocto has thousands of units, Buildroot has ~2800. `[yoe]`
-has a handful. Need curl, dbus, python3, or ffmpeg? You have to write the unit.
+**Package count.** Yocto has ~5,000 recipes across oe-core + meta-openembedded,
+Buildroot has ~2,800 packages, Alpine has ~36,000, Debian has ~35,000, and
+Nixpkgs has ~142,000. `[yoe]` has dozens. Need curl, dbus, python3, or ffmpeg?
+You have to write the unit.
 
 **Configuration UX.** Buildroot's `make menuconfig` is a killer feature —
 visual, discoverable, searchable. You can explore what's available without
@@ -717,22 +726,32 @@ Buildroot is too limited.
 
 ## Summary Matrix
 
-| Feature                 | Yocto    | Buildroot | Alpine   | Arch     | Debian   | UC      | NixOS   | **`[yoe]`** |
-| ----------------------- | -------- | --------- | -------- | -------- | -------- | ------- | ------- | ----------- |
-| Embedded focus          | Yes      | Yes       | Partial  | No       | No       | Yes     | No      | **Yes**     |
-| Simple config           | No       | Moderate  | Moderate | Yes      | Moderate | No      | No      | **Yes**     |
-| Native builds           | No       | No        | Yes      | Yes      | Yes      | Yes     | Yes     | **Yes**     |
-| On-device packages      | Optional | No        | Yes      | Yes      | Yes      | Yes     | Yes     | **Yes**     |
-| Content-addressed cache | Partial  | No        | No       | No       | No       | No      | Yes     | **Yes**     |
-| Remote shared cache     | Complex  | No        | No       | No       | No       | No      | Yes     | **Yes**     |
-| Pre-built package cache | No       | No        | Yes      | Yes      | Yes      | Yes     | Yes     | **Yes**     |
-| Declarative images      | Yes      | Partial   | No       | No       | Partial  | Yes     | Yes     | **Yes**     |
-| Multi-image support     | Yes      | No        | No       | No       | No       | Partial | Yes     | **Yes**     |
-| Image inheritance       | Partial  | No        | No       | No       | No       | No      | Yes     | **Yes**     |
-| Custom BSP support      | Yes      | Yes       | No       | No       | Minimal  | Yes     | Minimal | **Yes**     |
-| Incremental updates     | Complex  | No        | Yes      | Yes      | Yes      | Yes     | Yes     | **Yes**     |
-| Hermetic builds         | Partial  | No        | No       | No       | No       | Partial | Yes     | **Yes**     |
-| Fast package ops        | N/A      | N/A       | Yes      | Moderate | Moderate | Slow    | Slow    | **Yes**     |
-| Single-digit MB base    | No       | Yes       | Yes      | No       | No       | No      | No      | **Yes**     |
+| Feature                 | Yocto    | Buildroot | Alpine   | Arch     | Debian   | UC        | NixOS     | **`[yoe]`** |
+| ----------------------- | -------- | --------- | -------- | -------- | -------- | --------- | --------- | ----------- |
+| Embedded focus          | Yes      | Yes       | Partial  | No       | No       | Yes       | No        | **Yes**     |
+| Simple config           | No       | Moderate  | Moderate | Yes      | Moderate | No        | No        | **Yes**     |
+| Native builds           | No       | No        | Yes      | Yes      | Yes      | Yes       | Yes       | **Yes**     |
+| On-device packages      | Optional | No        | Yes      | Yes      | Yes      | Yes       | Yes       | **Yes**     |
+| Content-addressed cache | Partial  | No        | No       | No       | No       | No        | Yes       | **Yes**     |
+| Remote shared cache     | Complex  | No        | No       | No       | No       | No        | Yes       | **Yes**     |
+| Pre-built package cache | No       | No        | Yes      | Yes      | Yes      | Yes       | Yes       | **Yes**     |
+| Declarative images      | Yes      | Partial   | No       | No       | Partial  | Yes       | Yes       | **Yes**     |
+| Multi-image support     | Yes      | No        | No       | No       | No       | Partial   | Yes       | **Yes**     |
+| Image inheritance       | Partial  | No        | No       | No       | No       | No        | Yes       | **Yes**     |
+| Custom BSP support      | Yes      | Yes       | No       | No       | Minimal  | Yes       | Minimal   | **Yes**     |
+| Incremental updates     | Complex  | No        | Yes      | Yes      | Yes      | Yes       | Yes       | **Yes**     |
+| Hermetic builds         | Partial  | No        | No       | No       | No       | Partial   | Yes       | **Yes**     |
+| Fast package ops        | N/A      | N/A       | Yes      | Moderate | Moderate | Slow      | Slow      | **Yes**     |
+| Min base image size     | ~15 MB   | ~5 MB     | ~5 MB    | ~500 MB  | ~150 MB  | ~2,500 MB | ~1,500 MB | **~5 MB**   |
+| Packages available      | ~5,000   | ~2,800    | ~36,000  | ~15,000  | ~35,000  | ~10,000   | ~142,000  | **Dozens**  |
 
-_UC = Ubuntu Core._
+_UC = Ubuntu Core. "Min base image size" is the approximate on-disk footprint of
+the smallest practical bootable/usable root filesystem (core-image-minimal for
+Yocto, `minbase` debootstrap for Debian, minirootfs for Alpine, a minimal Ubuntu
+Core 24 model with no app snaps, a minimal NixOS closure). Actual sizes vary
+with architecture, kernel, and configuration. "Packages available" is the rough
+count of ready-to-use packages/recipes in the standard/common repositories;
+Yocto counts typical oe-core + meta-openembedded, Arch excludes the ~90,000 AUR
+packages, UC counts snaps in the public store — a different delivery model that
+is not directly comparable. Sources: project documentation,
+[repology.org](https://repology.org/repositories/packages)._

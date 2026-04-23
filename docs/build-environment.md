@@ -295,7 +295,7 @@ bwrap --unshare-user --uid 0 --gid 0 \
     --proc /proc \
     -- sh -c '
         # Install packages — apk sets ownership to root:root
-        apk --root /rootfs add glibc busybox systemd openssh myapp
+        apk --root /rootfs add musl busybox openssh myapp
 
         # Create device nodes
         mknod /rootfs/dev/null c 1 3
@@ -322,18 +322,20 @@ Because this is kernel-native:
 ### Disk Image Partitioning
 
 For the final step of creating a partitioned disk image (GPT/MBR with boot and
-rootfs partitions), `yoe` can use **systemd-repart** as a complementary tool.
-Since `[yoe]` already uses systemd, `systemd-repart` is a natural fit:
-
-- Declarative partition definitions (aligns with the partition definitions in
-  image units).
-- Handles GPT, MBR, filesystem creation, and image sizing.
-- Runs unprivileged with user namespaces.
-- Maintained by the systemd project.
+rootfs partitions), `yoe` needs a partitioning tool on the host or inside the
+build container.
+**[systemd-repart](https://www.freedesktop.org/software/systemd/man/systemd-repart.html)**
+is a candidate if `[yoe]` ever ships systemd as part of the base system — its
+declarative partition definitions align well with the partition definitions in
+image units, it handles GPT/MBR/filesystem creation in one step, and it runs
+unprivileged with user namespaces. Today, `[yoe]` does **not** use systemd, so
+disk image assembly uses the standard `sfdisk`/`mkfs.*` tools from the build
+container.
 
 The combination is: **bubblewrap** for rootfs population (installing packages,
-setting ownership, creating device nodes) and **systemd-repart** for disk image
-assembly (partitioning, filesystem creation, writing the final `.img`).
+setting ownership, creating device nodes) and a partitioning tool (`sfdisk` +
+`mkfs.*` today, `systemd-repart` as a future option) for disk image assembly
+(partitioning, filesystem creation, writing the final `.img`).
 
 ## Build Environment Lifecycle
 

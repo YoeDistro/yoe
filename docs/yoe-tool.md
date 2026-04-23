@@ -171,8 +171,9 @@ assembly:
 7. **Install packages** — run `apk add --root <rootfs>` with the `[yoe]`
    repository to install all declared packages. apk handles dependency
    resolution.
-8. **Apply configuration** — set hostname, timezone, locale, enable systemd
-   services per the image unit's configuration.
+8. **Apply configuration** — set hostname, timezone, locale, and enable services
+   per the image unit's configuration (via the active init system — busybox init
+   today, systemd a possible future option).
 9. **Apply overlays** — copy files from `overlays/` into the rootfs.
 10. **Install kernel + bootloader** — build (or fetch from cache) the kernel and
     bootloader per the machine definition, install into the rootfs/boot
