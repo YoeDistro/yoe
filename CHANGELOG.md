@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-04-24
+
 - **Class task merge semantics** — units passing `tasks=[...]` to a class
   (`autotools`, `cmake`, `go_binary`) no longer fully replace the class's
   default task list. Instead, overrides are merged by name: a same-named task
