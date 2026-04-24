@@ -107,6 +107,14 @@ def _create_disk_image(name, partitions):
 
     run("printf '%s' | sfdisk %s" % (sfdisk_lines, img))
 
+    # Rootfs was assembled as the host build user (docker --user uid:gid), so
+    # every file under $DESTDIR/rootfs is owned by that uid. mkfs.ext4 -d copies
+    # ownership into the filesystem verbatim, so the booted system would see
+    # files owned by whatever host user ran the build. Chown to root before
+    # packing, and chown the destdir back at the end so the next build's
+    # os.RemoveAll() on the host can clean it up.
+    run("chown -R 0:0 $DESTDIR/rootfs", privileged = True)
+
     offset = 1
     for p in partitions:
         size_mb = _parse_size_mb(p.size)
@@ -115,12 +123,13 @@ def _create_disk_image(name, partitions):
 
         if p.type == "vfat":
             run("mkfs.vfat -n %s %s" % (p.label.upper(), part_img))
-            # Copy boot files from rootfs
-            run("mcopy -sQi %s $DESTDIR/rootfs/boot/* ::/ 2>/dev/null || true" % part_img)
+            # Copy boot files from rootfs (root-owned; mcopy needs read access).
+            run("mcopy -sQi %s $DESTDIR/rootfs/boot/* ::/ 2>/dev/null || true" % part_img, privileged = True)
         elif p.type == "ext4":
             # Disable ext4 features that syslinux 6.03 can't read (x86 only)
             ext4_opts = "-O ^64bit,^metadata_csum,^extent " if ARCH == "x86_64" else ""
-            run("mkfs.ext4 %s-d $DESTDIR/rootfs -L %s %s %dM" % (ext4_opts, p.label, part_img, size_mb))
+            run("mkfs.ext4 %s-d $DESTDIR/rootfs -L %s %s %dM" % (ext4_opts, p.label, part_img, size_mb),
+                privileged = True)
 
         run("dd if=%s of=%s bs=1M seek=%d conv=notrunc" % (part_img, img, offset))
         run("rm -f %s" % part_img)
@@ -129,6 +138,11 @@ def _create_disk_image(name, partitions):
     # Install bootloader (x86 syslinux)
     if ARCH == "x86_64":
         _install_syslinux(img, partitions)
+
+    # Restore destdir ownership to the host build user. The chown -R above,
+    # plus any root-owned files the privileged mkfs/mcopy/syslinux steps left
+    # behind, would otherwise block the next build's os.RemoveAll on the host.
+    run("chown -R $(stat -c %u:%g /project) $DESTDIR", privileged = True)
 
 def _install_syslinux(img, partitions):
     """Install syslinux MBR boot code and extlinux on an x86 disk image."""

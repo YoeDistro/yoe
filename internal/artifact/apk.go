@@ -83,6 +83,7 @@ func addDirToTar(tw *tar.Writer, baseDir string) error {
 		}
 		header, _ := tar.FileInfoHeader(info, "")
 		header.Name = rel
+		normalizeOwnership(header)
 		if info.Mode()&os.ModeSymlink != 0 {
 			link, _ := os.Readlink(path)
 			header.Linkname = link
@@ -96,6 +97,17 @@ func addDirToTar(tw *tar.Writer, baseDir string) error {
 		}
 	}
 	return nil
+}
+
+// normalizeOwnership resets a tar header to root:root. Package artifacts are
+// built under the host user's uid/gid (docker --user uid:gid); without this,
+// those uids leak into installed rootfs content and the booted system sees
+// files owned by a nonexistent user.
+func normalizeOwnership(h *tar.Header) {
+	h.Uid = 0
+	h.Gid = 0
+	h.Uname = "root"
+	h.Gname = "root"
 }
 
 // buildDataTar creates an uncompressed tar archive of the destDir contents.
@@ -138,6 +150,7 @@ func buildDataTar(destDir string) ([]byte, error) {
 			return nil, err
 		}
 		header.Name = rel
+		normalizeOwnership(header)
 
 		if info.Mode()&os.ModeSymlink != 0 {
 			link, _ := os.Readlink(path)
