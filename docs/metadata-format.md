@@ -525,6 +525,35 @@ def autotools(name, version, source, configure_args=[], **kwargs):
     )
 ```
 
+**Extending a class's tasks** — when a unit passes `tasks=[...]` to a class
+(`autotools`, `cmake`, `go_binary`), the class merges the overrides into its
+default task list rather than replacing them entirely. Merge rules:
+
+- Same name → replace at the existing position (the override's `steps` fully
+  replace the base's; merging steps is not supported).
+- New name → append to the end.
+- `task("name", remove=True)` → drop that task from the base list.
+
+```python
+# Adds an init-script task without restating the class's default build task.
+go_binary(
+    name = "simpleiot",
+    ...
+    tasks = [
+        task("init-script", steps = [
+            "mkdir -p $DESTDIR/etc/init.d",
+            install_file("simpleiot.init",
+                         "$DESTDIR/etc/init.d/simpleiot", mode = 0o755),
+        ]),
+    ],
+)
+```
+
+Merging is implemented by `merge_tasks(base, overrides)` in
+`modules/units-core/classes/tasks.star`. Custom classes that want the same
+behavior should `load("//classes/tasks.star", "merge_tasks")` and call it before
+passing `tasks` to `unit()`.
+
 See [per-unit containers plan](superpowers/plans/per-unit-containers.md) for the
 full design.
 

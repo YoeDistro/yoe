@@ -153,11 +153,18 @@ task("build", steps = [
 ])
 ```
 
-`src` paths are relative to the unit's files directory
-(`<DefinedIn>/<unit-name>/`). For a unit defined in
+`src` paths are relative to the **calling .star file's** template directory:
+`<dir(file)>/<basename(file) without .star>/`. For a call written in
 `units/base/base-files.star`, `"inittab.tmpl"` resolves to
-`units/base/base-files/inittab.tmpl`. Paths that escape the files directory
+`units/base/base-files/inittab.tmpl`. Paths that escape that directory
 (`"../../etc/passwd"`) are rejected.
+
+Resolving relative to the call site — not to the resulting unit's `unit()` call
+site — is what lets a helper function package its templates next to itself and
+reuse them across many units. For example, `base_files()` in
+`units/base/base-files.star` can be called from `images/dev-image.star` with
+`name = "base-files-dev"`; the install steps it returns still find their
+templates in `units/base/base-files/`, not in `images/base-files-dev/`.
 
 `dest` has environment variables (`$DESTDIR`, `$PREFIX`, etc.) expanded from the
 task's build environment. Unknown variables expand to the empty string — there

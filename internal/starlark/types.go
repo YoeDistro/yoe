@@ -171,11 +171,18 @@ type Step struct {
 
 // InstallStep describes a file installation action produced by the Starlark
 // install_file() / install_template() builtins. Executed by the build executor.
+//
+// BaseDir is the absolute directory captured from the .star file containing
+// the install_file() / install_template() call (see InstallStepValue). The
+// file to install lives at BaseDir/Src. Resolving relative to the call site
+// — rather than to the unit() call site — lets helper functions package
+// templates next to themselves and reuse them across many units.
 type InstallStep struct {
-	Kind string // "file" or "template"
-	Src  string // path relative to <DefinedIn>/<unit-name>/
-	Dest string // env-expanded at execution time
-	Mode int
+	Kind    string // "file" or "template"
+	Src     string // path relative to BaseDir
+	Dest    string // env-expanded at execution time
+	Mode    int
+	BaseDir string // absolute directory; file to install lives at BaseDir/Src
 }
 
 // Task is a named build phase containing one or more steps.

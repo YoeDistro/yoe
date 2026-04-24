@@ -8,6 +8,27 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Class task merge semantics** — units passing `tasks=[...]` to a class
+  (`autotools`, `cmake`, `go_binary`) no longer fully replace the class's
+  default task list. Instead, overrides are merged by name: a same-named task
+  replaces in place (preserving position and using the override's `steps`
+  fully), a new-named task is appended, and `task("name", remove=True)` drops a
+  base task. This lets units add a new task (e.g., `init-script`) without
+  restating the class-generated `build` task. The merge is implemented in a new
+  `classes/tasks.star` helper (`merge_tasks(base, overrides)`) shared by the
+  three classes. The `simpleiot` unit dropped its duplicated `build` task as a
+  result; existing units that override `build` are unaffected (replace-in-place
+  yields the same result as the previous full-replacement semantics).
+- **Fix install_template/install_file path resolution for helper functions** —
+  template paths now resolve relative to the `.star` file containing the
+  `install_template()`/`install_file()` call, not to the file that ultimately
+  calls `unit()`. Previously, a helper like
+  `base_files(name = "base-files-dev")` in `units/base/base-files.star` invoked
+  from `images/dev-image.star` looked for templates under
+  `images/base-files-dev/` instead of `units/base/base-files/`, breaking the
+  `dev-image` build. The base directory is now captured at install-step
+  construction time from the Starlark caller frame; existing units that define
+  and use install steps in the same `.star` file are unaffected.
 - **File templates** — units can declare external template files (`.tmpl`) and
   static files in a directory alongside the `.star` file and install them via
   new `install_template()` and `install_file()` step-value constructors placed

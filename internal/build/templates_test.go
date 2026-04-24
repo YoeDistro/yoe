@@ -139,3 +139,40 @@ func TestDoInstallStep_PathEscapeRejected(t *testing.T) {
 		t.Fatal("expected escape error, got nil")
 	}
 }
+
+// TestDoInstallStep_BaseDirOverridesUnitDir verifies that when BaseDir is set
+// (the normal case for install_template/install_file calls in real units),
+// the source file is resolved relative to BaseDir — not to the unit's
+// DefinedIn/Name. This is what makes helper functions work: the helper's
+// templates are located via the helper's source file, regardless of which
+// unit ends up holding the install step.
+func TestDoInstallStep_BaseDirOverridesUnitDir(t *testing.T) {
+	tmp := t.TempDir()
+	helperDir := filepath.Join(tmp, "helper-templates")
+	_ = os.MkdirAll(helperDir, 0o755)
+	_ = os.WriteFile(filepath.Join(helperDir, "config"),
+		[]byte("from helper\n"), 0o644)
+
+	destDir := filepath.Join(tmp, "destdir")
+	// Unit looks like it was registered from a totally unrelated directory,
+	// matching the helper-from-image scenario in real builds.
+	u := &yoestar.Unit{Name: "renamed-unit", DefinedIn: filepath.Join(tmp, "image-dir")}
+	step := &yoestar.InstallStep{
+		Kind:    "file",
+		Src:     "config",
+		Dest:    "$DESTDIR/etc/config",
+		Mode:    0o644,
+		BaseDir: helperDir,
+	}
+	env := map[string]string{"DESTDIR": destDir}
+	if err := doInstallStep(u, step, nil, env); err != nil {
+		t.Fatalf("doInstallStep: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(destDir, "etc/config"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "from helper\n" {
+		t.Errorf("got %q, want %q", got, "from helper\n")
+	}
+}

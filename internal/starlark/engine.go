@@ -6,7 +6,10 @@ import (
 	"sync"
 
 	"go.starlark.net/starlark"
+	"go.starlark.net/syntax"
 )
+
+var fileOpts = &syntax.FileOptions{}
 
 // Engine evaluates .star files and collects results.
 type Engine struct {
@@ -72,7 +75,7 @@ func (e *Engine) ExecString(filename, src string) error {
 	thread.Load = e.makeLoadFunc(filename)
 	predeclared := e.builtins()
 
-	globals, err := starlark.ExecFile(thread, filename, src, predeclared)
+	globals, err := starlark.ExecFileOptions(fileOpts, thread, filename, src, predeclared)
 	if err != nil {
 		return fmt.Errorf("evaluating %s: %w", filename, err)
 	}
@@ -92,7 +95,7 @@ func (e *Engine) ExecFile(path string) error {
 	thread.Load = e.makeLoadFunc(path)
 	predeclared := e.builtins()
 
-	globals, err := starlark.ExecFile(thread, path, nil, predeclared)
+	globals, err := starlark.ExecFileOptions(fileOpts, thread, path, nil, predeclared)
 	if err != nil {
 		return fmt.Errorf("evaluating %s: %w", path, err)
 	}

@@ -110,10 +110,11 @@ func ParseTaskList(list *starlark.List) []Task {
 						t.Steps = append(t.Steps, Step{Command: string(val)})
 					case *InstallStepValue:
 						t.Steps = append(t.Steps, Step{Install: &InstallStep{
-							Kind: val.Kind,
-							Src:  val.Src,
-							Dest: val.Dest,
-							Mode: val.Mode,
+							Kind:    val.Kind,
+							Src:     val.Src,
+							Dest:    val.Dest,
+							Mode:    val.Mode,
+							BaseDir: val.BaseDir,
 						}})
 					case starlark.Callable:
 						t.Steps = append(t.Steps, Step{Fn: val})

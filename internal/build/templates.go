@@ -35,7 +35,7 @@ func BuildTemplateContext(u *yoestar.Unit, arch, machine, console, project strin
 // template data map and env are the same ones used for shell and fn steps in
 // the enclosing task, so variable semantics stay consistent across step kinds.
 func doInstallStep(u *yoestar.Unit, step *yoestar.InstallStep, data map[string]any, env map[string]string) error {
-	srcPath, err := resolveTemplatePath(u, step.Src)
+	srcPath, err := resolveTemplatePath(u, step)
 	if err != nil {
 		return fmt.Errorf("install %s: %w", step.Src, err)
 	}
@@ -85,18 +85,24 @@ func installStepLabel(s *yoestar.InstallStep) string {
 	return fmt.Sprintf("%s: %s -> %s", fn, s.Src, s.Dest)
 }
 
-// resolveTemplatePath resolves a relative path against the unit's files
-// directory: <DefinedIn>/<unit-name>/<relPath>. Rejects paths that escape
-// the unit files directory (e.g. "../../etc/passwd").
-func resolveTemplatePath(u *yoestar.Unit, relPath string) (string, error) {
-	filesDir := filepath.Join(u.DefinedIn, u.Name)
-	resolved := filepath.Join(filesDir, relPath)
-	rel, err := filepath.Rel(filesDir, resolved)
+// resolveTemplatePath resolves the install step's source path against its
+// captured base directory (set at the install_file()/install_template() call
+// site — typically <dir(.star file)>/<basename(.star file) without extension>).
+// Falls back to <DefinedIn>/<unit-name>/ for steps constructed directly in
+// Go (tests, programmatic use). Rejects paths that escape the base directory
+// (e.g. "../../etc/passwd").
+func resolveTemplatePath(u *yoestar.Unit, step *yoestar.InstallStep) (string, error) {
+	baseDir := step.BaseDir
+	if baseDir == "" {
+		baseDir = filepath.Join(u.DefinedIn, u.Name)
+	}
+	resolved := filepath.Join(baseDir, step.Src)
+	rel, err := filepath.Rel(baseDir, resolved)
 	if err != nil {
-		return "", fmt.Errorf("resolving %q: %w", relPath, err)
+		return "", fmt.Errorf("resolving %q: %w", step.Src, err)
 	}
 	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("path %q escapes unit files directory", relPath)
+		return "", fmt.Errorf("path %q escapes install base directory", step.Src)
 	}
 	return resolved, nil
 }

@@ -1,9 +1,12 @@
 package starlark
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"go.starlark.net/starlark"
+	"go.starlark.net/syntax"
 )
 
 func TestInstallFile_ReturnsValue(t *testing.T) {
@@ -12,7 +15,7 @@ func TestInstallFile_ReturnsValue(t *testing.T) {
 		"install_file":     starlark.NewBuiltin("install_file", fnInstallFile),
 		"install_template": starlark.NewBuiltin("install_template", fnInstallTemplate),
 	}
-	globals, err := starlark.ExecFile(thread, "t.star", `
+	globals, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, "t.star", `
 f = install_file("rcS", "$DESTDIR/etc/init.d/rcS", mode = 0o755)
 t = install_template("inittab.tmpl", "$DESTDIR/etc/inittab")
 `, predeclared)
@@ -32,6 +35,51 @@ t = install_template("inittab.tmpl", "$DESTDIR/etc/inittab")
 	}
 	if tt.Kind != "template" || tt.Mode != 0o644 {
 		t.Errorf("t = %+v, want default mode 0o644", tt)
+	}
+}
+
+// TestInstallStep_BaseDirFromCallerFile verifies that BaseDir is captured from
+// the .star file containing the install_template() call — not from where the
+// resulting value is later used. This is what lets a helper function in
+// units/base/base-files.star generate install steps for units registered
+// from images/dev-image.star.
+func TestInstallStep_BaseDirFromCallerFile(t *testing.T) {
+	tmp := t.TempDir()
+	helper := filepath.Join(tmp, "helper.star")
+	caller := filepath.Join(tmp, "caller.star")
+	if err := os.WriteFile(helper, []byte(`
+def make_steps():
+    return install_template("inittab.tmpl", "$DESTDIR/etc/inittab")
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(caller, []byte(`
+load("helper.star", "make_steps")
+v = make_steps()
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	thread := &starlark.Thread{Name: caller}
+	thread.Load = func(_ *starlark.Thread, module string) (starlark.StringDict, error) {
+		t := &starlark.Thread{Name: filepath.Join(tmp, module)}
+		return starlark.ExecFileOptions(&syntax.FileOptions{}, t, filepath.Join(tmp, module), nil, starlark.StringDict{
+			"install_template": starlark.NewBuiltin("install_template", fnInstallTemplate),
+		})
+	}
+	globals, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, caller, nil, starlark.StringDict{
+		"install_template": starlark.NewBuiltin("install_template", fnInstallTemplate),
+	})
+	if err != nil {
+		t.Fatalf("ExecFile: %v", err)
+	}
+	v, ok := globals["v"].(*InstallStepValue)
+	if !ok {
+		t.Fatalf("v = %T, want *InstallStepValue", globals["v"])
+	}
+	want := filepath.Join(tmp, "helper")
+	if v.BaseDir != want {
+		t.Errorf("BaseDir = %q, want %q (should reflect helper.star, not caller.star)", v.BaseDir, want)
 	}
 }
 

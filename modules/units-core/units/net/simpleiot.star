@@ -10,12 +10,6 @@ go_binary(
     description = "IoT application for sensor data, telemetry, configuration, and device management",
     services = ["simpleiot"],
     tasks = [
-        task("build", steps=[
-            'case "$ARCH" in x86_64) goarch=amd64;; aarch64) goarch=arm64;; armv7l) goarch=arm;; riscv64) goarch=riscv64;; *) echo "unsupported ARCH=$ARCH" >&2; exit 1;; esac'
-            + " && export PATH=/usr/local/go/bin:$PATH"
-            + " && CGO_ENABLED=0 GOOS=linux GOARCH=$goarch"
-            + " go build -o $DESTDIR$PREFIX/bin/siot ./cmd/siot",
-        ]),
         task("init-script", steps = [
             "mkdir -p $DESTDIR/etc/init.d",
             install_file("simpleiot.init",
