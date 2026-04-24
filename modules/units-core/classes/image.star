@@ -167,8 +167,14 @@ def _install_syslinux(img, partitions):
 
     # Run extlinux --install via losetup with explicit offset (not -P which
     # requires partition device nodes). Needs privileged=True for losetup/mount.
+    # Docker's --privileged does not populate /dev/loop*, so losetup --find
+    # allocates a loop number via /dev/loop-control but then fails to open the
+    # missing device node. Pre-create /dev/loop0..31 via mknod before losetup.
     run("""
 set -e
+for i in $(seq 0 31); do
+    [ -b /dev/loop$i ] || mknod /dev/loop$i b 7 $i
+done
 LOOP=$(losetup --find --show --offset %d --sizelimit %d %s)
 trap 'umount /mnt/extlinux 2>/dev/null; losetup -d $LOOP 2>/dev/null' EXIT
 mkdir -p /mnt/extlinux

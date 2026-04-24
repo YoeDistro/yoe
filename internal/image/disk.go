@@ -323,7 +323,12 @@ func installBootloader(imgPath, rootfs string, unit *yoestar.Unit, projectDir st
 
 	// Run losetup + mount + extlinux as a single shell script inside the container.
 	// NoUser: true because losetup/mount require root.
+	// Docker's --privileged does not populate /dev/loop*, so pre-create the
+	// device nodes before losetup --find (see classes/image.star for details).
 	extlinuxScript := fmt.Sprintf(`set -e
+for i in $(seq 0 31); do
+    [ -b /dev/loop$i ] || mknod /dev/loop$i b 7 $i
+done
 LOOP=$(losetup --find --show --offset %d --sizelimit %d %s)
 trap 'umount /mnt/extlinux 2>/dev/null; losetup -d $LOOP 2>/dev/null' EXIT
 mkdir -p /mnt/extlinux
