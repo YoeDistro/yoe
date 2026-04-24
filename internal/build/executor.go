@@ -350,7 +350,17 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 
 			if step.Install != nil {
 				fmt.Fprintf(logW, "    [%d/%d] %s\n", i+1, len(t.Steps), installStepLabel(step.Install))
-				if err := doInstallStep(unit, step.Install, tctxData, env); err != nil {
+				// doInstallStep runs on the host, not in the sandbox, so
+				// override path-valued env vars that would otherwise point
+				// at container-side bind mounts (/build/...).
+				hostEnv := make(map[string]string, len(env)+3)
+				for k, v := range env {
+					hostEnv[k] = v
+				}
+				hostEnv["DESTDIR"] = destDir
+				hostEnv["SRCDIR"] = srcDir
+				hostEnv["SYSROOT"] = sysroot
+				if err := doInstallStep(unit, step.Install, tctxData, hostEnv); err != nil {
 					if !opts.Verbose {
 						fmt.Fprintf(w, "  build log: %s\n", logPath)
 					}

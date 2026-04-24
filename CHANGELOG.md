@@ -17,8 +17,10 @@ and this project adheres to
   `name`/`version`/`release`/`arch`/`machine`/`console`/`project` and any extra
   kwargs passed to `unit()`. The context map and the contents of the unit's
   files directory are hashed so template edits and extra-kwarg changes
-  invalidate the cache. `base-files`, `network-config`, and `simpleiot` migrated
-  off inline heredocs. See `docs/file-templates.md`.
+  invalidate the cache. Install steps run on the host (not inside the sandbox),
+  so `$DESTDIR` / `$SRCDIR` / `$SYSROOT` in install paths expand to host paths
+  rather than the container bind-mount paths. `base-files`, `network-config`,
+  and `simpleiot` migrated off inline heredocs. See `docs/file-templates.md`.
 - **CLI flag parsing with flag.NewFlagSet** — refactored all subcommands
   (`build`, `run`, `flash`, `init`, `clean`, `log`, `refs`, `graph`) from manual
   switch-based parsing to Go's `flag.NewFlagSet`. Adds free `--help` for every
