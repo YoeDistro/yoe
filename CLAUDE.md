@@ -179,3 +179,9 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
   suffix and the Status blockquote in the same change that ships the code. The
   goal: a reader of `docs/` can never confuse aspirational design with what
   `yoe` actually does today.
+- **Changelog entries stay simple and user-focused.** Write for the user of
+  `yoe`, not the engineer changing it. One or two short sentences, leading with
+  the user-visible benefit (what they see, what they can now do, what was broken
+  and is now fixed). Do not enumerate file paths, function names, or the
+  mechanism of the fix — those belong in the commit message and the code itself.
+  Past entries are immutable history; never edit them during refactors.
