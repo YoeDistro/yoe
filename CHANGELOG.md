@@ -8,9 +8,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-04-24
+
 - **Fix extlinux install under Docker 29** — `--privileged` containers no longer
   auto-populate `/dev/loop*`, so `losetup --find` failed during image assembly.
   Pre-create `/dev/loop0..31` with `mknod` before calling `losetup`.
+
+## [0.8.1] - 2026-04-24
+
 - **Fix rootfs ownership on booted systems** — files under `/`, `/bin`, `/etc`,
   `/usr`, etc. are now owned by `root:root` on the booted system instead of
   showing up as whatever user built the project.
