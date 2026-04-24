@@ -8,9 +8,9 @@ and this project adheres to
 
 ## [Unreleased]
 
-- **Fix extlinux install under Docker 29** — `--privileged` containers no
-  longer auto-populate `/dev/loop*`, so `losetup --find` failed during image
-  assembly. Pre-create `/dev/loop0..31` with `mknod` before calling `losetup`.
+- **Fix extlinux install under Docker 29** — `--privileged` containers no longer
+  auto-populate `/dev/loop*`, so `losetup --find` failed during image assembly.
+  Pre-create `/dev/loop0..31` with `mknod` before calling `losetup`.
 
 ## [0.8.0] - 2026-04-24
 
