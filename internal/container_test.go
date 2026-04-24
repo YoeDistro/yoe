@@ -32,8 +32,8 @@ func TestContainerRunArgs_Basic(t *testing.T) {
 	if last3[0] != "yoe/toolchain-musl:15-x86_64" {
 		t.Errorf("expected image tag %q, got %q", "yoe/toolchain-musl:15-x86_64", last3[0])
 	}
-	if last3[1] != "bash" || last3[2] != "-c" {
-		t.Errorf("expected 'bash -c', got %v", last3)
+	if last3[1] != "sh" || last3[2] != "-c" {
+		t.Errorf("expected 'sh -c', got %v", last3)
 	}
 }
 

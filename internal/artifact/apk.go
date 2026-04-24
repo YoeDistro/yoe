@@ -242,6 +242,11 @@ func generatePKGINFO(unit *yoestar.Unit, destDir, dataHashHex, arch string) stri
 		fmt.Fprintf(&b, "depend = %s\n", dep)
 	}
 
+	// Services (init scripts this package provides)
+	for _, svc := range unit.Services {
+		fmt.Fprintf(&b, "service = %s\n", svc)
+	}
+
 	return b.String()
 }
 

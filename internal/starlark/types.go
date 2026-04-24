@@ -4,14 +4,14 @@ import "go.starlark.net/starlark"
 
 // Project represents an evaluated PROJECT.star.
 type Project struct {
-	Name     string
-	Version  string
-	Defaults Defaults
-	Cache    CacheConfig
-	Sources  SourcesConfig
-	Modules  []ModuleRef
-	Machines map[string]*Machine
-	Units    map[string]*Unit
+	Name      string
+	Version   string
+	Defaults  Defaults
+	Cache     CacheConfig
+	Sources   SourcesConfig
+	Modules   []ModuleRef
+	Machines  map[string]*Machine
+	Units     map[string]*Unit
 }
 
 type Defaults struct {
@@ -91,6 +91,15 @@ type QEMUConfig struct {
 	Memory   string
 	Firmware string
 	Display  string
+	Ports    []string // host:guest port mappings for user-mode networking
+}
+
+// QEMUPorts returns the port mappings from the machine's QEMU config, or nil.
+func (m *Machine) QEMUPorts() []string {
+	if m.QEMU == nil {
+		return nil
+	}
+	return m.QEMU.Ports
 }
 
 // Unit represents an evaluated unit(), image(), etc. call.
@@ -117,6 +126,8 @@ type Unit struct {
 	// Build
 	Container     string // default container for all tasks
 	ContainerArch string // "target" or "host"
+	Sandbox       bool   // use bwrap sandbox inside container (default false)
+	Shell         string // shell for build commands: "sh" (default) or "bash"
 	Tasks     []Task
 	Provides    string // virtual package name
 	Module      string // module that registered this unit (empty = project root)
@@ -127,6 +138,7 @@ type Unit struct {
 	Services    []string
 	Conffiles   []string
 	Environment map[string]string
+	CacheDirs   map[string]string // container_path:host_subdir cache mounts
 
 	// Image-specific (class == "image")
 	Artifacts  []string // artifacts to install in rootfs
@@ -135,6 +147,11 @@ type Unit struct {
 	Timezone   string
 	Locale     string
 	Partitions []Partition
+
+	// Arbitrary kwargs passed to unit() that don't map to a typed field.
+	// Used for template context rendering and will be included in the unit
+	// hash (see docs/superpowers/plans/2026-04-23-file-templates.md Task 6).
+	Extra map[string]any
 }
 
 type Partition struct {
@@ -145,10 +162,27 @@ type Partition struct {
 	Contents []string
 }
 
-// Step is a single build action — either a shell command or a Starlark function.
+// Step is a single build action — shell command, Starlark function, or install step.
 type Step struct {
-	Command string            // shell command (set when step is a string)
-	Fn      starlark.Callable // Starlark function (set when step is callable)
+	Command string            // shell command
+	Fn      starlark.Callable // Starlark function
+	Install *InstallStep      // install_file / install_template step
+}
+
+// InstallStep describes a file installation action produced by the Starlark
+// install_file() / install_template() builtins. Executed by the build executor.
+//
+// BaseDir is the absolute directory captured from the .star file containing
+// the install_file() / install_template() call (see InstallStepValue). The
+// file to install lives at BaseDir/Src. Resolving relative to the call site
+// — rather than to the unit() call site — lets helper functions package
+// templates next to themselves and reuse them across many units.
+type InstallStep struct {
+	Kind    string // "file" or "template"
+	Src     string // path relative to BaseDir
+	Dest    string // env-expanded at execution time
+	Mode    int
+	BaseDir string // absolute directory; file to install lives at BaseDir/Src
 }
 
 // Task is a named build phase containing one or more steps.

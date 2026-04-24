@@ -8,8 +8,92 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Class task merge semantics** — units passing `tasks=[...]` to a class
+  (`autotools`, `cmake`, `go_binary`) no longer fully replace the class's
+  default task list. Instead, overrides are merged by name: a same-named task
+  replaces in place (preserving position and using the override's `steps`
+  fully), a new-named task is appended, and `task("name", remove=True)` drops a
+  base task. This lets units add a new task (e.g., `init-script`) without
+  restating the class-generated `build` task. The merge is implemented in a new
+  `classes/tasks.star` helper (`merge_tasks(base, overrides)`) shared by the
+  three classes. The `simpleiot` unit dropped its duplicated `build` task as a
+  result; existing units that override `build` are unaffected (replace-in-place
+  yields the same result as the previous full-replacement semantics).
+- **Fix install_template/install_file path resolution for helper functions** —
+  template paths now resolve relative to the `.star` file containing the
+  `install_template()`/`install_file()` call, not to the file that ultimately
+  calls `unit()`. Previously, a helper like
+  `base_files(name = "base-files-dev")` in `units/base/base-files.star` invoked
+  from `images/dev-image.star` looked for templates under
+  `images/base-files-dev/` instead of `units/base/base-files/`, breaking the
+  `dev-image` build. The base directory is now captured at install-step
+  construction time from the Starlark caller frame; existing units that define
+  and use install steps in the same `.star` file are unaffected.
+- **File templates** — units can declare external template files (`.tmpl`) and
+  static files in a directory alongside the `.star` file and install them via
+  new `install_template()` and `install_file()` step-value constructors placed
+  directly in `task(..., steps=[...])` alongside shell strings. Templates render
+  through Go `text/template` with a unified `map[string]any` context
+  auto-populated with
+  `name`/`version`/`release`/`arch`/`machine`/`console`/`project` and any extra
+  kwargs passed to `unit()`. The context map and the contents of the unit's
+  files directory are hashed so template edits and extra-kwarg changes
+  invalidate the cache. Install steps run on the host (not inside the sandbox),
+  so `$DESTDIR` / `$SRCDIR` / `$SYSROOT` in install paths expand to host paths
+  rather than the container bind-mount paths. `base-files`, `network-config`,
+  and `simpleiot` migrated off inline heredocs. See `docs/file-templates.md`.
+- **CLI flag parsing with flag.NewFlagSet** — refactored all subcommands
+  (`build`, `run`, `flash`, `init`, `clean`, `log`, `refs`, `graph`) from manual
+  switch-based parsing to Go's `flag.NewFlagSet`. Adds free `--help` for every
+  subcommand, consistent `-flag`/`--flag` support, and repeatable flags (e.g.,
+  `--port`). Net reduction of ~70 lines.
+- **Go module cache** — Go units now persist module and build caches across
+  builds via `cache_dirs = {"/go/cache": "go"}`. The executor mounts `cache/go/`
+  from the project directory into the container, and `GOMODCACHE` and `GOCACHE`
+  point to it. Subsequent builds skip module downloads.
+- **Fix service enablement for S-prefixed init scripts** — services declared
+  with an `S<NN>` prefix (like `S10network`) no longer get a symlink created on
+  top of the actual script, which was causing a symlink loop and breaking
+  networking at boot.
+- **Unit environment field** — units can declare `environment = {"KEY": "VAL"}`
+  which the executor merges into the build environment for all tasks. The Go
+  class uses this for `GOMODCACHE`/`GOCACHE` so custom tasks (like simpleiot)
+  get the cache env vars automatically.
+- **QEMU port forwarding in machine config** — `qemu_config()` now accepts a
+  `ports` field (e.g., `ports = ["2222:22", "8118:8118"]`) for default port
+  forwarding. CLI `--port` flags extend these. Fixed a bug where multiple ports
+  created duplicate QEMU netdevs. Fixed hostfwd syntax to use QEMU's
+  `host-:guest` format. QEMU machines default to SSH (2222:22), HTTP (8080:80),
+  and SimpleIoT (8118:8118).
+- **Service enablement moved to units** — units now declare
+  `services = ["sshd"]` to indicate which init scripts they provide. The image
+  assembly auto-enables services by reading `service` metadata from installed
+  APKs and creating `S50<name>` symlinks (or custom priority like `S10network`).
+  The `services` parameter on `image()` is removed.
+- **Design specs** — added `docs/starlark-packaging-images.md` (move packaging
+  and image assembly to composable Starlark tasks) and `docs/file-templates.md`
+  (external template files using Go `text/template`, replacing inline heredocs
+  in units).
+- **Go class uses golang container** — `go_binary()` now defaults to the
+  `golang:1.24` external container image instead of `toolchain-musl`.
+  Cross-compilation is handled via `GOARCH`/`GOOS` environment variables with
+  `CGO_ENABLED=0` for static binaries, so the container always runs at host
+  architecture (no QEMU overhead).
+- **Per-unit sandbox and shell selection** — units now have `sandbox` (bool,
+  default false) and `shell` (string, default "sh") fields. The autotools,
+  cmake, and image classes set `sandbox=True, shell="bash"` for bwrap isolation.
+  External containers (like `golang:1.24`) use the defaults — no bwrap, POSIX sh
+  — since they don't ship bwrap or bash.
+- **simpleiot unit** — new `go_binary` unit for SimpleIoT v0.18.5, an IoT
+  application for sensor data, telemetry, and device management.
+- **ca-certificates unit** — Mozilla CA bundle for TLS verification. Added to
+  dev-image alongside simpleiot.
+- **Per-task container resolution** — tasks can override the unit-level
+  container via `task(container = "...")`. The executor resolves the container
+  per-task, falling back to the unit default.
 - **TUI: amber `[yoe]` title** — the top-left title in the TUI now renders
   `[yoe]` in amber on black, matching the project logo.
+- Fix module URLs in `init` generated project file.
 
 ## [0.7.1] - 2026-04-06
 

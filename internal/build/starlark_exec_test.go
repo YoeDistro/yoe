@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"go.starlark.net/starlark"
+	"go.starlark.net/syntax"
 )
 
 // fakeExecer records calls and returns a configurable result.
@@ -31,7 +32,7 @@ func TestFnRun_Success(t *testing.T) {
 	thread := NewBuildThread(context.Background(), cfg, fake)
 
 	predeclared := BuildPredeclared()
-	globals, err := starlark.ExecFile(thread, "test.star", `
+	globals, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, "test.star", `
 result = run("make -j4")
 `, predeclared)
 	if err != nil {
@@ -62,7 +63,7 @@ func TestFnRun_FailureWithCheck(t *testing.T) {
 	thread := NewBuildThread(context.Background(), cfg, fake)
 
 	predeclared := BuildPredeclared()
-	_, err := starlark.ExecFile(thread, "test.star", `
+	_, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, "test.star", `
 run("false")
 `, predeclared)
 	if err == nil {
@@ -79,7 +80,7 @@ func TestFnRun_FailureWithCheckFalse(t *testing.T) {
 	thread := NewBuildThread(context.Background(), cfg, fake)
 
 	predeclared := BuildPredeclared()
-	globals, err := starlark.ExecFile(thread, "test.star", `
+	globals, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, "test.star", `
 result = run("false", check=False)
 `, predeclared)
 	if err != nil {
@@ -99,7 +100,7 @@ func TestFnRun_MultipleCalls(t *testing.T) {
 	thread := NewBuildThread(context.Background(), cfg, fake)
 
 	predeclared := BuildPredeclared()
-	_, err := starlark.ExecFile(thread, "test.star", `
+	_, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, "test.star", `
 run("./configure")
 run("make -j4")
 run("make install DESTDIR=/build/destdir")

@@ -96,7 +96,7 @@ func NewBuildThread(ctx context.Context, cfg *SandboxConfig, execer Execer) *sta
 	t.SetLocal(sandboxKey, cfg)
 	t.SetLocal(execerKey, execer)
 	t.SetLocal(contextKey, ctx)
-	// Store the real run() function so the global placeholder can delegate.
+	// Store the real run() so the global placeholder can delegate.
 	t.SetLocal("yoe.run", starlark.NewBuiltin("run", fnRun))
 	return t
 }
@@ -173,7 +173,7 @@ func fnRun(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kw
 }
 
 // BuildPredeclared returns the predeclared names available in build-time
-// Starlark threads. Currently provides only run().
+// Starlark threads. Provides run().
 func BuildPredeclared() starlark.StringDict {
 	return starlark.StringDict{
 		"run": starlark.NewBuiltin("run", fnRun),

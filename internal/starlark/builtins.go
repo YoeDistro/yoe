@@ -28,7 +28,9 @@ func (e *Engine) builtins() starlark.StringDict {
 		"task":        starlark.NewBuiltin("task", fnTask),
 		"command":     starlark.NewBuiltin("command", e.fnCommand),
 		"arg":         starlark.NewBuiltin("arg", fnArg),
-		"run":         starlark.NewBuiltin("run", fnRunPlaceholder),
+		"run":            starlark.NewBuiltin("run", fnRunPlaceholder),
+		"install_file":     starlark.NewBuiltin("install_file", fnInstallFile),
+		"install_template": starlark.NewBuiltin("install_template", fnInstallTemplate),
 		"True":        starlark.True,
 		"False":       starlark.False,
 	}
@@ -73,6 +75,70 @@ func kwString(kwargs []starlark.Tuple, key string) string {
 	return ""
 }
 
+// ParseTaskList converts a Starlark list of task structs into Go Task values.
+func ParseTaskList(list *starlark.List) []Task {
+	var tasks []Task
+	iter := list.Iterate()
+	defer iter.Done()
+	var v starlark.Value
+	for iter.Next(&v) {
+		s, ok := v.(*starlarkstruct.Struct)
+		if !ok {
+			continue
+		}
+		t := Task{
+			Name:      structString(s, "name"),
+			Container: structString(s, "container"),
+		}
+		if rv, err := s.Attr("run"); err == nil {
+			if cmd, ok := rv.(starlark.String); ok {
+				t.Steps = []Step{{Command: string(cmd)}}
+			}
+		}
+		if rv, err := s.Attr("fn"); err == nil {
+			if fn, ok := rv.(starlark.Callable); ok {
+				t.Steps = []Step{{Fn: fn}}
+			}
+		}
+		if rv, err := s.Attr("steps"); err == nil {
+			if list, ok := rv.(*starlark.List); ok {
+				si := list.Iterate()
+				var sv starlark.Value
+				for si.Next(&sv) {
+					switch val := sv.(type) {
+					case starlark.String:
+						t.Steps = append(t.Steps, Step{Command: string(val)})
+					case *InstallStepValue:
+						t.Steps = append(t.Steps, Step{Install: &InstallStep{
+							Kind:    val.Kind,
+							Src:     val.Src,
+							Dest:    val.Dest,
+							Mode:    val.Mode,
+							BaseDir: val.BaseDir,
+						}})
+					case starlark.Callable:
+						t.Steps = append(t.Steps, Step{Fn: val})
+					}
+				}
+				si.Done()
+			}
+		}
+		tasks = append(tasks, t)
+	}
+	return tasks
+}
+
+func kwBool(kwargs []starlark.Tuple, key string) bool {
+	for _, kv := range kwargs {
+		if string(kv[0].(starlark.String)) == key {
+			if b, ok := kv[1].(starlark.Bool); ok {
+				return bool(b)
+			}
+		}
+	}
+	return false
+}
+
 func kwInt(kwargs []starlark.Tuple, key string) int {
 	for _, kv := range kwargs {
 		if string(kv[0].(starlark.String)) == key {
@@ -103,6 +169,94 @@ func kwStringList(kwargs []starlark.Tuple, key string) []string {
 		}
 	}
 	return nil
+}
+
+func kwStringMap(kwargs []starlark.Tuple, key string) map[string]string {
+	for _, kv := range kwargs {
+		if string(kv[0].(starlark.String)) == key {
+			if d, ok := kv[1].(*starlark.Dict); ok {
+				m := make(map[string]string, d.Len())
+				for _, item := range d.Items() {
+					if k, ok := item[0].(starlark.String); ok {
+						if v, ok := item[1].(starlark.String); ok {
+							m[string(k)] = string(v)
+						}
+					}
+				}
+				return m
+			}
+		}
+	}
+	return nil
+}
+
+// reservedUnitKwargs lists the kwargs that unit() and image() map to typed
+// fields on the Unit struct. Kwargs not in this set are captured into
+// Unit.Extra for template context rendering.
+//
+// When a new typed field is added to the Unit struct, add its kwarg name here
+// too so it isn't double-captured into Extra.
+var reservedUnitKwargs = map[string]bool{
+	"name": true, "version": true, "release": true, "scope": true,
+	"description": true, "license": true, "source": true, "sha256": true,
+	"tag": true, "branch": true, "patches": true, "deps": true,
+	"runtime_deps": true, "container": true, "container_arch": true,
+	"sandbox": true, "shell": true, "tasks": true, "provides": true,
+	"services": true, "conffiles": true, "environment": true,
+	"cache_dirs": true, "artifacts": true, "exclude": true,
+	"hostname": true, "timezone": true, "locale": true,
+	"partitions": true, "unit_class": true,
+}
+
+// starlarkToGo converts a Starlark value into a Go value suitable for JSON
+// serialization and Go template rendering. Returns an error for unsupported
+// types so unit definitions fail loudly instead of silently dropping data.
+func starlarkToGo(v starlark.Value) (any, error) {
+	switch x := v.(type) {
+	case starlark.NoneType:
+		return nil, nil
+	case starlark.Bool:
+		return bool(x), nil
+	case starlark.String:
+		return string(x), nil
+	case starlark.Int:
+		n, ok := x.Int64()
+		if !ok {
+			return nil, fmt.Errorf("int value out of int64 range")
+		}
+		return n, nil
+	case starlark.Float:
+		return float64(x), nil
+	case *starlark.List:
+		out := make([]any, 0, x.Len())
+		it := x.Iterate()
+		defer it.Done()
+		var item starlark.Value
+		for it.Next(&item) {
+			g, err := starlarkToGo(item)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, g)
+		}
+		return out, nil
+	case *starlark.Dict:
+		out := make(map[string]any, x.Len())
+		for _, kv := range x.Items() {
+			ks, ok := kv[0].(starlark.String)
+			if !ok {
+				return nil, fmt.Errorf("dict key must be string, got %s", kv[0].Type())
+			}
+			g, err := starlarkToGo(kv[1])
+			if err != nil {
+				return nil, err
+			}
+			out[string(ks)] = g
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("unsupported type %s", v.Type())
+	}
 }
 
 func kwStruct(kwargs []starlark.Tuple, key string) *starlarkstruct.Struct {
@@ -360,6 +514,7 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 					Memory:   structString(s, "memory"),
 					Firmware: structString(s, "firmware"),
 					Display:  structString(s, "display"),
+					Ports:    structStringList(s, "ports"),
 				}
 			}
 		case "partitions":
@@ -423,9 +578,13 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 		RuntimeDeps: kwStringList(kwargs, "runtime_deps"),
 		Container:     kwString(kwargs, "container"),
 		ContainerArch: kwString(kwargs, "container_arch"),
+		Sandbox:       kwBool(kwargs, "sandbox"),
+		Shell:         kwString(kwargs, "shell"),
 		Provides:    kwString(kwargs, "provides"),
 		Services:    kwStringList(kwargs, "services"),
 		Conffiles:   kwStringList(kwargs, "conffiles"),
+		Environment: kwStringMap(kwargs, "environment"),
+		CacheDirs:   kwStringMap(kwargs, "cache_dirs"),
 		Artifacts:   kwStringList(kwargs, "artifacts"),
 		Exclude:     kwStringList(kwargs, "exclude"),
 		Hostname:    kwString(kwargs, "hostname"),
@@ -437,47 +596,7 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 	for _, kv := range kwargs {
 		if string(kv[0].(starlark.String)) == "tasks" {
 			if list, ok := kv[1].(*starlark.List); ok {
-				iter := list.Iterate()
-				defer iter.Done()
-				var v starlark.Value
-				for iter.Next(&v) {
-					s, ok := v.(*starlarkstruct.Struct)
-					if !ok {
-						continue
-					}
-					t := Task{
-						Name:      structString(s, "name"),
-						Container: structString(s, "container"),
-					}
-					// Parse steps: run (single string), fn (single callable),
-					// or steps (list of strings/callables)
-					if rv, err := s.Attr("run"); err == nil {
-						if cmd, ok := rv.(starlark.String); ok {
-							t.Steps = []Step{{Command: string(cmd)}}
-						}
-					}
-					if rv, err := s.Attr("fn"); err == nil {
-						if fn, ok := rv.(starlark.Callable); ok {
-							t.Steps = []Step{{Fn: fn}}
-						}
-					}
-					if rv, err := s.Attr("steps"); err == nil {
-						if list, ok := rv.(*starlark.List); ok {
-							si := list.Iterate()
-							var sv starlark.Value
-							for si.Next(&sv) {
-								switch val := sv.(type) {
-								case starlark.String:
-									t.Steps = append(t.Steps, Step{Command: string(val)})
-								case starlark.Callable:
-									t.Steps = append(t.Steps, Step{Fn: val})
-								}
-							}
-							si.Done()
-						}
-					}
-					r.Tasks = append(r.Tasks, t)
-				}
+				r.Tasks = append(r.Tasks, ParseTaskList(list)...)
 			}
 		}
 	}
@@ -507,6 +626,22 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 				}
 			}
 		}
+	}
+
+	// Capture unrecognized kwargs into Extra (used for template context + hash).
+	for _, kv := range kwargs {
+		k := string(kv[0].(starlark.String))
+		if reservedUnitKwargs[k] {
+			continue
+		}
+		v, err := starlarkToGo(kv[1])
+		if err != nil {
+			return nil, fmt.Errorf("%s() kwarg %q: %w", class, k, err)
+		}
+		if r.Extra == nil {
+			r.Extra = make(map[string]any)
+		}
+		r.Extra[k] = v
 	}
 
 	r.Module = e.currentModule

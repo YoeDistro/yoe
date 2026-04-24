@@ -294,6 +294,11 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		"REPO":            filepath.Join("/project", repoRelPath(proj, opts.ProjectDir)),
 	}
 
+	// Merge unit-level environment variables (from classes like go_binary)
+	for k, v := range unit.Environment {
+		env[k] = v
+	}
+
 	// Resolve container image for this unit
 	containerImage := resolveContainerImage(proj, unit, opts.Arch)
 
@@ -304,14 +309,64 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		hostDir = unit.DefinedIn
 	}
 
+	// Resolve cache dir mounts: unit's cache_dirs maps container paths to
+	// subdirectory names under the project's cache directory.
+	var cacheDirs map[string]string
+	if len(unit.CacheDirs) > 0 {
+		cacheDirs = make(map[string]string, len(unit.CacheDirs))
+		for containerPath, subdir := range unit.CacheDirs {
+			hostPath := filepath.Join(opts.ProjectDir, "cache", subdir)
+			os.MkdirAll(hostPath, 0755)
+			cacheDirs[hostPath] = containerPath
+		}
+	}
+
+	// Build the template context data map for install_file / install_template.
+	// Unit identity fields + auto-populated machine/arch/console/project,
+	// with unit.Extra kwargs overriding on collision.
+	projectName := ""
+	if proj != nil {
+		projectName = proj.Name
+	}
+	tctxData := BuildTemplateContext(unit, opts.Arch, opts.Machine, console, projectName)
+
 	// Execute tasks
 	for ti, t := range unit.Tasks {
 		fmt.Fprintf(w, "  [%d/%d] task: %s\n", ti+1, len(unit.Tasks), t.Name)
 		fmt.Fprintf(logW, "  task: %s (%d steps)\n", t.Name, len(t.Steps))
 
+		// Per-task container override
+		taskContainer := containerImage
+		if t.Container != "" {
+			taskUnit := *unit
+			taskUnit.Container = t.Container
+			taskContainer = resolveContainerImage(proj, &taskUnit, opts.Arch)
+		}
+
 		for i, step := range t.Steps {
 			if err := ctx.Err(); err != nil {
 				return fmt.Errorf("build cancelled")
+			}
+
+			if step.Install != nil {
+				fmt.Fprintf(logW, "    [%d/%d] %s\n", i+1, len(t.Steps), installStepLabel(step.Install))
+				// doInstallStep runs on the host, not in the sandbox, so
+				// override path-valued env vars that would otherwise point
+				// at container-side bind mounts (/build/...).
+				hostEnv := make(map[string]string, len(env)+3)
+				for k, v := range env {
+					hostEnv[k] = v
+				}
+				hostEnv["DESTDIR"] = destDir
+				hostEnv["SRCDIR"] = srcDir
+				hostEnv["SYSROOT"] = sysroot
+				if err := doInstallStep(unit, step.Install, tctxData, hostEnv); err != nil {
+					if !opts.Verbose {
+						fmt.Fprintf(w, "  build log: %s\n", logPath)
+					}
+					return fmt.Errorf("task %s: %w", t.Name, err)
+				}
+				continue
 			}
 
 			if step.Command != "" {
@@ -319,13 +374,16 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 				cfg := &SandboxConfig{
 					Ctx:        ctx,
 					Arch:       opts.Arch,
-					Container:  containerImage,
+					Container:  taskContainer,
+					Sandbox:    unit.Sandbox,
+					Shell:      unit.Shell,
 					SrcDir:     srcDir,
 					DestDir:    destDir,
 					Sysroot:    sysroot,
 					Env:        env,
 					ProjectDir: opts.ProjectDir,
 					HostDir:    hostDir,
+					CacheDirs:  cacheDirs,
 					Stdout:     logW,
 					Stderr:     logW,
 				}
@@ -340,13 +398,16 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 				cfg := &SandboxConfig{
 					Ctx:        ctx,
 					Arch:       opts.Arch,
-					Container:  containerImage,
+					Container:  taskContainer,
+					Sandbox:    unit.Sandbox,
+					Shell:      unit.Shell,
 					SrcDir:     srcDir,
 					DestDir:    destDir,
 					Sysroot:    sysroot,
 					Env:        env,
 					ProjectDir: opts.ProjectDir,
 					HostDir:    hostDir,
+					CacheDirs:  cacheDirs,
 					Stdout:     logW,
 					Stderr:     logW,
 				}
@@ -361,7 +422,8 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		}
 	}
 
-	// Package the output into an .apk and publish to the local repo
+	// Package the output into an .apk and publish to the local repo.
+	// Then stage destdir for downstream units' per-unit sysroots.
 	if unit.Class != "image" && unit.Class != "container" {
 		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), sd)
 		if err != nil {
@@ -374,7 +436,6 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 			return fmt.Errorf("publishing to repo: %w", err)
 		}
 
-		// Stage destdir for downstream units' per-unit sysroots
 		if err := StageSysroot(destDir, buildDir); err != nil {
 			fmt.Fprintf(w, "  (warning: sysroot staging failed: %v)\n", err)
 		}
@@ -439,6 +500,16 @@ func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[strin
 		fmt.Fprintf(w, "  %-20s [%s] %s%s\n", name, unit.Class, hashes[name][:12], cached)
 	}
 	return nil
+}
+
+// hasTask returns true if the unit has a task with the given name.
+func hasTask(unit *yoestar.Unit, name string) bool {
+	for _, t := range unit.Tasks {
+		if t.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveContainerImage returns the Docker image tag for a unit's container.

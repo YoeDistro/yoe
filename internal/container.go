@@ -44,6 +44,7 @@ type Mount struct {
 
 // ContainerRunConfig configures a single command execution inside the container.
 type ContainerRunConfig struct {
+	Shell       string            // shell to use: "sh" (default) or "bash"
 	Ctx         context.Context   // optional; nil means background
 	Arch        string            // target architecture (empty = host arch)
 	Image       string            // Docker image tag (overrides default containerTag)
@@ -192,7 +193,11 @@ func containerRunArgs(cfg ContainerRunConfig) ([]string, error) {
 
 	args = append(args, "-w", "/project")
 	args = append(args, cfg.Image)
-	args = append(args, "bash", "-c")
+	shell := cfg.Shell
+	if shell == "" {
+		shell = "sh"
+	}
+	args = append(args, shell, "-c")
 
 	return args, nil
 }

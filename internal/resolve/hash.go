@@ -2,7 +2,11 @@ package resolve
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -48,7 +52,26 @@ func UnitHash(unit *yoestar.Unit, arch string, depHashes map[string]string) stri
 	}
 	fmt.Fprintf(h, "container:%s\n", unit.Container)
 	fmt.Fprintf(h, "container_arch:%s\n", unit.ContainerArch)
+	fmt.Fprintf(h, "sandbox:%v\n", unit.Sandbox)
+	fmt.Fprintf(h, "shell:%s\n", unit.Shell)
 	fmt.Fprintf(h, "provides:%s\n", unit.Provides)
+	fmt.Fprintf(h, "services:%s\n", strings.Join(unit.Services, ","))
+
+	// Extra kwargs — JSON-encoded with sorted keys for stability.
+	// Go's encoding/json sorts map keys when marshaling map[string]any,
+	// so the result is deterministic regardless of iteration order.
+	if len(unit.Extra) > 0 {
+		if b, err := json.Marshal(sortedMap(unit.Extra)); err == nil {
+			fmt.Fprintf(h, "extra:%s\n", b)
+		}
+	}
+
+	// Unit files directory: <DefinedIn>/<unit-name>/ — hash file contents
+	// so template and static file edits invalidate the cache.
+	if unit.DefinedIn != "" {
+		filesDir := filepath.Join(unit.DefinedIn, unit.Name)
+		hashFilesDir(h, filesDir)
+	}
 
 	// Dependencies — include their hashes for transitivity
 	deps := make([]string, len(unit.Deps))
@@ -95,4 +118,55 @@ func ComputeAllHashes(dag *DAG, arch, machine string) (map[string]string, error)
 	}
 
 	return hashes, nil
+}
+
+// sortedMap walks a map[string]any recursively and returns a structurally
+// identical value with nested map keys enumerated in a deterministic order.
+// Go's encoding/json sorts top-level map keys already; this helper covers
+// nested containers so the whole tree serializes deterministically.
+func sortedMap(v any) any {
+	switch x := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(x))
+		for k, val := range x {
+			out[k] = sortedMap(val)
+		}
+		return out
+	case []any:
+		out := make([]any, len(x))
+		for i, e := range x {
+			out[i] = sortedMap(e)
+		}
+		return out
+	default:
+		return v
+	}
+}
+
+// hashFilesDir writes a deterministic digest of the files under dir into h.
+// Paths are sorted so iteration order doesn't change the hash. Missing
+// directories are silently skipped — not every unit has a files directory.
+func hashFilesDir(h io.Writer, dir string) {
+	info, err := os.Stat(dir)
+	if err != nil || !info.IsDir() {
+		return
+	}
+	var paths []string
+	_ = filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		paths = append(paths, p)
+		return nil
+	})
+	sort.Strings(paths)
+	for _, p := range paths {
+		rel, _ := filepath.Rel(dir, p)
+		content, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		sum := sha256.Sum256(content)
+		fmt.Fprintf(h, "file:%s:%x\n", rel, sum[:])
+	}
 }

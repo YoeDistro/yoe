@@ -326,6 +326,30 @@ project(name = "second", version = "2.0.0")
 	}
 }
 
+func TestEvalUnitCacheDirs(t *testing.T) {
+	src := `
+unit(
+    name = "mygo",
+    version = "1.0.0",
+    cache_dirs = {"/go/cache": "go"},
+)
+`
+	eng := NewEngine()
+	if err := eng.ExecString("units/mygo.star", src); err != nil {
+		t.Fatalf("ExecString: %v", err)
+	}
+	u := eng.Units()["mygo"]
+	if u == nil {
+		t.Fatal("unit 'mygo' not found")
+	}
+	if len(u.CacheDirs) != 1 {
+		t.Fatalf("CacheDirs = %v, want 1 entry", u.CacheDirs)
+	}
+	if u.CacheDirs["/go/cache"] != "go" {
+		t.Errorf("CacheDirs[/go/cache] = %q, want %q", u.CacheDirs["/go/cache"], "go")
+	}
+}
+
 func TestEvalUnitDuplicate(t *testing.T) {
 	src := `
 unit(name = "foo", version = "1.0.0")
@@ -338,5 +362,49 @@ unit(name = "foo", version = "2.0.0")
 	}
 	if !strings.Contains(err.Error(), "already defined") {
 		t.Errorf("error = %q, want it to contain 'already defined'", err)
+	}
+}
+
+func TestRegisterUnit_CapturesExtraKwargs(t *testing.T) {
+	eng := NewEngine()
+	src := `
+unit(
+    name = "my-app",
+    version = "1.0.0",
+    port = 8080,
+    log_level = "info",
+    enable_tls = True,
+    workers = 4,
+    tasks = [],
+)
+`
+	if err := eng.ExecString("test.star", src); err != nil {
+		t.Fatalf("ExecString: %v", err)
+	}
+	u := eng.Units()["my-app"]
+	if u == nil {
+		t.Fatal("unit not registered")
+	}
+	if u.Extra == nil {
+		t.Fatal("Extra is nil")
+	}
+	if got := u.Extra["port"]; got != int64(8080) {
+		t.Errorf("Extra[port] = %v (%T), want int64(8080)", got, got)
+	}
+	if got := u.Extra["log_level"]; got != "info" {
+		t.Errorf("Extra[log_level] = %v, want \"info\"", got)
+	}
+	if got := u.Extra["enable_tls"]; got != true {
+		t.Errorf("Extra[enable_tls] = %v, want true", got)
+	}
+	if got := u.Extra["workers"]; got != int64(4) {
+		t.Errorf("Extra[workers] = %v (%T), want int64(4)", got, got)
+	}
+	// Known fields must NOT appear in Extra
+	if _, ok := u.Extra["name"]; ok {
+		t.Error("Extra[name] should not be set (name is a typed field)")
+	}
+	if _, ok := u.Extra["tasks"]; ok {
+		t.Error("Extra[tasks] should not be set (tasks is a typed field)")
 	}
 }

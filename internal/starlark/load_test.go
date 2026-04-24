@@ -163,3 +163,94 @@ shared_builder(name = "pkg-b", version = "2.0")
 		t.Error("expected successful cache entry")
 	}
 }
+
+// TestMergeTasks exercises the merge_tasks helper used by classes to allow
+// units to add or replace named tasks without restating the class's defaults.
+func TestMergeTasks(t *testing.T) {
+	tmp := t.TempDir()
+
+	// Drop in a copy of the merge_tasks helper.
+	classesDir := filepath.Join(tmp, "classes")
+	if err := os.MkdirAll(classesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	helperSrc, err := os.ReadFile("../../modules/units-core/classes/tasks.star")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(classesDir, "tasks.star"), helperSrc, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// A class that uses merge_tasks and registers a unit named after the
+	// resulting task list, so we can read tasks back through Engine.Units().
+	if err := os.WriteFile(filepath.Join(classesDir, "demo.star"), []byte(`
+load("//classes/tasks.star", "merge_tasks")
+
+def demo(name, overrides):
+    base = [
+        task("fetch",     steps = ["echo fetch"]),
+        task("build",     steps = ["echo base-build"]),
+        task("install",   steps = ["echo install"]),
+    ]
+    unit(name = name, version = "1.0",
+         tasks = merge_tasks(base, overrides))
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	unitsDir := filepath.Join(tmp, "units")
+	if err := os.MkdirAll(unitsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(unitsDir, "u.star"), []byte(`
+load("//classes/demo.star", "demo")
+
+# Replace 'build', append a brand new task, and remove 'fetch'.
+demo(name = "u", overrides = [
+    task("build",      steps = ["echo overridden-build"]),
+    task("post",       steps = ["echo post"]),
+    task("fetch",      remove = True),
+])
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	eng := NewEngine()
+	eng.SetProjectRoot(tmp)
+	if err := eng.ExecFile(filepath.Join(unitsDir, "u.star")); err != nil {
+		t.Fatalf("ExecFile: %v", err)
+	}
+
+	u, ok := eng.Units()["u"]
+	if !ok {
+		t.Fatal("unit 'u' not registered")
+	}
+
+	gotNames := []string{}
+	for _, tk := range u.Tasks {
+		gotNames = append(gotNames, tk.Name)
+	}
+	wantNames := []string{"build", "install", "post"}
+	if len(gotNames) != len(wantNames) {
+		t.Fatalf("task names = %v, want %v", gotNames, wantNames)
+	}
+	for i, name := range wantNames {
+		if gotNames[i] != name {
+			t.Errorf("task[%d] = %q, want %q (full list: %v)", i, gotNames[i], name, gotNames)
+		}
+	}
+
+	// Verify the replaced 'build' has the override's steps, not the base's.
+	var buildSteps []string
+	for _, tk := range u.Tasks {
+		if tk.Name == "build" {
+			for _, s := range tk.Steps {
+				buildSteps = append(buildSteps, s.Command)
+			}
+		}
+	}
+	if len(buildSteps) != 1 || buildSteps[0] != "echo overridden-build" {
+		t.Errorf("build steps = %v, want [\"echo overridden-build\"]", buildSteps)
+	}
+}

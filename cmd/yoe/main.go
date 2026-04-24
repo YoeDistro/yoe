@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	yoe "github.com/YoeDistro/yoe-ng/internal"
 	"github.com/YoeDistro/yoe-ng/internal/bootstrap"
@@ -24,6 +26,15 @@ import (
 var version = "dev"
 
 var globalProjectFile string
+
+// stringSlice implements flag.Value for repeatable string flags.
+type stringSlice []string
+
+func (s *stringSlice) String() string { return strings.Join(*s, ", ") }
+func (s *stringSlice) Set(v string) error {
+	*s = append(*s, v)
+	return nil
+}
 
 func main() {
 	// Parse global flags before command dispatch
@@ -181,58 +192,40 @@ func resolveTargetArch(proj *yoestar.Project, machineName string) (string, error
 }
 
 func cmdBuild(args []string) {
-	force := false
-	clean := false
-	noCache := false
-	dryRun := false
-	verbose := false
-	machineName := ""
-	var units []string
+	fs := flag.NewFlagSet("build", flag.ExitOnError)
+	force := fs.Bool("force", false, "force rebuild even if cached")
+	clean := fs.Bool("clean", false, "clean build directory before building")
+	noCache := fs.Bool("no-cache", false, "disable cache lookup")
+	dryRun := fs.Bool("dry-run", false, "show what would be built without building")
+	verbose := fs.Bool("verbose", false, "verbose output")
+	machineName := fs.String("machine", "", "target machine")
+	all := fs.Bool("all", false, "build all units")
+	fs.BoolVar(verbose, "v", false, "verbose output (shorthand)")
+	fs.Parse(args)
 
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--force", "-force":
-			force = true
-		case "--clean":
-			clean = true
-		case "--no-cache":
-			noCache = true
-		case "--dry-run":
-			dryRun = true
-		case "--verbose", "-v":
-			verbose = true
-		case "--machine":
-			if i+1 < len(args) {
-				machineName = args[i+1]
-				i++
-			}
-		case "--all":
-			// build all — units stays empty
-		default:
-			units = append(units, args[i])
-		}
-	}
+	_ = all // build all when no positional args — handled by empty units slice
+	units := fs.Args()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	proj := loadProjectWithMachine(machineName)
-	targetArch, err := resolveTargetArch(proj, machineName)
+	proj := loadProjectWithMachine(*machineName)
+	targetArch, err := resolveTargetArch(proj, *machineName)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
-	resolvedMachine := machineName
+	resolvedMachine := *machineName
 	if resolvedMachine == "" {
 		resolvedMachine = proj.Defaults.Machine
 	}
 	opts := build.Options{
 		Ctx:        ctx,
-		Force:      force,
-		Clean:      clean,
-		NoCache:    noCache,
-		DryRun:     dryRun,
-		Verbose:    verbose,
+		Force:      *force,
+		Clean:      *clean,
+		NoCache:    *noCache,
+		DryRun:     *dryRun,
+		Verbose:    *verbose,
 		ProjectDir: projectDir(),
 		Arch:       targetArch,
 		Machine:    resolvedMachine,
@@ -305,6 +298,8 @@ func cmdContainerShell() {
 	build.EnsureDir(destDir)
 
 	cfg := &build.SandboxConfig{
+		Sandbox:    true,
+		Shell:      "bash",
 		SrcDir:     srcDir,
 		DestDir:    destDir,
 		Sysroot:    sysroot,
@@ -335,6 +330,7 @@ func cmdContainerShell() {
 	proj := loadProject()
 
 	if err := yoe.RunInContainer(yoe.ContainerRunConfig{
+		Shell:       "bash",
 		Image:       yoe.DefaultContainerImage(proj.Units),
 		Command:     bwrapCmd,
 		ProjectDir:  projectDir,
@@ -347,30 +343,16 @@ func cmdContainerShell() {
 }
 
 func cmdInit(args []string) {
-	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s init <project-dir> [-machine <name>]\n", os.Args[0])
+	fs := flag.NewFlagSet("init", flag.ExitOnError)
+	machine := fs.String("machine", "", "default machine for the project")
+	fs.Parse(args)
+
+	if fs.NArg() < 1 {
+		fmt.Fprintf(os.Stderr, "Usage: %s init <project-dir> [--machine <name>]\n", os.Args[0])
 		os.Exit(1)
 	}
 
-	projectDir := args[0]
-	machine := ""
-
-	for i := 1; i < len(args); i++ {
-		switch args[i] {
-		case "-machine", "--machine":
-			if i+1 >= len(args) {
-				fmt.Fprintf(os.Stderr, "Error: -machine requires a name\n")
-				os.Exit(1)
-			}
-			machine = args[i+1]
-			i++
-		default:
-			fmt.Fprintf(os.Stderr, "Unknown flag: %s\n", args[i])
-			os.Exit(1)
-		}
-	}
-
-	if err := yoe.RunInit(projectDir, machine); err != nil {
+	if err := yoe.RunInit(fs.Arg(0), *machine); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -403,30 +385,19 @@ func cmdConfig(args []string) {
 }
 
 func cmdClean(args []string) {
-	all := false
-	force := false
-	locks := false
-	var units []string
-
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "-all", "--all":
-			all = true
-		case "--force", "-f":
-			force = true
-		case "--locks":
-			locks = true
-		default:
-			units = append(units, args[i])
-		}
-	}
+	fs := flag.NewFlagSet("clean", flag.ExitOnError)
+	all := fs.Bool("all", false, "remove all build artifacts")
+	force := fs.Bool("force", false, "skip confirmation prompt")
+	locks := fs.Bool("locks", false, "remove stale lock files")
+	fs.BoolVar(force, "f", false, "skip confirmation prompt (shorthand)")
+	fs.Parse(args)
 
 	dir := os.Getenv("YOE_PROJECT")
 	if dir == "" {
 		dir = "."
 	}
 
-	if locks {
+	if *locks {
 		if err := yoe.CleanLocks(dir, build.Arch()); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -434,7 +405,7 @@ func cmdClean(args []string) {
 		return
 	}
 
-	if err := yoe.RunClean(dir, build.Arch(), all, force, units); err != nil {
+	if err := yoe.RunClean(dir, build.Arch(), *all, *force, fs.Args()); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -491,40 +462,31 @@ func cmdDesc(args []string) {
 }
 
 func cmdRefs(args []string) {
-	if len(args) < 1 {
+	fs := flag.NewFlagSet("refs", flag.ExitOnError)
+	direct := fs.Bool("direct", false, "show only direct dependents")
+	fs.Parse(args)
+
+	if fs.NArg() < 1 {
 		fmt.Fprintf(os.Stderr, "Usage: %s refs <unit> [--direct]\n", os.Args[0])
 		os.Exit(1)
 	}
-	name := args[0]
-	direct := false
-	for _, a := range args[1:] {
-		if a == "--direct" || a == "-direct" {
-			direct = true
-		}
-	}
+
 	proj := loadProject()
-	if err := resolve.Refs(os.Stdout, proj, name, direct); err != nil {
+	if err := resolve.Refs(os.Stdout, proj, fs.Arg(0), *direct); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
 func cmdGraph(args []string) {
-	format := "text"
-	filter := ""
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--format", "-format":
-			if i+1 < len(args) {
-				format = args[i+1]
-				i++
-			}
-		default:
-			filter = args[i]
-		}
-	}
+	fs := flag.NewFlagSet("graph", flag.ExitOnError)
+	format := fs.String("format", "text", "output format (text, dot)")
+	fs.Parse(args)
+
+	filter := fs.Arg(0)
+
 	proj := loadProject()
-	if err := resolve.Graph(os.Stdout, proj, format, filter); err != nil {
+	if err := resolve.Graph(os.Stdout, proj, *format, filter); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -603,19 +565,12 @@ func cmdBootstrap(args []string) {
 }
 
 func cmdLog(args []string) {
-	edit := false
-	var unitName string
-
-	for _, a := range args {
-		switch a {
-		case "-e", "--edit":
-			edit = true
-		default:
-			unitName = a
-		}
-	}
+	fs := flag.NewFlagSet("log", flag.ExitOnError)
+	edit := fs.Bool("e", false, "open log in editor")
+	fs.Parse(args)
 
 	dir := projectDir()
+	unitName := fs.Arg(0)
 	var logPath string
 
 	if unitName != "" {
@@ -629,7 +584,7 @@ func cmdLog(args []string) {
 		os.Exit(1)
 	}
 
-	if edit {
+	if *edit {
 		editor := os.Getenv("EDITOR")
 		if editor == "" {
 			editor = "vi"
@@ -654,14 +609,13 @@ func cmdLog(args []string) {
 }
 
 func cmdDiagnose(args []string) {
-	var unitName string
-	for _, a := range args {
-		unitName = a
+	dir := projectDir()
+	unitName := ""
+	if len(args) > 0 {
+		unitName = args[0]
 	}
 
-	dir := projectDir()
 	var logPath string
-
 	if unitName != "" {
 		logPath = filepath.Join(build.UnitBuildDir(dir, build.Arch(), unitName), "build.log")
 	} else {
@@ -745,74 +699,50 @@ func cmdTUI(_ []string) {
 }
 
 func cmdFlash(args []string) {
-	if len(args) < 1 {
+	fs := flag.NewFlagSet("flash", flag.ExitOnError)
+	machineName := fs.String("machine", "", "target machine")
+	dryRun := fs.Bool("dry-run", false, "show what would be flashed without writing")
+	fs.Parse(args)
+
+	if fs.NArg() < 1 {
 		fmt.Fprintf(os.Stderr, "Usage: %s flash <image-unit> <device> [--machine <name>] [--dry-run]\n", os.Args[0])
 		os.Exit(1)
 	}
 
-	unitName := args[0]
-	devicePath := ""
-	machineName := ""
-	dryRun := false
+	unitName := fs.Arg(0)
+	devicePath := fs.Arg(1)
 
-	for i := 1; i < len(args); i++ {
-		switch args[i] {
-		case "--dry-run":
-			dryRun = true
-		case "--machine":
-			if i+1 < len(args) {
-				machineName = args[i+1]
-				i++
-			}
-		default:
-			devicePath = args[i]
-		}
-	}
-
-	if devicePath == "" && !dryRun {
+	if devicePath == "" && !*dryRun {
 		fmt.Fprintf(os.Stderr, "Usage: %s flash <image-unit> <device>\n", os.Args[0])
 		os.Exit(1)
 	}
 
-	proj := loadProjectWithMachine(machineName)
-	if err := device.Flash(proj, unitName, devicePath, projectDir(), dryRun, os.Stdout); err != nil {
+	proj := loadProjectWithMachine(*machineName)
+	if err := device.Flash(proj, unitName, devicePath, projectDir(), *dryRun, os.Stdout); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
 func cmdRun(args []string) {
-	unitName := ""
-	machineName := ""
-	opts := device.QEMUOptions{Memory: "1G"}
+	fs := flag.NewFlagSet("run", flag.ExitOnError)
+	machineName := fs.String("machine", "", "target machine")
+	memory := fs.String("memory", "1G", "RAM size")
+	display := fs.Bool("display", false, "enable graphical display")
+	daemon := fs.Bool("daemon", false, "run in background")
+	var ports stringSlice
+	fs.Var(&ports, "port", "host:guest port forwarding (repeatable)")
+	fs.Parse(args)
 
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--machine", "-machine":
-			if i+1 < len(args) {
-				machineName = args[i+1]
-				i++
-			}
-		case "--memory":
-			if i+1 < len(args) {
-				opts.Memory = args[i+1]
-				i++
-			}
-		case "--port":
-			if i+1 < len(args) {
-				opts.Ports = append(opts.Ports, args[i+1])
-				i++
-			}
-		case "--display":
-			opts.Display = true
-		case "--daemon":
-			opts.Daemon = true
-		default:
-			unitName = args[i]
-		}
+	opts := device.QEMUOptions{
+		Memory:  *memory,
+		Ports:   ports,
+		Display: *display,
+		Daemon:  *daemon,
 	}
 
 	proj := loadProject()
+	unitName := fs.Arg(0)
 	if unitName == "" {
 		unitName = proj.Defaults.Image
 	}
@@ -821,7 +751,7 @@ func cmdRun(args []string) {
 		os.Exit(1)
 	}
 
-	if err := device.RunQEMU(proj, unitName, machineName, projectDir(), opts, os.Stdout); err != nil {
+	if err := device.RunQEMU(proj, unitName, *machineName, projectDir(), opts, os.Stdout); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}

@@ -66,7 +66,7 @@ func (e *Engine) makeLoadFunc(fromFile string) func(thread *starlark.Thread, mod
 		childThread.Load = e.makeLoadFunc(absPath)
 		predeclared := e.builtins()
 
-		globals, err := starlark.ExecFile(childThread, absPath, nil, predeclared)
+		globals, err := starlark.ExecFileOptions(fileOpts, childThread, absPath, nil, predeclared)
 
 		result := &loadResult{globals: globals, err: err}
 		e.loadCache.mu.Lock()
