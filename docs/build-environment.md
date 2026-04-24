@@ -337,6 +337,54 @@ setting ownership, creating device nodes) and a partitioning tool (`sfdisk` +
 `mkfs.*` today, `systemd-repart` as a future option) for disk image assembly
 (partitioning, filesystem creation, writing the final `.img`).
 
+### Reducing Dependence on Docker's `/dev` (planned)
+
+> **Status:** Today, `yoe` uses option 5 below. The `mknod /dev/loop0..31`
+> workaround is implemented in `modules/units-core/classes/image.star`
+> (`_install_syslinux`) and mirrored in `internal/image/disk.go`. Options 1–4
+> are future directions — none are implemented yet.
+
+Installing the bootloader on an x86 image currently runs
+`losetup`/`mount`/`extlinux` inside the `--privileged` build container. This
+depends on behavior that varies across container runtimes: Docker's `/dev` is a
+tmpfs and does not auto-populate `/dev/loop*` (recent Docker releases tightened
+this further, requiring `mknod` inside the script), while Podman's
+`--privileged` bind-mounts host `/dev` and "just works". The same fragility
+surfaces with `/dev/kvm`, rootless mode, and various CI runners.
+
+Options for decoupling image assembly from container-runtime `/dev` behavior,
+ordered by how cleanly they sidestep the issue:
+
+1. **Avoid loop devices entirely (preferred).** Build the partition table,
+   populate ext4 with `mkfs.ext4 -d` (already used), write MBR and VBR bytes
+   directly, and install `ldlinux.sys` by splicing bytes into the image — all in
+   pure Go on the host. A Go library like
+   [`go-diskfs`](https://github.com/diskfs/go-diskfs) covers partition tables
+   and filesystems; the syslinux VBR layout is well-documented. This is what
+   Buildroot's `genimage` and Yocto's `wic` do. It removes `losetup`, `mount`,
+   and `--privileged` from the image-assembly path entirely and aligns with
+   `[yoe]`'s principles (no intermediate code generation, host runs Go /
+   container runs compilation).
+2. **Host-side image assembly.** Run `losetup`/`mount`/`mkfs`/`extlinux` on the
+   host instead of in the container. Cleanest implementation, but breaks the
+   "host needs only git + docker + yoe" promise — the host would need
+   `util-linux`, `e2fsprogs`, and `syslinux`.
+3. **Purpose-built image tools.** `genimage`, `wic`, `diskimage-builder`, or
+   `guestfish` construct disk images in userspace with no loop mounts. Adds a
+   build-time dependency but avoids writing partition/filesystem code.
+4. **Make the assembly container less Docker-dependent.** Prefer Podman
+   (rootful) for image assembly, or drive the step with `systemd-nspawn` /
+   bubblewrap on the host. Both expose the real `/dev` and work across runtimes.
+5. **Pin Docker behavior explicitly (current approach).** Keep the existing
+   container flow but pre-create `/dev/loop0..31` via `mknod` before `losetup`.
+   Still Docker-compatible, no longer dependent on Docker's shifting defaults,
+   but retains the loop/mount/privileged surface.
+
+**Direction:** move toward option 1 — a Go image assembler — as the long-term
+answer. This removes a whole class of "works on my machine" failures across
+Docker versions, kernels, rootless setups, and CI runners, and fits the existing
+host-runs-Go / container-runs-compilation split.
+
 ## Build Environment Lifecycle
 
 ```
