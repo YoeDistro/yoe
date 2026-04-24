@@ -748,6 +748,97 @@ Buildroot is too limited.
    `[yoe]` because it fits their workflow, not because it mimics something they
    already have.
 
+## Rootfs Ownership: How Each Project Handles It
+
+A recurring problem when building an embedded image unprivileged: the installed
+rootfs needs files owned by `root:root` (and sometimes by specific service
+users), but the build itself ideally does not run as real root. `mkfs.ext4 -d`
+copies ownership straight out of `stat()`, so whatever the filesystem says at
+image-pack time is what the booted system sees. Every serious build tool has had
+to solve this.
+
+There are only three real options, and the industry has converged on them:
+
+**1. Real root (`sudo`).** Traditional flow. `sudo debootstrap`, `apk add` on an
+Alpine host, a container running as root — the simplest approach, but needs
+privileges on the build host.
+
+**2. fakeroot (LD_PRELOAD).** A small library that intercepts `chown`, `stat`,
+and friends. `chown` updates an in-memory database instead of the kernel; later
+`stat` calls return the faked ownership. Files on disk stay owned by the build
+user, but `tar` / `mkfs.ext4` / `dpkg-deb` see the virtual ownership and pack
+that into the archive or image. Invented by Debian; now standard.
+
+**3. User namespaces (`unshare -U`).** Linux kernel feature. Inside the
+namespace the build process sees itself as uid 0; subuid/subgid mapping
+translates writes back to a range owned by the build user on the host. No
+LD_PRELOAD tricks, no real root — but requires subuid configuration on the host
+kernel.
+
+### How specific projects apply these
+
+**Alpine Linux** — two halves:
+
+- **Package build** (`abuild`) wraps the whole build in `fakeroot` so the
+  resulting `.apk` tar records `root:root` ownership regardless of who ran
+  abuild.
+- **Rootfs assembly** (`apk add`, `alpine-make-rootfs`) runs as real root on a
+  live system or inside a build chroot.
+
+**Debian / Ubuntu** — historically real root; modern tooling offers all three:
+
+- **Package build** — `dpkg-buildpackage` runs under `fakeroot`
+  (`fakeroot debian/rules binary`). This is universal — essentially every `.deb`
+  on the planet has its ownership laundered through fakeroot.
+- **Rootfs assembly** — the original `debootstrap` requires `sudo`. Its
+  successor `mmdebstrap` explicitly exposes the full menu via `--mode=root`,
+  `--mode=fakeroot`, `--mode=fakechroot`, `--mode=unshare` (user namespaces),
+  `--mode=proot`, and `--mode=chrootless`. `--mode=unshare` is the recommended
+  modern unprivileged default.
+
+**Buildroot** — wraps image packaging in plain `fakeroot`. Works, but fakeroot's
+in-memory database doesn't persist across process invocations, so Buildroot does
+the whole image pack in one fakeroot session.
+
+**Yocto / OpenEmbedded** — uses `pseudo` instead of `fakeroot`. `pseudo` is an
+enhanced fakeroot that persists state to an on-disk SQLite database, so
+ownership survives across the many separate steps a Yocto task graph spawns.
+This is necessary for OE's execution model and is one of the reasons Yocto
+builds have a heavier tooling footprint than Alpine/Buildroot.
+
+**NixOS** — builds entirely under a sandboxing daemon (`nix-daemon`) running as
+root; individual builders drop privileges. Image assembly for NixOS system
+closures happens inside the daemon's controlled environment with proper root, so
+the ownership problem doesn't surface the same way.
+
+**Google GN / Bazel** — out of scope; neither builds Linux rootfs images as a
+first-class concern.
+
+### How `[yoe]` applies these
+
+- **APK build** — `internal/artifact/apk.go` normalizes every tar header to
+  `root:root` directly in Go's `archive/tar` writer. This is the structural
+  equivalent of what Alpine's `abuild` gets from `fakeroot` and what Debian gets
+  from `dpkg-buildpackage` under fakeroot — just implemented in the build tool
+  rather than via LD_PRELOAD, because Go writes the tar anyway.
+- **Rootfs assembly** (`modules/units-core/classes/image.star`) currently runs
+  inside the Docker build container, which is already privileged. The image
+  class `chown -R 0:0`s the assembled rootfs before `mkfs.ext4 -d`, and chowns
+  `$DESTDIR` back to the host build user at the end so the next build's
+  host-side cleanup works. This is roughly Alpine's "run as real root" path,
+  adapted to our docker-with-host-ownership cache model.
+- **Future direction** — the planned move of image assembly to the host via
+  `bwrap --unshare-user --uid 0 --gid 0`
+  (`docs/superpowers/plans/host-image-building-bwrap.md`) is the user-namespace
+  approach: the same category as `mmdebstrap --mode=unshare`. When it lands, the
+  `chown` dance disappears — bwrap's namespace provides pseudo-root with
+  host-owned files for free.
+
+The short version: we match Alpine's tar-ownership convention for packages,
+we're currently doing the "real root in a container" move for rootfs assembly,
+and we have a documented path to the `mmdebstrap --mode=unshare` equivalent for
+the host.
+
 ## Summary Matrix
 
 | Feature                 | Yocto    | Buildroot | Alpine   | Arch     | Debian   | UC        | NixOS     | **`[yoe]`** |

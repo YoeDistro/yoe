@@ -8,11 +8,12 @@ and this project adheres to
 
 ## [Unreleased]
 
-## [0.8.0] - 2026-04-24
-
 - **Fix rootfs ownership on booted systems** — files under `/`, `/bin`, `/etc`,
   `/usr`, etc. are now owned by `root:root` on the booted system instead of
   showing up as whatever user built the project.
+- **Compare rootfs ownership handling across projects** — `docs/comparisons.md`
+  now has a section explaining how Alpine, Debian, Buildroot, Yocto, and NixOS
+  handle root ownership during image builds, and where `[yoe]` fits.
 
 ## [0.8.0] - 2026-04-24
 
