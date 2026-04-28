@@ -506,6 +506,10 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.message = fmt.Sprintf("%s is not an image unit", name)
 				return m, nil
 			}
+			if m.statuses[name] != statusCached {
+				m.message = fmt.Sprintf("Build %s first before flashing", name)
+				return m, nil
+			}
 			cands, err := device.ListCandidates()
 			if err != nil {
 				m.message = fmt.Sprintf("Listing devices: %v", err)
@@ -1078,8 +1082,13 @@ func (m model) viewUnits() string {
 	} else {
 		help := "  b build  x cancel  e edit  d diagnose  l log  c clean  s setup  / search  q quit"
 		if m.cursor < len(m.units) {
-			if u, ok := m.proj.Units[m.units[m.cursor]]; ok && u.Class == "image" {
-				help = "  b build  x cancel  r run  f flash  e edit  d diagnose  l log  c clean  s setup  / search  q quit"
+			name := m.units[m.cursor]
+			if u, ok := m.proj.Units[name]; ok && u.Class == "image" {
+				if m.statuses[name] == statusCached {
+					help = "  b build  x cancel  r run  f flash  e edit  d diagnose  l log  c clean  s setup  / search  q quit"
+				} else {
+					help = "  b build  x cancel  r run  e edit  d diagnose  l log  c clean  s setup  / search  q quit"
+				}
 			}
 		}
 		b.WriteString(helpStyle.Render(help))
