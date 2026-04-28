@@ -8,6 +8,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Fix `simpleiot` failing to start at boot** — the unit installed the
+  binary as `/usr/bin/simpleiot` but its init script invoked `/usr/bin/siot`,
+  so booting the dev image showed `siot: not found` and the service never
+  ran. The binary now installs as `siot` to match upstream. `go_binary`
+  gains a `binary` kwarg for cases where the installed command name
+  should differ from the apk package name.
 - **Per-developer machine override via `local.star`** — when you switch
   machines from the TUI's setup view, yoe now writes `local.star` at the
   project root with your selection. Subsequent `yoe` commands use that

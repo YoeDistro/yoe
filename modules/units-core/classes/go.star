@@ -8,13 +8,18 @@ _goarch = {
 }
 
 def go_binary(name, version, source, tag="", sha256="",
-              go_package="", deps=[], runtime_deps=[],
+              go_package="", binary="", deps=[], runtime_deps=[],
               services=[], conffiles=[], environment={},
               license="", description="", tasks=[], scope="",
               container="golang:1.24", container_arch="host",
               go_version="", **kwargs):
     if not go_package:
         go_package = "./cmd/" + name
+    # The installed binary's filename. Defaults to the unit name; override
+    # with `binary` when the upstream command name differs from the apk
+    # package name (e.g., simpleiot installs as siot).
+    if not binary:
+        binary = name
     # Build the GOARCH mapping as a shell case statement so the
     # correct value is resolved at build time from $ARCH.
     case_arms = " ".join([
@@ -29,7 +34,7 @@ def go_binary(name, version, source, tag="", sha256="",
             cross_setup +
             " && export PATH=/usr/local/go/bin:$PATH" +
             " && CGO_ENABLED=0 GOOS=linux GOARCH=$goarch" +
-            " go build -o $DESTDIR$PREFIX/bin/" + name + " " + go_package,
+            " go build -o $DESTDIR$PREFIX/bin/" + binary + " " + go_package,
         ]),
     ]
     final_tasks = merge_tasks(base_tasks, tasks)
