@@ -26,6 +26,13 @@ and this project adheres to
   picker with a live progress bar during the write. `yoe` never invokes
   `sudo` itself; if the device isn't writable, it prompts once for consent
   and runs `sudo chown <you> /dev/...`.
+- **Honest flash progress** — `yoe flash` now opens the target device with
+  `O_DIRECT` so writes bypass the kernel page cache and the progress bar
+  tracks actual device throughput. Previously the bar could hit 100% with
+  hundreds of MB still buffered in RAM, freezing the UI for tens of seconds
+  during the final flush. With `O_DIRECT` the wait is paid out across the
+  write itself, and "Flash complete" appears when the data is really on the
+  card.
 - **Fix `yoe flash` rejecting non-system disks** — `flash` previously refused
   to write to `/dev/sda`, `/dev/nvme0n1`, and `/dev/vda` regardless of the
   actual layout. It now detects which disk hosts the running system (`/`,
