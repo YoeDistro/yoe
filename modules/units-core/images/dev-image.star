@@ -14,7 +14,7 @@ image(
     name = "dev-image",
     artifacts = [
         "base-files-dev", "busybox", "musl", "kmod", "util-linux",
-        "linux", "network-config", "ntp-client", "openssh",
+        "linux", "network-config", "ntp-client", "mdnsd", "openssh",
         "ca-certificates", "curl", "simpleiot", "strace", "vim",
     ],
     hostname = "yoe-dev",

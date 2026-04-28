@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **mDNS via new `mdnsd` unit** — the dev-image now answers
+  `<hostname>.local` on the LAN, so `ssh user@yoe-dev.local` works without
+  knowing the device's IP. Uses troglobit/mdnsd (a small dbus-free mDNS
+  responder) and ships a default `_ssh._tcp` service record so the host A
+  record is advertised and SSH discovery works for Bonjour-aware tools.
 - **NTP at boot via new `ntp-client` unit** — boards without a battery-
   backed RTC (e.g., Raspberry Pi) booted at 1970, which broke TLS with
   "certificate is not yet valid". `ntp-client` does a blocking initial
