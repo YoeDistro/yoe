@@ -137,24 +137,98 @@ func validateDevice(devicePath string) error {
 		return fmt.Errorf("device path required")
 	}
 
-	// Check it exists
 	info, err := os.Stat(devicePath)
 	if err != nil {
 		return fmt.Errorf("device %s: %w", devicePath, err)
 	}
 
-	// Must be a block device
 	if info.Mode()&os.ModeDevice == 0 {
 		return fmt.Errorf("%s is not a block device", devicePath)
 	}
 
-	// Refuse to write to common system disk paths
-	dangerous := []string{"/dev/sda", "/dev/nvme0n1", "/dev/vda"}
-	for _, d := range dangerous {
-		if devicePath == d {
-			return fmt.Errorf("refusing to write to %s (looks like a system disk)", devicePath)
+	resolved, err := filepath.EvalSymlinks(devicePath)
+	if err != nil {
+		return fmt.Errorf("resolve %s: %w", devicePath, err)
+	}
+	targetDisk := parentDisk(resolved)
+
+	mountsData, err := os.ReadFile("/proc/mounts")
+	if err != nil {
+		return fmt.Errorf("read /proc/mounts: %w", err)
+	}
+	for _, sysDisk := range systemDisks(string(mountsData)) {
+		if sysDisk == targetDisk {
+			return fmt.Errorf("refusing to write to %s: hosts the running system", devicePath)
 		}
 	}
 
 	return nil
+}
+
+// parentDisk returns the whole-disk device for a partition (e.g. /dev/sda1
+// → /dev/sda, /dev/nvme0n1p2 → /dev/nvme0n1). If devicePath is not a
+// partition, or its sysfs entry can't be read, returns devicePath unchanged.
+func parentDisk(devicePath string) string {
+	name := filepath.Base(devicePath)
+	sysPath := "/sys/class/block/" + name
+	if _, err := os.Stat(filepath.Join(sysPath, "partition")); err != nil {
+		return devicePath
+	}
+	target, err := os.Readlink(sysPath)
+	if err != nil {
+		return devicePath
+	}
+	return "/dev/" + filepath.Base(filepath.Dir(target))
+}
+
+// systemDisks returns the set of whole-disk devices that host critical
+// system mountpoints. Walks /sys/class/block/<name>/slaves to resolve
+// dm-crypt, LVM, and md devices to their underlying physical disks.
+func systemDisks(mountsContent string) []string {
+	critical := map[string]bool{
+		"/":         true,
+		"/boot":     true,
+		"/boot/efi": true,
+		"/usr":      true,
+	}
+	seen := map[string]bool{}
+	var disks []string
+	for _, line := range strings.Split(mountsContent, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 || !critical[fields[1]] {
+			continue
+		}
+		src := fields[0]
+		if !strings.HasPrefix(src, "/dev/") {
+			continue
+		}
+		resolved, err := filepath.EvalSymlinks(src)
+		if err != nil {
+			continue
+		}
+		for _, base := range underlyingDevices(resolved) {
+			disk := parentDisk(base)
+			if !seen[disk] {
+				seen[disk] = true
+				disks = append(disks, disk)
+			}
+		}
+	}
+	return disks
+}
+
+// underlyingDevices recurses through /sys/class/block/<name>/slaves to find
+// the physical block devices backing a dm-/md device. For a leaf device
+// with no slaves, returns devicePath unchanged.
+func underlyingDevices(devicePath string) []string {
+	slavesDir := filepath.Join("/sys/class/block", filepath.Base(devicePath), "slaves")
+	entries, err := os.ReadDir(slavesDir)
+	if err != nil || len(entries) == 0 {
+		return []string{devicePath}
+	}
+	var out []string
+	for _, e := range entries {
+		out = append(out, underlyingDevices("/dev/"+e.Name())...)
+	}
+	return out
 }
