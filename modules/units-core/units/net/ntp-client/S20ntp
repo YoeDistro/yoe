@@ -8,13 +8,14 @@
 # after udhcpc, transient peer failures) and the daemon handles both
 # the initial step and ongoing drift correction.
 
-NTPD=/usr/bin/ntpd
 PEERS="-p pool.ntp.org -p time.cloudflare.com -p time.google.com"
 
 case "$1" in
     start)
-        # busybox ntpd backgrounds itself when -n is omitted.
-        $NTPD $PEERS 2>/dev/null
+        # busybox installs ntpd as /usr/sbin/ntpd; rely on PATH so this
+        # works regardless of where the applet symlink lands. The daemon
+        # backgrounds itself when -n is omitted.
+        ntpd $PEERS 2>/dev/null
         ;;
     stop)
         killall ntpd 2>/dev/null
