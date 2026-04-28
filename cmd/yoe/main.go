@@ -112,7 +112,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  container               Manage the build container (build, shell, status)\n")
 	fmt.Fprintf(os.Stderr, "  build [units...]      Build units (--force, --clean, --verbose, --dry-run)\n")
 	fmt.Fprintf(os.Stderr, "  dev                     Manage source modifications (extract, diff, status)\n")
-	fmt.Fprintf(os.Stderr, "  flash <device>          Write an image to a device/SD card\n")
+	fmt.Fprintf(os.Stderr, "  flash <unit> <device>   Write an image to a device/SD card (also: flash list)\n")
 	fmt.Fprintf(os.Stderr, "  run                     Run an image in QEMU\n")
 	fmt.Fprintf(os.Stderr, "  module                  Manage external modules (fetch, sync, list)\n")
 	fmt.Fprintf(os.Stderr, "  repo                    Manage the local apk package repository\n")
@@ -699,13 +699,20 @@ func cmdTUI(_ []string) {
 }
 
 func cmdFlash(args []string) {
+	if len(args) > 0 && args[0] == "list" {
+		cmdFlashList(args[1:])
+		return
+	}
+
 	fs := flag.NewFlagSet("flash", flag.ExitOnError)
 	machineName := fs.String("machine", "", "target machine")
 	dryRun := fs.Bool("dry-run", false, "show what would be flashed without writing")
+	assumeYes := fs.Bool("yes", false, "skip confirmation prompt")
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s flash <image-unit> <device> [--machine <name>] [--dry-run]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s flash <image-unit> <device> [--machine <name>] [--yes] [--dry-run]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "       %s flash list\n", os.Args[0])
 		os.Exit(1)
 	}
 
@@ -718,9 +725,26 @@ func cmdFlash(args []string) {
 	}
 
 	proj := loadProjectWithMachine(*machineName)
-	if err := device.Flash(proj, unitName, devicePath, projectDir(), *dryRun, os.Stdout); err != nil {
+	if err := device.Flash(proj, unitName, devicePath, projectDir(), *dryRun, *assumeYes, os.Stdout); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
+	}
+}
+
+func cmdFlashList(_ []string) {
+	cands, err := device.ListCandidates()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	if len(cands) == 0 {
+		fmt.Println("No removable devices detected.")
+		return
+	}
+	fmt.Printf("%-14s %8s  %-4s %-10s %s\n", "DEVICE", "SIZE", "BUS", "VENDOR", "MODEL")
+	for _, c := range cands {
+		fmt.Printf("%-14s %8s  %-4s %-10s %s\n",
+			c.Path, device.FormatSize(c.Size), c.Bus, c.Vendor, c.Model)
 	}
 }
 

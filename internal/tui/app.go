@@ -12,11 +12,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/progress"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	yoe "github.com/YoeDistro/yoe-ng/internal"
 	"github.com/YoeDistro/yoe-ng/internal/build"
+	"github.com/YoeDistro/yoe-ng/internal/device"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
@@ -49,6 +51,18 @@ const (
 	viewUnits viewKind = iota
 	viewDetail
 	viewSetup
+	viewFlash
+)
+
+// Flash view stages
+type flashStage int
+
+const (
+	flashSelect  flashStage = iota // picking a device
+	flashConfirm                   // y/N confirmation
+	flashWriting                   // write in progress
+	flashDone                      // success
+	flashError                     // failed
 )
 
 // Unit status
@@ -80,6 +94,16 @@ type execDoneMsg struct {
 }
 
 type notifyMsg string
+
+// Flash messages
+type flashProgressMsg struct {
+	written int64
+	total   int64
+}
+
+type flashDoneMsg struct {
+	err error
+}
 
 // model is the Bubble Tea model for the yoe TUI.
 type model struct {
@@ -122,6 +146,18 @@ type model struct {
 	setupCursor int      // cursor within setup options
 	setupField  string   // "" = top-level, "machine" = picking machine
 	machineCursor int    // cursor within machine list
+
+	// Flash view
+	flashUnit       string
+	flashCandidates []device.Candidate
+	flashCursor     int
+	flashStage      flashStage
+	flashImagePath  string
+	flashImageSize  int64
+	flashWritten    int64
+	flashTotal      int64
+	flashErr        error
+	flashProgress   progress.Model
 }
 
 // Run launches the TUI.
@@ -160,16 +196,17 @@ func Run(proj *yoestar.Project, projectDir string) error {
 	machines := sortedKeys(proj.Machines)
 
 	m := model{
-		proj:       proj,
-		projectDir: projectDir,
-		arch:       arch,
-		dag:        dag,
-		units:      units,
-		hashes:     hashes,
-		statuses:   statuses,
-		building:   make(map[string]bool),
-		cancels:    make(map[string]context.CancelFunc),
-		machines:   machines,
+		proj:          proj,
+		projectDir:    projectDir,
+		arch:          arch,
+		dag:           dag,
+		units:         units,
+		hashes:        hashes,
+		statuses:      statuses,
+		building:      make(map[string]bool),
+		cancels:       make(map[string]context.CancelFunc),
+		machines:      machines,
+		flashProgress: progress.New(progress.WithDefaultGradient()),
 	}
 	m.checkBinfmtWarning()
 
@@ -249,6 +286,31 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case flashProgressMsg:
+		m.flashWritten = msg.written
+		m.flashTotal = msg.total
+		var ratio float64
+		if msg.total > 0 {
+			ratio = float64(msg.written) / float64(msg.total)
+		}
+		cmd := m.flashProgress.SetPercent(ratio)
+		return m, cmd
+
+	case progress.FrameMsg:
+		var pm tea.Model
+		pm, cmd := m.flashProgress.Update(msg)
+		m.flashProgress = pm.(progress.Model)
+		return m, cmd
+
+	case flashDoneMsg:
+		if msg.err != nil {
+			m.flashStage = flashError
+			m.flashErr = msg.err
+		} else {
+			m.flashStage = flashDone
+		}
+		return m, nil
+
 	case notifyMsg:
 		m.notification = string(msg)
 		return m, nil
@@ -273,6 +335,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateDetail(msg)
 		case viewSetup:
 			return m.updateSetup(msg)
+		case viewFlash:
+			return m.updateFlash(msg)
 		}
 	}
 	return m, nil
@@ -431,6 +495,30 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				})
 			}
 			m.message = fmt.Sprintf("%s is not an image unit", name)
+		}
+		return m, nil
+
+	case "f":
+		if m.cursor < len(m.units) {
+			name := m.units[m.cursor]
+			u, ok := m.proj.Units[name]
+			if !ok || u.Class != "image" {
+				m.message = fmt.Sprintf("%s is not an image unit", name)
+				return m, nil
+			}
+			cands, err := device.ListCandidates()
+			if err != nil {
+				m.message = fmt.Sprintf("Listing devices: %v", err)
+				return m, nil
+			}
+			m.flashUnit = name
+			m.flashCandidates = cands
+			m.flashCursor = 0
+			m.flashStage = flashSelect
+			m.flashErr = nil
+			m.flashWritten = 0
+			m.flashTotal = 0
+			m.view = viewFlash
 		}
 		return m, nil
 
@@ -880,6 +968,8 @@ func (m model) View() string {
 		return m.viewDetail()
 	case viewSetup:
 		return m.viewSetup()
+	case viewFlash:
+		return m.viewFlash()
 	default:
 		return m.viewUnits()
 	}
@@ -989,7 +1079,7 @@ func (m model) viewUnits() string {
 		help := "  b build  x cancel  e edit  d diagnose  l log  c clean  s setup  / search  q quit"
 		if m.cursor < len(m.units) {
 			if u, ok := m.proj.Units[m.units[m.cursor]]; ok && u.Class == "image" {
-				help = "  b build  x cancel  r run  e edit  d diagnose  l log  c clean  s setup  / search  q quit"
+				help = "  b build  x cancel  r run  f flash  e edit  d diagnose  l log  c clean  s setup  / search  q quit"
 			}
 		}
 		b.WriteString(helpStyle.Render(help))
@@ -1586,4 +1676,150 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// ----- Flash view -----
+
+func (m model) updateFlash(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch m.flashStage {
+	case flashSelect:
+		switch msg.String() {
+		case "esc", "q":
+			m.view = viewUnits
+			return m, nil
+		case "up", "k":
+			if m.flashCursor > 0 {
+				m.flashCursor--
+			}
+			return m, nil
+		case "down", "j":
+			if m.flashCursor < len(m.flashCandidates)-1 {
+				m.flashCursor++
+			}
+			return m, nil
+		case "enter":
+			if len(m.flashCandidates) == 0 {
+				return m, nil
+			}
+			m.flashStage = flashConfirm
+			return m, nil
+		}
+	case flashConfirm:
+		switch strings.ToLower(msg.String()) {
+		case "y":
+			cand := m.flashCandidates[m.flashCursor]
+			imgPath, imgSize, err := findImageForFlash(m.proj, m.flashUnit, m.projectDir)
+			if err != nil {
+				m.flashStage = flashError
+				m.flashErr = err
+				return m, nil
+			}
+			m.flashImagePath = imgPath
+			m.flashImageSize = imgSize
+			m.flashTotal = imgSize
+			m.flashWritten = 0
+			m.flashStage = flashWriting
+			return m, m.flashWriteCmd(imgPath, cand.Path)
+		case "esc", "n", "q":
+			m.flashStage = flashSelect
+			return m, nil
+		}
+	case flashWriting:
+		// no-op; ignore keys while writing
+		return m, nil
+	case flashDone, flashError:
+		switch msg.String() {
+		case "esc", "q", "enter":
+			m.view = viewUnits
+			m.flashStage = flashSelect
+			return m, nil
+		}
+	}
+	return m, nil
+}
+
+// flashWriteCmd returns a tea.Cmd that writes the image and streams
+// progress messages back to the bubbletea program.
+func (m model) flashWriteCmd(imagePath, devicePath string) tea.Cmd {
+	return func() tea.Msg {
+		progressFn := func(written, total int64) {
+			if tuiProgram != nil {
+				tuiProgram.Send(flashProgressMsg{written: written, total: total})
+			}
+		}
+		err := device.Write(imagePath, devicePath, progressFn)
+		return flashDoneMsg{err: err}
+	}
+}
+
+func (m model) viewFlash() string {
+	var b strings.Builder
+	b.WriteString(titleStyle.Render(fmt.Sprintf(" yoe flash — %s ", m.flashUnit)))
+	b.WriteString("\n\n")
+
+	switch m.flashStage {
+	case flashSelect:
+		if len(m.flashCandidates) == 0 {
+			b.WriteString(dimStyle.Render("No removable devices detected."))
+			b.WriteString("\n\n")
+			b.WriteString(helpStyle.Render("esc: back"))
+			return b.String()
+		}
+		b.WriteString(headerStyle.Render(fmt.Sprintf("%-14s %8s  %-4s %-10s %s", "DEVICE", "SIZE", "BUS", "VENDOR", "MODEL")))
+		b.WriteString("\n")
+		for i, c := range m.flashCandidates {
+			line := fmt.Sprintf("%-14s %8s  %-4s %-10s %s",
+				c.Path, device.FormatSize(c.Size), c.Bus, c.Vendor, c.Model)
+			if i == m.flashCursor {
+				b.WriteString(selectedStyle.Render("> " + line))
+			} else {
+				b.WriteString("  " + line)
+			}
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+		b.WriteString(helpStyle.Render("↑/↓ select • enter confirm • esc back"))
+	case flashConfirm:
+		c := m.flashCandidates[m.flashCursor]
+		b.WriteString(fmt.Sprintf("Flash %s → %s (%s, %s %s)?\n",
+			m.flashUnit, c.Path, device.FormatSize(c.Size), c.Vendor, c.Model))
+		b.WriteString(failedStyle.Render(fmt.Sprintf("This will erase all data on %s.", c.Path)))
+		b.WriteString("\n\n")
+		b.WriteString(helpStyle.Render("y to confirm • n/esc to cancel"))
+	case flashWriting:
+		c := m.flashCandidates[m.flashCursor]
+		b.WriteString(fmt.Sprintf("Writing %s → %s\n\n", filepath.Base(m.flashImagePath), c.Path))
+		b.WriteString(m.flashProgress.View())
+		b.WriteString("\n")
+		var rate string
+		if m.flashTotal > 0 {
+			rate = fmt.Sprintf("%s / %s", device.FormatSize(m.flashWritten), device.FormatSize(m.flashTotal))
+		}
+		b.WriteString(dimStyle.Render(rate))
+	case flashDone:
+		b.WriteString(buildingStyle.Render("Flash complete."))
+		b.WriteString("\n\n")
+		b.WriteString(helpStyle.Render("press any key to return"))
+	case flashError:
+		b.WriteString(failedStyle.Render(fmt.Sprintf("Flash failed: %v", m.flashErr)))
+		b.WriteString("\n\n")
+		b.WriteString(helpStyle.Render("press any key to return"))
+	}
+	return b.String()
+}
+
+// findImageForFlash locates the built image for an image unit at the
+// project's default machine. Mirrors the resolution done in device.Flash
+// without requiring the rest of the orchestration.
+func findImageForFlash(proj *yoestar.Project, unitName, projectDir string) (string, int64, error) {
+	machine, ok := proj.Machines[proj.Defaults.Machine]
+	if !ok {
+		return "", 0, fmt.Errorf("default machine %q not found", proj.Defaults.Machine)
+	}
+	imgPath := filepath.Join(projectDir, "build", unitName+"."+machine.Name, "destdir", unitName+".img")
+	info, err := os.Stat(imgPath)
+	if err != nil {
+		return "", 0, fmt.Errorf("no built image found — run yoe build %s first", unitName)
+	}
+	return imgPath, info.Size(), nil
 }

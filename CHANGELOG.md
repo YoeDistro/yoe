@@ -8,12 +8,26 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **`yoe flash list` and TUI device picker** — `yoe flash list` enumerates
+  removable USB sticks and SD cards (filtered against the disk hosting the
+  running system). In the TUI, pressing `f` on an image unit opens a device
+  picker with a live progress bar during the write. `yoe` never invokes
+  `sudo` itself; if the device isn't writable, it prompts once for consent
+  and runs `sudo chown <you> /dev/...`.
 - **Fix `yoe flash` rejecting non-system disks** — `flash` previously refused
   to write to `/dev/sda`, `/dev/nvme0n1`, and `/dev/vda` regardless of the
   actual layout. It now detects which disk hosts the running system (`/`,
   `/boot`, `/boot/efi`, `/usr`) and refuses only that disk, so flashing to a
   USB or external SATA drive named `/dev/sda` works on machines whose root is
   on NVMe.
+- **Fix images silently shipping without packages** — if an artifact's apk
+  was missing from the local repo (e.g., its build was cancelled), the image
+  used to build anyway with a `warning: package X not found, skipping` and
+  produce a kernel-panicking rootfs. Image assembly now hard-fails with a
+  clear message naming the missing package. The build cache now also treats
+  a unit as out-of-date when its apk has gone missing, and rebuilding any
+  unit invalidates its dependents — so reruns auto-recover instead of
+  reusing stale outputs.
 
 ## [0.8.2] - 2026-04-24
 
