@@ -10,58 +10,53 @@ and this project adheres to
 
 ## [0.8.3] - 2026-04-28
 
-- **mDNS via new `mdnsd` unit** — the dev-image now answers
-  `<hostname>.local` on the LAN, so `ssh user@yoe-dev.local` works without
-  knowing the device's IP. Uses troglobit/mdnsd (a small dbus-free mDNS
-  responder) and ships a default `_ssh._tcp` service record so the host A
-  record is advertised and SSH discovery works for Bonjour-aware tools.
-- **NTP at boot via new `ntp-client` unit** — boards without a battery-
-  backed RTC (e.g., Raspberry Pi) booted at 1970, which broke TLS with
-  "certificate is not yet valid". `ntp-client` does a blocking initial
-  sync at S20 (retried a few times to cover DNS settling right after
-  udhcpc) so subsequent services start with real time, then leaves a
-  busybox `ntpd` daemon running to discipline drift over uptime. Added
-  to `dev-image` by default. `base-files` also gets `/var/run` so
-  daemons that write a pidfile have a place to put it.
-- **Fix `simpleiot` failing to start at boot** — the unit installed the
-  binary as `/usr/bin/simpleiot` but its init script invoked `/usr/bin/siot`,
-  so booting the dev image showed `siot: not found` and the service never
-  ran. The binary now installs as `siot` to match upstream. `go_binary`
-  gains a `binary` kwarg for cases where the installed command name
-  should differ from the apk package name.
-- **Per-developer machine override via `local.star`** — when you switch
-  machines from the TUI's setup view, yoe now writes `local.star` at the
-  project root with your selection. Subsequent `yoe` commands use that
-  machine without you re-passing `--machine` every time. The file is
-  gitignored so each developer can pin their own target. `--machine` on
-  the command line still wins.
+- **mDNS via new `mdnsd` unit** — the dev-image now answers `<hostname>.local`
+  on the LAN, so `ssh user@yoe-dev.local` works without knowing the device's IP.
+  Uses troglobit/mdnsd (a small dbus-free mDNS responder) and ships a default
+  `_ssh._tcp` service record so the host A record is advertised and SSH
+  discovery works for Bonjour-aware tools.
+- **NTP at boot via new `ntp-client` unit** — boards without a battery- backed
+  RTC (e.g., Raspberry Pi) booted at 1970, which broke TLS with "certificate is
+  not yet valid". `ntp-client` does a blocking initial sync at S20 (retried a
+  few times to cover DNS settling right after udhcpc) so subsequent services
+  start with real time, then leaves a busybox `ntpd` daemon running to
+  discipline drift over uptime. Added to `dev-image` by default. `base-files`
+  also gets `/var/run` so daemons that write a pidfile have a place to put it.
+- **Fix `simpleiot` failing to start at boot** — the unit installed the binary
+  as `/usr/bin/simpleiot` but its init script invoked `/usr/bin/siot`, so
+  booting the dev image showed `siot: not found` and the service never ran. The
+  binary now installs as `siot` to match upstream. `go_binary` gains a `binary`
+  kwarg for cases where the installed command name should differ from the apk
+  package name.
+- **Per-developer machine override via `local.star`** — when you switch machines
+  from the TUI's setup view, yoe now writes `local.star` at the project root
+  with your selection. Subsequent `yoe` commands use that machine without you
+  re-passing `--machine` every time. The file is gitignored so each developer
+  can pin their own target. `--machine` on the command line still wins.
 - **`yoe flash list` and TUI device picker** — `yoe flash list` enumerates
   removable USB sticks and SD cards (filtered against the disk hosting the
   running system). In the TUI, pressing `f` on an image unit opens a device
-  picker with a live progress bar during the write. `yoe` never invokes
-  `sudo` itself; if the device isn't writable, it prompts once for consent
-  and runs `sudo chown <you> /dev/...`.
+  picker with a live progress bar during the write. `yoe` never invokes `sudo`
+  itself; if the device isn't writable, it prompts once for consent and runs
+  `sudo chown <you> /dev/...`.
 - **Honest flash progress** — `yoe flash` now opens the target device with
-  `O_DIRECT` so writes bypass the kernel page cache and the progress bar
-  tracks actual device throughput. Previously the bar could hit 100% with
-  hundreds of MB still buffered in RAM, freezing the UI for tens of seconds
-  during the final flush. With `O_DIRECT` the wait is paid out across the
-  write itself, and "Flash complete" appears when the data is really on the
-  card.
-- **Fix `yoe flash` rejecting non-system disks** — `flash` previously refused
-  to write to `/dev/sda`, `/dev/nvme0n1`, and `/dev/vda` regardless of the
-  actual layout. It now detects which disk hosts the running system (`/`,
-  `/boot`, `/boot/efi`, `/usr`) and refuses only that disk, so flashing to a
-  USB or external SATA drive named `/dev/sda` works on machines whose root is
-  on NVMe.
-- **Fix images silently shipping without packages** — if an artifact's apk
-  was missing from the local repo (e.g., its build was cancelled), the image
-  used to build anyway with a `warning: package X not found, skipping` and
-  produce a kernel-panicking rootfs. Image assembly now hard-fails with a
-  clear message naming the missing package. The build cache now also treats
-  a unit as out-of-date when its apk has gone missing, and rebuilding any
-  unit invalidates its dependents — so reruns auto-recover instead of
-  reusing stale outputs.
+  `O_DIRECT` so writes bypass the kernel page cache and the progress bar tracks
+  actual device throughput. Previously the bar could hit 100% with hundreds of
+  MB still buffered in RAM, freezing the UI for tens of seconds during the final
+  flush. With `O_DIRECT` the wait is paid out across the write itself, and
+  "Flash complete" appears when the data is really on the card.
+- **Fix `yoe flash` rejecting non-system disks** — `flash` previously refused to
+  write to `/dev/sda`, `/dev/nvme0n1`, and `/dev/vda` regardless of the actual
+  layout. It now detects which disk hosts the running system (`/`, `/boot`,
+  `/boot/efi`, `/usr`) and refuses only that disk, so flashing to a USB or
+  external SATA drive named `/dev/sda` works on machines whose root is on NVMe.
+- **Fix images silently shipping without packages** — if an artifact's apk was
+  missing from the local repo (e.g., its build was cancelled), the image used to
+  build anyway with a `warning: package X not found, skipping` and produce a
+  kernel-panicking rootfs. Image assembly now hard-fails with a clear message
+  naming the missing package. The build cache now also treats a unit as
+  out-of-date when its apk has gone missing, and rebuilding any unit invalidates
+  its dependents — so reruns auto-recover instead of reusing stale outputs.
 
 ## [0.8.2] - 2026-04-24
 
