@@ -119,7 +119,8 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
   `autoreconf` for git sources missing `./configure`.
 - **Prefer git sources over tarballs** — shallow clone with tag pinning. Enables
   `yoe dev` workflow (edit, commit, extract patches).
-- **apk** package manager (same as Alpine, but with glibc)
+- **apk** package manager (same as Alpine). Currently targets musl libc; glibc
+  support may be added in the future.
 - **bubblewrap** for per-unit build isolation inside the container
 - **Module path** — modules can live in a subdirectory of a repo via the `path`
   field on `module()`. Module name is derived from the path's last component.

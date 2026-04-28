@@ -1,0 +1,6 @@
+# Advertise SSH on this host. mdnsd needs at least one service record
+# before it announces the host A record (<hostname>.local), so this
+# file does double duty: it announces SSH for service-discovery clients
+# and it's what makes "ssh user@<hostname>.local" work at all.
+type _ssh._tcp
+port 22

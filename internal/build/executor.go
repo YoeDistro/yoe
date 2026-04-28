@@ -98,9 +98,10 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 	// can show the full build queue before any work starts.
 	for _, name := range order {
 		hash := hashes[name]
-		sd := ScopeDir(proj.Units[name], opts.Arch, opts.Machine)
+		unit := proj.Units[name]
+		sd := ScopeDir(unit, opts.Arch, opts.Machine)
 		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
-		if !forceThis && !opts.NoCache && IsBuildCached(opts.ProjectDir, sd, name, hash) {
+		if !forceThis && !opts.NoCache && cacheValid(proj, opts.ProjectDir, unit, sd, hash) {
 			notify(name, "cached")
 		} else {
 			notify(name, "waiting")
@@ -111,6 +112,12 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 	if ctx == nil {
 		ctx = context.Background()
 	}
+
+	// Track which units we rebuilt in this run, so we can invalidate
+	// downstream caches: if a dep is rebuilt, its dependents must rebuild
+	// too — the cache marker alone won't catch this because input hashes
+	// don't change just because an apk got reproduced.
+	rebuilt := map[string]bool{}
 
 	// Build in order
 	for _, name := range order {
@@ -126,8 +133,19 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		// dependencies still use the cache.
 		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
 
-		if !forceThis && !opts.NoCache {
-			if IsBuildCached(opts.ProjectDir, sd, name, hash) {
+		// Direct deps are sufficient: topological order guarantees that
+		// any rebuilt transitive dep already invalidated the intermediate
+		// dep, which is therefore in `rebuilt`.
+		depRebuilt := false
+		for _, d := range dag.Nodes[name].Deps {
+			if rebuilt[d] {
+				depRebuilt = true
+				break
+			}
+		}
+
+		if !forceThis && !opts.NoCache && !depRebuilt {
+			if cacheValid(proj, opts.ProjectDir, unit, sd, hash) {
 				fmt.Fprintf(w, "%-20s [cached] %s\n", name, hash[:12])
 				continue
 			}
@@ -151,6 +169,7 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 
 		// Write cache marker
 		writeCacheMarker(opts.ProjectDir, sd, name, hash)
+		rebuilt[name] = true
 		fmt.Fprintf(w, "%-20s [done] %s\n", name, hash[:12])
 		notify(name, "done")
 	}
@@ -494,7 +513,7 @@ func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[strin
 		sd := ScopeDir(unit, opts.Arch, opts.Machine)
 		cached := ""
 		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
-		if !forceThis && IsBuildCached(opts.ProjectDir, sd, name, hashes[name]) {
+		if !forceThis && cacheValid(proj, opts.ProjectDir, unit, sd, hashes[name]) {
 			cached = " [cached, skip]"
 		}
 		fmt.Fprintf(w, "  %-20s [%s] %s%s\n", name, unit.Class, hashes[name][:12], cached)
@@ -551,6 +570,23 @@ func IsBuildCached(projectDir, arch, name, hash string) bool {
 		return false
 	}
 	return string(data) == hash
+}
+
+// cacheValid reports whether a unit's cached build is still usable. The cache
+// marker alone is not sufficient: for units that publish an .apk, the marker
+// can outlive the apk (deleted manually, or written racily by a parallel run
+// while the actual build was cancelled). When the apk is gone, the cache is
+// stale and the unit must be rebuilt.
+func cacheValid(proj *yoestar.Project, projectDir string, unit *yoestar.Unit, scopeDir, hash string) bool {
+	if !IsBuildCached(projectDir, scopeDir, unit.Name, hash) {
+		return false
+	}
+	if unit.Class == "image" || unit.Class == "container" {
+		return true
+	}
+	apkName := fmt.Sprintf("%s-%s-r%d.%s.apk", unit.Name, unit.Version, unit.Release, scopeDir)
+	_, err := os.Stat(filepath.Join(repo.RepoDir(proj, projectDir), apkName))
+	return err == nil
 }
 
 func HasBuildLog(projectDir, arch, name string) bool {

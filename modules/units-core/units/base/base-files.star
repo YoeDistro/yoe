@@ -37,7 +37,7 @@ def base_files(name = "base-files", users = None):
             task("build", steps = (
                 [
                     "mkdir -p $DESTDIR/etc $DESTDIR/root $DESTDIR/proc $DESTDIR/sys"
-                    + " $DESTDIR/dev $DESTDIR/tmp $DESTDIR/run"
+                    + " $DESTDIR/dev $DESTDIR/tmp $DESTDIR/run $DESTDIR/var/run"
                     + " $DESTDIR/etc/init.d $DESTDIR/boot/extlinux",
                 ]
                 + users_commands(users)

@@ -45,8 +45,7 @@ def _assemble_rootfs(packages, hostname, timezone, locale):
     for pkg in packages:
         apk = _find_apk(pkg)
         if not apk:
-            run("echo 'warning: package %s not found, skipping' >&2" % pkg)
-            continue
+            fail("package %s not found in repo — its build may have been cancelled or its apk removed. Rebuild it with: yoe build --force %s" % (pkg, pkg))
         run("tar xzf %s -C $DESTDIR/rootfs --exclude=.PKGINFO" % apk)
 
     if hostname:
