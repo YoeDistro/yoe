@@ -47,11 +47,12 @@ The unit detail view for an image unit gains a flash action. Pressing it:
 1. Renders the device list (same code as `flash list`) inside the existing
    bubbletea model.
 2. User selects a device with arrow keys + enter.
-3. Confirmation prompt; on accept, the write runs with output streamed to
-   the existing detail-view log pane.
+3. Confirmation prompt; on accept, the write runs with progress shown via
+   a `bubbles/progress` bar in the detail view, and stdout/stderr from
+   the write streamed to the existing log pane.
 
-No new dependencies — uses the lipgloss / bubbletea stack already in
-`internal/tui/app.go`.
+Adds `github.com/charmbracelet/bubbles` as a dep — same ecosystem as the
+bubbletea / lipgloss already in use.
 
 ## Device discovery
 
@@ -149,9 +150,25 @@ If absent: `no built image found — run yoe build <unit>` and exit non-zero.
      If user declines, exit non-zero with
      `no write permission on /dev/sdb — run: sudo chown <user> /dev/sdb`.
    - On `EBUSY`: print the same mounted-partitions hint as step 2.
-5. **Stream the image** — `io.CopyBuffer` with a 4 MiB buffer, periodic
-   progress to stderr (e.g. `written 256 MiB / 612 MiB (42%)`). After the
+5. **Stream the image** — `io.CopyBuffer` with a 4 MiB buffer. After the
    copy: `f.Sync()`, then `f.Close()`. Pure stdlib.
+
+   The write function takes a progress callback so CLI and TUI can render
+   it differently from the same code path:
+
+   ```go
+   func Write(imagePath, devicePath string, progress func(written, total int64)) error
+   ```
+
+   The callback is invoked at most every 250ms (or every 16 MiB,
+   whichever comes first) to avoid flooding either consumer.
+
+   - **CLI** binds the callback to a stderr writer that overprints a single
+     line with `\r`:
+     `written 256 MiB / 612 MiB (42%) — 18.4 MiB/s`
+   - **TUI** binds the callback to a tea.Cmd that emits `progressMsg{written,
+     total}`. The detail view renders a `bubbles/progress` bar with the
+     same `MiB / total — rate` line below it.
 
 ## Three layers of safety
 
