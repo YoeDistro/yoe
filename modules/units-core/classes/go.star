@@ -1,10 +1,9 @@
 load("//classes/tasks.star", "merge_tasks")
 
-# _goarch maps uname -m architecture names to GOARCH values.
+# _goarch maps Yoe canonical architecture names to GOARCH values.
 _goarch = {
     "x86_64": "amd64",
-    "aarch64": "arm64",
-    "armv7l": "arm",
+    "arm64": "arm64",
     "riscv64": "riscv64",
 }
 
