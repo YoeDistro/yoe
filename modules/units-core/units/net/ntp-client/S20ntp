@@ -1,37 +1,38 @@
 #!/bin/sh
 # Two-phase time sync for boards without a battery-backed RTC.
 #
-# Phase 1: blocking one-shot sync. Boards like Raspberry Pi boot at the
-# epoch (1970), so TLS rejects every certificate as "not yet valid". We
-# block here so any service started after S20ntp sees real time.
+# Phase 1: blocking initial sync, retried for up to ~30 s. Boards like
+# Raspberry Pi boot at the epoch (1970), so TLS rejects every cert as
+# "not yet valid". We block here so any service after S20ntp starts
+# with real time.
 #
 # Phase 2: long-running daemon. Without ongoing discipline the clock
-# drifts and a transient phase-1 failure (DNS, network not up) would
-# leave us stuck at 1970 forever. The daemon retries until it gets a
-# lock, then keeps the clock corrected over uptime.
+# drifts, and a transient phase-1 failure (DNS hiccup right after
+# udhcpc, peer unreachable) would leave us stuck at 1970 forever. The
+# daemon keeps retrying and disciplines the clock over uptime.
 
 NTPD=/usr/bin/ntpd
 PEERS="-p pool.ntp.org -p time.cloudflare.com -p time.google.com"
-PIDFILE=/var/run/ntpd.pid
 
 case "$1" in
     start)
-        # Phase 1: block until first sync (or until busybox gives up
-        # probing all peers; it does not hang forever).
-        $NTPD -nq $PEERS >/dev/null 2>&1 || \
+        # Phase 1: try a few times, since DNS can lose the first query
+        # right after udhcpc populates /etc/resolv.conf.
+        for attempt in 1 2 3; do
+            if $NTPD -nq $PEERS >/dev/null 2>&1; then
+                break
+            fi
+            sleep 2
+        done
+        if [ "$(date +%Y)" = "1970" ]; then
             echo "ntp: initial sync failed; daemon will retry" >&2
+        fi
 
-        # Phase 2: daemonize. busybox ntpd backgrounds itself when -n is
-        # omitted, and -d disables the daemon's verbose drift logging.
+        # Phase 2: daemonize. busybox ntpd backgrounds itself when -n
+        # is not set; killall in stop is sufficient (only one ntpd).
         $NTPD $PEERS 2>/dev/null
-        pgrep -x ntpd > $PIDFILE 2>/dev/null
         ;;
     stop)
-        if [ -f $PIDFILE ]; then
-            kill $(cat $PIDFILE) 2>/dev/null
-            rm -f $PIDFILE
-        else
-            killall ntpd 2>/dev/null
-        fi
+        killall ntpd 2>/dev/null
         ;;
 esac

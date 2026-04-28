@@ -11,9 +11,11 @@ and this project adheres to
 - **NTP at boot via new `ntp-client` unit** — boards without a battery-
   backed RTC (e.g., Raspberry Pi) booted at 1970, which broke TLS with
   "certificate is not yet valid". `ntp-client` does a blocking initial
-  sync at S20 (so subsequent services see real time), then leaves a
+  sync at S20 (retried a few times to cover DNS settling right after
+  udhcpc) so subsequent services start with real time, then leaves a
   busybox `ntpd` daemon running to discipline drift over uptime. Added
-  to `dev-image` by default.
+  to `dev-image` by default. `base-files` also gets `/var/run` so
+  daemons that write a pidfile have a place to put it.
 - **Fix `simpleiot` failing to start at boot** — the unit installed the
   binary as `/usr/bin/simpleiot` but its init script invoked `/usr/bin/siot`,
   so booting the dev image showed `siot: not found` and the service never
