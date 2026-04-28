@@ -8,6 +8,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Per-developer machine override via `local.star`** — when you switch
+  machines from the TUI's setup view, yoe now writes `local.star` at the
+  project root with your selection. Subsequent `yoe` commands use that
+  machine without you re-passing `--machine` every time. The file is
+  gitignored so each developer can pin their own target. `--machine` on
+  the command line still wins.
 - **`yoe flash list` and TUI device picker** — `yoe flash list` enumerates
   removable USB sticks and SD cards (filtered against the disk hosting the
   running system). In the TUI, pressing `f` on an image unit opens a device

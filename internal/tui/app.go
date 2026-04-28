@@ -751,13 +751,18 @@ func (m model) updateSetupMachine(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "enter":
-		m.proj.Defaults.Machine = m.machines[m.machineCursor]
-		if mach, ok := m.proj.Machines[m.machines[m.machineCursor]]; ok {
+		picked := m.machines[m.machineCursor]
+		m.proj.Defaults.Machine = picked
+		if mach, ok := m.proj.Machines[picked]; ok {
 			m.arch = mach.Arch
 		}
 		m.recomputeStatuses()
 		m.checkBinfmtWarning()
-		m.message = fmt.Sprintf("Machine set to %s", m.machines[m.machineCursor])
+		if err := yoestar.WriteLocalOverrides(m.projectDir, yoestar.LocalOverrides{Machine: picked}); err != nil {
+			m.message = fmt.Sprintf("Machine set to %s (warning: failed to save local.star: %v)", picked, err)
+		} else {
+			m.message = fmt.Sprintf("Machine set to %s (saved to local.star)", picked)
+		}
 		m.setupField = ""
 		m.view = viewUnits
 		return m, nil

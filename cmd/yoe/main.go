@@ -420,6 +420,19 @@ func loadProjectWithMachine(machineName string) *yoestar.Project {
 	if dir == "" {
 		dir = "."
 	}
+	// Precedence: --machine flag > local.star > PROJECT.star defaults.
+	if machineName == "" {
+		absDir, err := filepath.Abs(dir)
+		if err == nil {
+			if root, err := findProjectRootForLocal(absDir); err == nil {
+				if ov, err := yoestar.LoadLocalOverrides(root); err == nil {
+					machineName = ov.Machine
+				} else {
+					fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+				}
+			}
+		}
+	}
 	opts := []yoestar.LoadOption{
 		yoestar.WithModuleSync(module.SyncIfNeeded),
 	}
@@ -435,6 +448,22 @@ func loadProjectWithMachine(machineName string) *yoestar.Project {
 		os.Exit(1)
 	}
 	return proj
+}
+
+// findProjectRootForLocal walks up from dir looking for PROJECT.star so
+// LoadLocalOverrides can be called against the project root (where
+// local.star lives) rather than the working dir.
+func findProjectRootForLocal(dir string) (string, error) {
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "PROJECT.star")); err == nil {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("no PROJECT.star in %s or parents", dir)
+		}
+		dir = parent
+	}
 }
 
 func defaultArch(proj *yoestar.Project) string {
