@@ -8,6 +8,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Fix `yoe flash` rejecting non-system disks** — `flash` previously refused
+  to write to `/dev/sda`, `/dev/nvme0n1`, and `/dev/vda` regardless of the
+  actual layout. It now detects which disk hosts the running system (`/`,
+  `/boot`, `/boot/efi`, `/usr`) and refuses only that disk, so flashing to a
+  USB or external SATA drive named `/dev/sda` works on machines whose root is
+  on NVMe.
+
 ## [0.8.2] - 2026-04-24
 
 - **Fix extlinux install under Docker 29** — `--privileged` containers no longer
