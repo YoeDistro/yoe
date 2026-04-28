@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-04-28
+
 - **mDNS via new `mdnsd` unit** — the dev-image now answers
   `<hostname>.local` on the LAN, so `ssh user@yoe-dev.local` works without
   knowing the device's IP. Uses troglobit/mdnsd (a small dbus-free mDNS
