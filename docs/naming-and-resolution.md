@@ -255,10 +255,10 @@ The rule that keeps the apk repo lean:
 
 This means:
 
-- **Don't `provides` a build-time library.** Swapping `openssl` ↔ `libressl`
-  via `provides` would fan out every `curl`, `openssh`, `python` apk per
-  selection. If you need a different crypto library, give it a different name
-  and have consumers reference it explicitly.
+- **Don't `provides` a build-time library.** Swapping `openssl` ↔ `libressl` via
+  `provides` would fan out every `curl`, `openssh`, `python` apk per selection.
+  If you need a different crypto library, give it a different name and have
+  consumers reference it explicitly.
 - **Don't put machine-flavored units in a generic library's build-time `deps`.**
   A library should depend on other libraries, never on `linux`, `base-files`, or
   any unit that varies by machine — otherwise the library's apk forks per
