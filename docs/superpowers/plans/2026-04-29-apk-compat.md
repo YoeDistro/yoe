@@ -285,20 +285,26 @@ on the target so `apk` runs without `--allow-untrusted`.
       concatenated gzip stream. _(Implementation in `internal/artifact/sign.go`
       with `Signer.SignStream`; `CreateAPK` writes `sigGz + controlGz +
       dataGz` to the .apk file.)_
-- [ ] Re-run phase 1's round-trip test without `--allow-untrusted`. Should
-      succeed once the public key is in `/etc/apk/keys/`. _(Verification
-      pending: existing `apk_compat_test.go` still uses --allow-untrusted;
-      a follow-up test should drop it and use --keys-dir instead, proving
-      signature verification works against stock apk-tools.)_
+- [x] Re-run phase 1's round-trip test without `--allow-untrusted`. Should
+      succeed once the public key is in `/etc/apk/keys/`.
+      _(`TestAPKSignedRepoInstallWithUpstreamApk` in
+      `apk_compat_test.go` builds a signed apk + signed APKINDEX, drops
+      the public key into the rootfs's `/etc/apk/keys/`, and runs stock
+      `apk add --root` (no --allow-untrusted, no --keys-dir). Surfaced
+      and fixed two bugs along the way: APKINDEX `C:` was hashing the
+      first stream regardless of whether it was the signature, and
+      apk 2.x's `--keys-dir` doesn't compose with `--root` the way the
+      original image.star assumed.)_
 
 ### Task 3.3: Sign APKINDEX
 
 - [x] Apply the same signing flow to `APKINDEX.tar.gz` so apk doesn't warn about
       untrusted indexes. _(`repo.GenerateIndex` builds the index into a
       buffer and prepends the signature stream when a Signer is supplied.)_
-- [ ] Verify with `apk update` against the local repo. _(Verification
-      pending: same as 3.2 — needs a CI test that runs `apk update`
-      against a yoe-built repo with --keys-dir but without
+- [x] Verify with `apk update` against the local repo. _(Same test as
+      3.2 — `apk add` against a yoe-built repo via `--repository` now
+      reads our signed APKINDEX, verifies its signature against the
+      pre-staged public key, and resolves the package without
       --allow-untrusted.)_
 
 ### Task 3.4: Public key in rootfs

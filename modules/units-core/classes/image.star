@@ -52,9 +52,6 @@ def _assemble_rootfs(packages, hostname, timezone, locale):
     Flags:
       --root            — destination rootfs
       --initdb          — create /lib/apk/db on a fresh rootfs
-      --keys-dir        — directory with the project's signing public key;
-                          yoe publishes it next to the local repo so apk
-                          verifies signatures without --allow-untrusted
       --no-network      — never reach the public Alpine mirrors
       --no-cache        — keep /etc/apk/cache out of the rootfs
       --no-scripts      — don't try to run pre/post-install scripts during
@@ -62,19 +59,26 @@ def _assemble_rootfs(packages, hostname, timezone, locale):
                           yoe-built apks don't ship scripts today anyway
       -X $REPO          — yoe's local Alpine-layout repo
 
+    The project's signing public key is pre-staged into the rootfs at
+    /etc/apk/keys/<keyname>.rsa.pub before `apk add` runs — apk reads
+    `<root>/etc/apk/keys/` to validate signatures, and `--keys-dir`
+    interacts oddly with `--root` in apk 2.x. base-files installs the
+    same file via its data tar, so the in-rootfs key after install is
+    identical to the pre-staged one.
+
     Intentional file shadows (busybox stubs vs the real util-linux/iproute2/
     procps-ng/etc.) are declared per-unit via `replaces = [...]`, which apk
     honors at install time. Without those annotations, a file conflict here
     is a real bug — let apk fail the build instead of papering over it with
     --force-overwrite.
     """
-    run("mkdir -p $DESTDIR/rootfs")
+    run("mkdir -p $DESTDIR/rootfs/etc/apk/keys")
+    run("cp $YOE_KEYS_DIR/$YOE_KEY_NAME $DESTDIR/rootfs/etc/apk/keys/")
 
     pkg_args = " ".join(packages)
     run("apk add " +
         "--root $DESTDIR/rootfs " +
         "--initdb " +
-        "--keys-dir $YOE_KEYS_DIR " +
         "--no-network " +
         "--no-cache " +
         "--no-scripts " +

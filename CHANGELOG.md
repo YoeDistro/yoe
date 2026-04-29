@@ -8,6 +8,16 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **APKINDEX `C:` hash is correct for signed apks.** When yoe started
+  signing apks, the on-disk first stream became the signature, not the
+  control block. The index generator was hashing the first stream
+  unconditionally, which broke `apk add` against the signed repo with a
+  misleading "BAD signature" error. The hasher now skips signature
+  streams and points at the actual control block. Image-time
+  `apk add` no longer needs `--keys-dir` either — the public key is
+  pre-staged into `<root>/etc/apk/keys/` before the install runs, which
+  matches how apk 2.x actually resolves keys when `--root` is set.
+
 - **`apk add` and `apk upgrade` work on yoe-built devices.** A new
   `apk-tools` unit (Alpine apk 2.14.10) ships in `dev-image`, so booted
   systems can install and upgrade packages against the project's signed

@@ -148,6 +148,104 @@ func TestAPKRepoInstallWithUpstreamApk(t *testing.T) {
 	}
 }
 
+// TestAPKSignedRepoInstallWithUpstreamApk exercises the signed-repo path:
+// build an apk and an APKINDEX both signed with a yoe-generated key, and
+// install via stock apk-tools WITHOUT `--allow-untrusted`. apk add must
+// verify the signatures against the public key we drop into
+// /etc/apk/keys/. This closes Phase 3.2/3.3 verification — proves the
+// signature format yoe writes is byte-for-byte compatible with apk-tools'
+// verification path.
+func TestAPKSignedRepoInstallWithUpstreamApk(t *testing.T) {
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not available")
+	}
+
+	tmp := t.TempDir()
+
+	// Generate a signing key in a temp dir so the test doesn't touch
+	// ~/.config/yoe/keys/.
+	keyPath := filepath.Join(tmp, "test-signing.rsa")
+	signer, err := artifact.LoadOrGenerateSigner("test", keyPath)
+	if err != nil {
+		t.Fatalf("LoadOrGenerateSigner: %v", err)
+	}
+
+	destDir := filepath.Join(tmp, "destdir")
+	if err := os.MkdirAll(filepath.Join(destDir, "usr/bin"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(destDir, "usr/bin/hello"),
+		[]byte("#!/bin/sh\necho hi\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Build the apk and the APKINDEX, both signed.
+	repoDir := filepath.Join(tmp, "repo", "x86_64")
+	if err := os.MkdirAll(repoDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(tmp, "out")
+	unit := &yoestar.Unit{
+		Name:        "hello",
+		Version:     "1.0.0",
+		License:     "MIT",
+		Description: "test package for signed apk compat",
+	}
+	apkPath, err := artifact.CreateAPK(unit, destDir, out, "x86_64", "", signer)
+	if err != nil {
+		t.Fatalf("CreateAPK: %v", err)
+	}
+	if err := copyFile(apkPath, filepath.Join(repoDir, filepath.Base(apkPath))); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.GenerateIndex(repoDir, signer); err != nil {
+		t.Fatalf("GenerateIndex: %v", err)
+	}
+
+	// Drop the public key where apk will look for it: <root>/etc/apk/keys/
+	// inside the container. apk reads that directory by default when
+	// --root is set, and that's also where base-files installs the key
+	// in real builds (see image.star and base-files.star).
+	keysHostDir := filepath.Join(tmp, "keys")
+	if err := os.MkdirAll(keysHostDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(keysHostDir, signer.KeyName), signer.PubPEM, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// No --allow-untrusted, no --keys-dir. We pre-stage the key into
+	// /tmp/test/etc/apk/keys/ before apk add runs — same flow as
+	// image.star.
+	cmd := exec.Command("docker", "run", "--rm",
+		"-v", filepath.Join(tmp, "repo")+":/repo:ro",
+		"-v", keysHostDir+":/keys:ro",
+		"alpine:3.21",
+		"sh", "-c",
+		"mkdir -p /tmp/test/etc/apk/keys && "+
+			"cp /keys/* /tmp/test/etc/apk/keys/ && "+
+			"apk add --root /tmp/test --initdb "+
+			"--repository /repo --no-network hello 2>&1; echo EXIT=$?")
+	output, _ := cmd.CombinedOutput()
+	t.Logf("upstream apk output:\n%s", string(output))
+
+	report := categorizeApkOutput(string(output))
+	if report.exitCode != 0 {
+		t.Errorf("apk add (signed) exited with %d", report.exitCode)
+	}
+	for _, e := range report.errors {
+		t.Errorf("upstream apk ERROR: %s", e)
+	}
+	// With signing in place, untrusted-signature warnings would be a
+	// regression — we want zero warnings here.
+	for _, w := range report.expectedWarnings {
+		t.Errorf("unexpected (would-be-expected) apk WARNING in signed flow: %s", w)
+	}
+	for _, w := range report.unexpectedWarnings {
+		t.Errorf("upstream apk WARNING: %s", w)
+	}
+}
+
 type apkReport struct {
 	exitCode           int
 	errors             []string

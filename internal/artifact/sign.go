@@ -165,19 +165,21 @@ func (s *Signer) SignStream(data []byte) ([]byte, error) {
 // signatureGzipStream wraps the signature bytes in a single-entry tar
 // (entry name = `.SIGN.RSA.<keyname>`) inside a gzip stream. The tar is
 // flushed without a trailer — apk reads exactly one gzip stream at a time,
-// so the standard 2-block tar EOF marker would just be wasted bytes.
+// so the standard 2-block tar EOF marker would just be wasted bytes. The
+// header shape mirrors what writeGzipTar in apk.go uses for the control
+// stream: bare Name/Size/Mode/ModTime, no PaX records, no Typeflag set.
+// apk's signature parser is order-tolerant on tar fields but rejects
+// unexpected extended headers in some configurations.
 func (s *Signer) signatureGzipStream(signature []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	gw := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(gw)
 
 	hdr := &tar.Header{
-		Name:     ".SIGN.RSA." + s.KeyName,
-		Mode:     0644,
-		Size:     int64(len(signature)),
-		ModTime:  time.Now(),
-		Typeflag: tar.TypeReg,
-		Format:   tar.FormatPAX,
+		Name:    ".SIGN.RSA." + s.KeyName,
+		Mode:    0644,
+		Size:    int64(len(signature)),
+		ModTime: time.Now(),
 	}
 	if err := tw.WriteHeader(hdr); err != nil {
 		return nil, err

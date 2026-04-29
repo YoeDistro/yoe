@@ -80,15 +80,18 @@ func CreateAPK(unit *yoestar.Unit, destDir, outputDir, arch, commit string, sign
 	// Generate PKGINFO with the data hash baked in.
 	pkginfo := generatePKGINFO(unit, destDir, dataHashHex, arch, commit)
 
-	// Build the control stream into a buffer so we can hash it for the
-	// signature before writing anything to disk.
+	// Build the control stream (gzipped tar containing .PKGINFO).
 	var controlGz bytes.Buffer
 	if err := writeGzipTar(&controlGz, map[string][]byte{".PKGINFO": []byte(pkginfo)}); err != nil {
 		return "", fmt.Errorf("building control stream: %w", err)
 	}
 
 	// Open output and write the streams in order: optional signature,
-	// control, data.
+	// control, data. The signature is over the SHA-1 of the gzip-compressed
+	// control stream (verified empirically against Alpine's own signed
+	// apks: sha1(controlGz) is exactly what `openssl dgst -sha1 -verify`
+	// accepts against the .SIGN.RSA.* signature). Data integrity flows
+	// through PKGINFO `datahash`, which the control stream carries.
 	f, err := os.Create(apkPath)
 	if err != nil {
 		return "", fmt.Errorf("creating %s: %w", apkPath, err)
