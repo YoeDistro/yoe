@@ -1,4 +1,15 @@
 #!/bin/sh
 ip link set lo up
 ip link set eth0 up
-udhcpc -i eth0 -s /usr/share/udhcpc/default.script -q
+
+# Wait briefly for carrier so udhcpc doesn't immediately hit "Network is down"
+# on virtio-net and similar drivers where IFF_LOWER_UP lags IFF_UP.
+i=0
+while [ $i -lt 50 ]; do
+    [ "$(cat /sys/class/net/eth0/carrier 2>/dev/null)" = "1" ] && break
+    i=$((i + 1))
+    sleep 0.1
+done
+
+# Background udhcpc so boot proceeds even when no DHCP server is reachable.
+udhcpc -i eth0 -s /usr/share/udhcpc/default.script -b -t 5 -T 1 -A 3 &
