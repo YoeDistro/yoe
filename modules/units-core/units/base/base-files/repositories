@@ -1,0 +1,14 @@
+# /etc/apk/repositories — list of apk repository URLs, one per line.
+#
+# Add your project's apk repository here, e.g.:
+#   https://repo.example.com/<project>/x86_64
+#   /var/cache/yoe/repo
+#
+# apk-tools uses /etc/apk/keys/<keyname>.rsa.pub to verify signatures —
+# yoe's base-files unit installed the project's public key for you.
+#
+# For yoe-built repos, the layout is:
+#   <repo-root>/<arch>/APKINDEX.tar.gz
+#   <repo-root>/<arch>/*.apk
+# Point this file at <repo-root> (without the /<arch> suffix); apk picks
+# the right arch automatically.

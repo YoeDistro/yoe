@@ -26,7 +26,7 @@ def base_files(name = "base-files", users = None):
     unit(
         name = name,
         version = "1.0.0",
-        release = 4,
+        release = 5,
         scope = "machine",
         license = "MIT",
         description = "Base filesystem skeleton: users, groups, dirs, inittab, boot config",
@@ -48,6 +48,11 @@ def base_files(name = "base-files", users = None):
                     install_template("os-release.tmpl", "$DESTDIR/etc/os-release"),
                     install_file("extlinux.conf",
                                  "$DESTDIR/boot/extlinux/extlinux.conf"),
+                    # Default /etc/apk/repositories — a commented-out
+                    # template. Operators populate this with their actual
+                    # repo URL via an overlay or by overriding base-files
+                    # in their project module.
+                    install_file("repositories", "$DESTDIR/etc/apk/repositories"),
                     # Ship the project's apk signing public key so on-target
                     # `apk add`/`apk upgrade` verify packages without
                     # --allow-untrusted. yoe writes the key under

@@ -8,6 +8,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **`apk add` and `apk upgrade` work on yoe-built devices.** A new
+  `apk-tools` unit (Alpine apk 2.14.10) ships in `dev-image`, so booted
+  systems can install and upgrade packages against the project's signed
+  repo using stock `apk` commands — no `--allow-untrusted`, no extra
+  flags. `base-files` installs a commented-out `/etc/apk/repositories`
+  template; operators point it at their actual repo URL (HTTPS, HTTP, or
+  a local path) and run `apk update`. `docs/on-device-apk.md` covers the
+  full OTA flow plus an nginx hosting example.
+
 - **Signed apks and APKINDEX.** Every `.apk` and the per-arch
   `APKINDEX.tar.gz` are now RSA-signed at build time. yoe auto-generates a
   2048-bit RSA keypair at `~/.config/yoe/keys/<project>.rsa` on first

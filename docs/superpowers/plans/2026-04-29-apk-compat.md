@@ -340,36 +340,46 @@ Booted systems can run `apk add`, `apk del`, `apk upgrade`, `apk info`,
 
 ### Task 4.1: apk-tools unit
 
-- [ ] Pin `apk-tools 2.14.x` from
+- [x] Pin `apk-tools 2.14.x` from
       `https://gitlab.alpinelinux.org/alpine/apk-tools.git`. Use a release tag.
-- [ ] Build deps: `zlib`, `openssl` (both existing units).
+      _(`modules/units-core/units/base/apk-tools.star` pins v2.14.10.)_
+- [x] Build deps: `zlib`, `openssl` (both existing units). _(Wired
+      through `deps` and `runtime_deps`.)_
 - [ ] Confirm musl compat — should be clean; Alpine itself is musl.
+      _(Pending actual build; the unit is written for the toolchain-musl
+      container so musl is the only libc in scope.)_
 - [ ] Verify the resulting binary runs in the build container against the
-      project repo (`apk info --root /tmp/test`).
+      project repo (`apk info --root /tmp/test`). _(Pending build.)_
 
 ### Task 4.2: Default repository config
 
-- [ ] Ship `/etc/apk/repositories` with the project's repo URL — initially a
+- [x] Ship `/etc/apk/repositories` with the project's repo URL — initially a
       `file://` path that's invalid on-device but documented as something the
-      operator overrides.
-- [ ] Document HTTP/HTTPS hosting in `docs/on-device-apk.md` (recommend e.g.
-      nginx serving the repo dir; sample config).
+      operator overrides. _(`base-files` installs a commented-out template
+      from `units/base/base-files/repositories` with operator instructions
+      for setting their actual URL.)_
+- [x] Document HTTP/HTTPS hosting in `docs/on-device-apk.md` (recommend e.g.
+      nginx serving the repo dir; sample config). _(Includes a worked
+      nginx vhost with the right cache headers for `APKINDEX.tar.gz`
+      vs immutable `.apk` files.)_
 
 ### Task 4.3: Boot-time validation
 
 - [ ] Boot dev-image in QEMU, confirm `apk info` shows the installed package
-      list correctly.
+      list correctly. _(Pending build.)_
 - [ ] `apk add <something>` from a custom local repo bind-mounted into QEMU.
-- [ ] `apk upgrade` smoke test once a newer version of any package is published.
+      _(Pending build.)_
+- [ ] `apk upgrade` smoke test once a newer version of any package is
+      published. _(Pending build.)_
 
 ### Task 4.4: Document the OTA story
 
-- [ ] In `docs/on-device-apk.md`, write the recommended OTA flow:
+- [x] In `docs/on-device-apk.md`, write the recommended OTA flow:
   1. Build new apk versions on dev host.
   2. Sign with project key.
   3. Push to HTTP repo (or whatever transport).
   4. On device: `apk update && apk upgrade`.
-- [ ] Note constraints (no kernel upgrades without reboot orchestration;
+- [x] Note constraints (no kernel upgrades without reboot orchestration;
       atomic-rootfs alternatives like A/B partitioning out of scope here).
 
 **Done when:** A yoe-built device can install and upgrade packages against the
