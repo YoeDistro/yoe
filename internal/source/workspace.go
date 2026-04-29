@@ -2,6 +2,7 @@ package source
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"compress/bzip2"
 	"compress/gzip"
 	"fmt"
@@ -190,6 +191,74 @@ func extractTarball(tarPath, destDir string) error {
 		}
 	}
 
+	return nil
+}
+
+func extractZip(zipPath, destDir string) error {
+	zr, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return fmt.Errorf("open zip %s: %w", zipPath, err)
+	}
+	defer zr.Close()
+
+	stripPrefix := ""
+	for i, f := range zr.File {
+		parts := strings.SplitN(f.Name, "/", 2)
+		if len(parts) < 2 {
+			stripPrefix = ""
+			break
+		}
+		first := parts[0] + "/"
+		if i == 0 {
+			stripPrefix = first
+			continue
+		}
+		if first != stripPrefix {
+			stripPrefix = ""
+			break
+		}
+	}
+
+	for _, f := range zr.File {
+		name := strings.TrimPrefix(f.Name, stripPrefix)
+		if name == "" || name == "." {
+			continue
+		}
+		target := filepath.Join(destDir, name)
+
+		if f.FileInfo().IsDir() {
+			// Ensure user can traverse and write the directory regardless of
+			// the recorded mode (some zip tools write 0666 for dir entries).
+			if err := os.MkdirAll(target, f.Mode()|0o700); err != nil {
+				return fmt.Errorf("mkdir %s: %w", target, err)
+			}
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		mode := f.Mode()
+		if mode == 0 {
+			mode = 0o644
+		}
+		out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+		if err != nil {
+			return err
+		}
+		rc, err := f.Open()
+		if err != nil {
+			out.Close()
+			return err
+		}
+		if _, err := io.Copy(out, rc); err != nil {
+			rc.Close()
+			out.Close()
+			return err
+		}
+		rc.Close()
+		out.Close()
+	}
 	return nil
 }
 
