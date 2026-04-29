@@ -13,6 +13,22 @@ import (
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
+// hashStringMap writes a deterministic representation of a string→string map
+// into h: keys sorted, then "k=v" pairs joined by `,`. Used for fields like
+// Environment where iteration order would otherwise destabilize the hash.
+func hashStringMap(h io.Writer, label string, m map[string]string) {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, len(keys))
+	for i, k := range keys {
+		parts[i] = k + "=" + m[k]
+	}
+	fmt.Fprintf(h, "%s:%s\n", label, strings.Join(parts, ","))
+}
+
 // UnitHash computes the content-addressed cache key for a unit.
 // The hash includes:
 //   - Unit fields (name, version, class, source, sha256, deps, build steps, etc.)
@@ -29,7 +45,12 @@ func UnitHash(unit *yoestar.Unit, arch string, depHashes map[string]string) stri
 	fmt.Fprintf(h, "version:%s\n", unit.Version)
 	fmt.Fprintf(h, "release:%d\n", unit.Release)
 	fmt.Fprintf(h, "class:%s\n", unit.Class)
+	fmt.Fprintf(h, "scope:%s\n", unit.Scope)
 	fmt.Fprintf(h, "arch:%s\n", arch)
+
+	// Apk metadata that lands in PKGINFO — editing must invalidate cache.
+	fmt.Fprintf(h, "description:%s\n", unit.Description)
+	fmt.Fprintf(h, "license:%s\n", unit.License)
 
 	// Source
 	fmt.Fprintf(h, "source:%s\n", unit.Source)
@@ -38,7 +59,8 @@ func UnitHash(unit *yoestar.Unit, arch string, depHashes map[string]string) stri
 	fmt.Fprintf(h, "branch:%s\n", unit.Branch)
 	fmt.Fprintf(h, "patches:%s\n", strings.Join(unit.Patches, "|"))
 
-	// Tasks
+	// Tasks — hash command text, callable name, and install-step payload so
+	// any change to a build step invalidates the cache.
 	for _, t := range unit.Tasks {
 		fmt.Fprintf(h, "task:%s:%s\n", t.Name, t.Container)
 		for _, s := range t.Steps {
@@ -48,6 +70,19 @@ func UnitHash(unit *yoestar.Unit, arch string, depHashes map[string]string) stri
 			if s.Fn != nil {
 				fmt.Fprintf(h, "step:fn:%s\n", s.Fn.Name())
 			}
+			if s.Install != nil {
+				fmt.Fprintf(h, "step:install:%s:%s:%s:%o:%s\n",
+					s.Install.Kind, s.Install.Src, s.Install.Dest,
+					s.Install.Mode, s.Install.BaseDir)
+				// Hash the source file content too — editing a template
+				// or static file should invalidate the unit.
+				if src := filepath.Join(s.Install.BaseDir, s.Install.Src); src != "" {
+					if data, err := os.ReadFile(src); err == nil {
+						sum := sha256.Sum256(data)
+						fmt.Fprintf(h, "step:install:src-sha256:%x\n", sum[:])
+					}
+				}
+			}
 		}
 	}
 	fmt.Fprintf(h, "container:%s\n", unit.Container)
@@ -55,7 +90,11 @@ func UnitHash(unit *yoestar.Unit, arch string, depHashes map[string]string) stri
 	fmt.Fprintf(h, "sandbox:%v\n", unit.Sandbox)
 	fmt.Fprintf(h, "shell:%s\n", unit.Shell)
 	fmt.Fprintf(h, "provides:%s\n", unit.Provides)
+	fmt.Fprintf(h, "replaces:%s\n", strings.Join(unit.Replaces, ","))
+	fmt.Fprintf(h, "runtime_deps:%s\n", strings.Join(unit.RuntimeDeps, ","))
 	fmt.Fprintf(h, "services:%s\n", strings.Join(unit.Services, ","))
+	fmt.Fprintf(h, "conffiles:%s\n", strings.Join(unit.Conffiles, ","))
+	hashStringMap(h, "environment", unit.Environment)
 
 	// Extra kwargs — JSON-encoded with sorted keys for stability.
 	// Go's encoding/json sorts map keys when marshaling map[string]any,
@@ -89,9 +128,15 @@ func UnitHash(unit *yoestar.Unit, arch string, depHashes map[string]string) stri
 		copy(pkgs, unit.Artifacts)
 		sort.Strings(pkgs)
 		fmt.Fprintf(h, "packages:%s\n", strings.Join(pkgs, ","))
+		fmt.Fprintf(h, "exclude:%s\n", strings.Join(unit.Exclude, ","))
 		fmt.Fprintf(h, "hostname:%s\n", unit.Hostname)
 		fmt.Fprintf(h, "timezone:%s\n", unit.Timezone)
 		fmt.Fprintf(h, "locale:%s\n", unit.Locale)
+		for i, p := range unit.Partitions {
+			fmt.Fprintf(h, "partition:%d:%s:%s:%s:%v:%s\n",
+				i, p.Label, p.Type, p.Size, p.Root,
+				strings.Join(p.Contents, ","))
+		}
 	}
 
 	return fmt.Sprintf("%x", h.Sum(nil))

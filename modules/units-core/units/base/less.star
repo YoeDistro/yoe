@@ -13,4 +13,5 @@ autotools(
     description = "Pager program (more capable than busybox less)",
     deps = ["ncurses"],
     runtime_deps = ["ncurses"],
+    replaces = ["busybox"],
 )

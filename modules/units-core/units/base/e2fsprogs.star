@@ -15,6 +15,7 @@ unit(
     description = "ext2/ext3/ext4 filesystem utilities (mkfs, fsck, tune2fs)",
     deps = ["util-linux", "toolchain-musl"],
     runtime_deps = ["util-linux"],
+    replaces = ["busybox"],
     container = "toolchain-musl",
     container_arch = "target",
     sandbox = True,

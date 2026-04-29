@@ -14,6 +14,7 @@ unit(
     description = "ps, top, free, vmstat and friends — full procps tools",
     deps = ["ncurses", "toolchain-musl"],
     runtime_deps = ["ncurses"],
+    replaces = ["busybox"],
     container = "toolchain-musl",
     container_arch = "target",
     sandbox = True,

@@ -66,6 +66,7 @@ func GenerateIndex(repoDir string) error {
 		url := pkginfo.Get("url")
 		depends := strings.Join(pkginfo.values("depend"), " ")
 		provides := strings.Join(pkginfo.values("provides"), " ")
+		replaces := strings.Join(pkginfo.values("replaces"), " ")
 
 		// Field order matches Alpine's apk index for diff sanity. apk-tools
 		// is order-tolerant but matching keeps comparisons readable.
@@ -96,6 +97,9 @@ func GenerateIndex(repoDir string) error {
 		}
 		if provides != "" {
 			fmt.Fprintf(&buf, "p:%s\n", provides)
+		}
+		if replaces != "" {
+			fmt.Fprintf(&buf, "r:%s\n", replaces)
 		}
 		if i < len(apks)-1 {
 			buf.WriteString("\n")

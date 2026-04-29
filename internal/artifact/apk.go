@@ -310,6 +310,14 @@ func generatePKGINFO(unit *yoestar.Unit, destDir, dataHashHex, arch, commit stri
 		fmt.Fprintf(&b, "depend = %s\n", dep)
 	}
 
+	// Packages whose files this one is allowed to overwrite at install time.
+	// apk reads this to scope file-conflict overrides — without it, a
+	// shadowing package (e.g. util-linux over busybox's /bin/dmesg) fails
+	// install instead of emitting a warning.
+	for _, r := range unit.Replaces {
+		fmt.Fprintf(&b, "replaces = %s\n", r)
+	}
+
 	// Note: yoe's `services = [...]` declaration becomes actual init.d
 	// symlinks in the data tar (see materializeServiceSymlinks). We don't
 	// emit a custom `service =` PKGINFO field because apk-tools 2.x

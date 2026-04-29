@@ -3,10 +3,52 @@ package resolve
 import (
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
+
+// hashSkipFields lists Unit fields that intentionally do NOT contribute to
+// the cache key. Adding a field here is a deliberate decision: it must not
+// change the build output or the resulting apk in any way.
+//
+// When you add a field to Unit, the TestUnitHash_CoversAllFields check
+// below will fail until you either reference unit.<Field> in UnitHash or
+// add the field name here with a one-line justification.
+var hashSkipFields = map[string]string{
+	"Module":      "registration provenance — same unit from different modules must hash identically",
+	"ModuleIndex": "registration order — informational, no output impact",
+	"CacheDirs":   "host-side mount points; doesn't affect built artifact contents",
+}
+
+// TestUnitHash_CoversAllFields fails when a new field is added to Unit
+// without either being incorporated into UnitHash or explicitly opted out
+// in hashSkipFields. This is the forcing function that prevents stale-cache
+// bugs caused by forgetting to hash a new field.
+func TestUnitHash_CoversAllFields(t *testing.T) {
+	source, err := os.ReadFile("hash.go")
+	if err != nil {
+		t.Fatalf("reading hash.go: %v", err)
+	}
+	src := string(source)
+
+	unitType := reflect.TypeFor[yoestar.Unit]()
+	for i := 0; i < unitType.NumField(); i++ {
+		name := unitType.Field(i).Name
+		if _, skipped := hashSkipFields[name]; skipped {
+			continue
+		}
+		// Field is "covered" if UnitHash references unit.<Name> directly.
+		// Helper functions still need to receive the field via this name,
+		// so the textual check is sufficient.
+		if !strings.Contains(src, "unit."+name) {
+			t.Errorf("Unit.%s is not referenced in UnitHash; either hash it "+
+				"or add it to hashSkipFields with a justification", name)
+		}
+	}
+}
 
 func TestUnitHash_Deterministic(t *testing.T) {
 	unit := &yoestar.Unit{

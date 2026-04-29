@@ -9,6 +9,7 @@ unit(
     description = "Full ip(8)/tc(8) suite for advanced network configuration",
     deps = ["util-linux", "toolchain-musl"],
     runtime_deps = ["util-linux"],
+    replaces = ["busybox"],
     container = "toolchain-musl",
     container_arch = "target",
     sandbox = True,

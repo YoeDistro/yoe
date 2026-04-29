@@ -59,9 +59,12 @@ def _assemble_rootfs(packages, hostname, timezone, locale):
                           assembly; the rootfs has no /bin/sh yet, and
                           yoe-built apks don't ship scripts today anyway
       -X $REPO         — yoe's local Alpine-layout repo
-      --force-overwrite — tolerate intentional shadow files (busybox vs
-                          iproute2, util-linux, procps-ng, etc.) until
-                          phase 5 ships `replaces:` annotations
+
+    Intentional file shadows (busybox stubs vs the real util-linux/iproute2/
+    procps-ng/etc.) are declared per-unit via `replaces = [...]`, which apk
+    honors at install time. Without those annotations, a file conflict here
+    is a real bug — let apk fail the build instead of papering over it with
+    --force-overwrite.
     """
     run("mkdir -p $DESTDIR/rootfs")
 
@@ -73,7 +76,6 @@ def _assemble_rootfs(packages, hostname, timezone, locale):
         "--no-network " +
         "--no-cache " +
         "--no-scripts " +
-        "--force-overwrite " +
         "-X $REPO " +
         pkg_args)
 
