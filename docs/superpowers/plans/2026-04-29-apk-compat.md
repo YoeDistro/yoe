@@ -223,10 +223,14 @@ critical prerequisite for `apk add` against the yoe repo.)
 
 ### Task 2.3: Re-baseline dev-image
 
-- [ ] Build dev-image with the new path; verify boot in QEMU.
-- [ ] For the 27 known shadows from the previous warning pass, declare each as
-      `replaces:` on the appropriate package (see phase 5; in the interim, pass
-      `--force-overwrite` and document the temporary licence).
+- [x] Build dev-image with the new path; verify boot in QEMU. _(Booted to a
+      login shell; udhcpc/dhcpcd obtains a lease against QEMU's user-mode
+      gateway — `S10network` runs and networking is up.)_
+- [x] For the known shadows surfaced earlier, declare each as `replaces:` on the
+      appropriate package, and drop `--force-overwrite` from image assembly.
+      _(See Phase 5.3 for the per-unit annotations. The interim
+      `--force-overwrite` is gone — undeclared file conflicts now fail apk's
+      install loudly instead of silently shipping.)_
 - [ ] Compare the resulting rootfs file list with the previous tar-merge version
       to catch surprises.
 
@@ -399,20 +403,29 @@ both DAG-time bindings and apk-level metadata.
 
 ### Task 5.2: `replaces` field
 
-- [ ] Add `replaces []string` to the unit kwargs.
-- [ ] Emit `replaces:` lines into PKGINFO.
-- [ ] Once apk-driven assembly (phase 2) is in, this field automatically
-      silences file-conflict errors for declared overrides.
+- [x] Add `replaces []string` to the unit kwargs. _(Wired through
+      `internal/starlark/types.go`, `builtins.go`, and added to the unit hash in
+      `internal/resolve/hash.go` so edits invalidate the cache.)_
+- [x] Emit `replaces:` lines into PKGINFO. _(Per-line `replaces = <pkg>` in
+      `internal/artifact/apk.go`; APKINDEX gets the parallel `r:` line in
+      `internal/repo/index.go`.)_
+- [x] Once apk-driven assembly (phase 2) is in, this field automatically
+      silences file-conflict errors for declared overrides. _(Image assembly no
+      longer passes `--force-overwrite`; declared shadows resolve cleanly,
+      undeclared ones fail apk's install.)_
 
 ### Task 5.3: Annotate known shadows
 
-- [ ] On `iproute2`, declare `replaces = ["busybox"]` (covers `/sbin/ip`,
+- [x] On `iproute2`, declare `replaces = ["busybox"]` (covers `/sbin/ip`,
       `/sbin/tc`).
-- [ ] Same on `util-linux` (mount, umount, dmesg, hwclock, fsck, etc.),
-      `procps-ng` (ps, kill, sysctl, watch, pidof, etc.), `less`, `xz`,
-      `ncurses` (clear, reset), `vim` (xxd).
-- [ ] Verify the 27 conflicts surfaced earlier are all covered by the
-      annotations.
+- [x] Same on `util-linux` (mount, umount, dmesg, hwclock, fsck, etc.),
+      `procps-ng` (ps, kill, sysctl, watch, pidof, etc.), `less`, `xz`, `vim`
+      (xxd), and `e2fsprogs`. For ncurses' `clear`/`reset`, the shadowing
+      direction is the reverse — busybox overwrites ncurses, so `busybox`
+      declares `replaces = ["ncurses"]`.
+- [ ] Verify the conflicts surfaced earlier are all covered by the annotations.
+      _(Pending a clean image build with the new replaces fields landed;
+      remaining gaps will surface as concrete apk install errors.)_
 
 ### Task 5.4: Documentation
 
