@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Networking picks the better DHCP client when available.** The default
+  `S10network` runs `dhcpcd` if it's on `PATH` (IPv6 SLAAC, DHCPv6, IPv4LL
+  fallback) and falls back to busybox `udhcpc` otherwise — so an image that
+  ships `dhcpcd` gets the modern client without changing the init script.
+
 - **File conflicts in image builds now fail loudly.** Units can declare
   `replaces = ["pkg", ...]` to opt into shadowing another package's files
   (e.g. `util-linux` over busybox's `/bin/dmesg`); apk honors that at install
