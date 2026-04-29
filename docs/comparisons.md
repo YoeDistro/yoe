@@ -144,6 +144,25 @@ looks like.
 - **Security-conscious defaults** — no unnecessary services, no open ports, no
   setuid binaries unless explicitly required.
 - **Fast package operations** — install/remove measured in milliseconds.
+- **Minimal install scripts** — Alpine packages do little or nothing in
+  postinst. Most ship with no install scripts at all; those that need them
+  typically run a handful of lines (`addgroup`, `adduser`, maybe an
+  `rc-update`). apk supports the full lifecycle (`.pre-install`,
+  `.post-install`, `.pre-upgrade`, `.post-upgrade`, `.pre-deinstall`,
+  `.post-deinstall`, plus triggers), but the culture is to keep them empty. This
+  is a sharp contrast with Debian's `.deb` maintainer-script tradition —
+  preinst/postinst/prerm/postrm with debconf prompts, alternatives,
+  `dpkg-divert`, and complex migrations — which is exactly what made EmDebian's
+  busybox replacement effort unsustainable (see Debian section below).
+
+**Alpine APKBUILDs are the reference implementation for `[yoe]` units.** When
+writing a new unit, the corresponding Alpine `APKBUILD` is the first place to
+look. Alpine has already solved configure flags, build-time dependencies,
+patches, and — most importantly — the install-script question (usually: nothing
+to do). Following Alpine keeps `[yoe]` out of the Debian-style postinst trap,
+where package install becomes imperative system mutation that's hard to
+reproduce, hard to sandbox, and hard to roll back. If Alpine doesn't need a
+postinst for it, `[yoe]` shouldn't either.
 
 **What `[yoe]` leaves behind:**
 

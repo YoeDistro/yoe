@@ -50,6 +50,24 @@ Verify the unit's dependency lists:
 - **Unnecessary deps** — check if any listed deps are actually unused by the
   build.
 - **Circular deps** — verify no dependency cycles exist via `yoe graph`.
+- **Machine-flavored dep in a generic unit** — flag as a **warning** if a
+  generic library or tool depends on a unit that varies by machine (anything
+  with `provides` set, or a unit reachable only via `MACHINE_CONFIG`). It forks
+  the generic unit's apk per machine. Generic units' deps should be other
+  generic libraries/tools only.
+
+### Step 3b: Check `provides` usage
+
+If the unit sets `provides`, check that it's appropriate:
+
+- `provides` is reserved for **leaf artifacts** that get swapped per machine or
+  project: kernel, base-files, init, bootloader. Flag as a **warning** if a
+  build-time library, a generic tool, or a daemon with a busybox alternative
+  declares `provides` — every transitive consumer's apk forks per swap.
+- For runtime alternatives (mdev/eudev, udhcpc/dhcpcd, busybox-ntpd/ntp-client),
+  recommend installing both side-by-side and selecting which daemon runs from
+  the init script in a config unit instead of using `provides`.
+- See `docs/naming-and-resolution.md` §"When NOT to use provides" for details.
 
 To check linked libraries after a successful build:
 
