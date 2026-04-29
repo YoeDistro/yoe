@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -34,6 +35,10 @@ type Options struct {
 	ProjectDir string // project root
 	Arch       string // target architecture
 	Machine    string // target machine name
+	// ProjectCommit is the git rev-parse HEAD of ProjectDir, captured once
+	// per build so PKGINFO records build provenance. Empty means "not a git
+	// repo" or "couldn't determine" — the apk omits the `commit` field then.
+	ProjectCommit string
 	OnEvent    func(BuildEvent) // optional callback for build progress
 }
 
@@ -52,8 +57,11 @@ func ScopeDir(unit *yoestar.Unit, arch, machine string) string {
 
 // BuildUnits builds the specified units (or all if names is empty).
 func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer) error {
-	// Warn if old-style build directories exist (no arch subdirectory)
-
+	// Capture project HEAD commit once for PKGINFO provenance. Failure is
+	// non-fatal — apks just omit the `commit` field.
+	if opts.ProjectCommit == "" {
+		opts.ProjectCommit = readProjectCommit(opts.ProjectDir)
+	}
 
 	dag, err := resolve.BuildDAG(proj)
 	if err != nil {
@@ -444,7 +452,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	// Package the output into an .apk and publish to the local repo.
 	// Then stage destdir for downstream units' per-unit sysroots.
 	if unit.Class != "image" && unit.Class != "container" {
-		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), sd)
+		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), sd, opts.ProjectCommit)
 		if err != nil {
 			return fmt.Errorf("creating apk: %w", err)
 		}
@@ -618,6 +626,23 @@ func writeCacheMarker(projectDir, arch, name, hash string) {
 	os.WriteFile(path, []byte(hash), 0644)
 }
 
+
+// readProjectCommit returns the trimmed output of `git rev-parse HEAD` run
+// in projectDir. Returns "" if the directory isn't a git repo, git isn't
+// installed, or the command fails for any other reason — apks just omit the
+// `commit` PKGINFO field in that case.
+func readProjectCommit(projectDir string) string {
+	if projectDir == "" {
+		return ""
+	}
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = projectDir
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
 
 // repoRelPath returns the repo directory path relative to the project root.
 func repoRelPath(proj *yoestar.Project, projectDir string) string {

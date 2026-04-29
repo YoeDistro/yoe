@@ -31,7 +31,7 @@ func TestCreateAPK(t *testing.T) {
 		RuntimeDeps: []string{"glibc"},
 	}
 
-	apkPath, err := CreateAPK(unit, destDir, outputDir, "x86_64")
+	apkPath, err := CreateAPK(unit, destDir, outputDir, "x86_64", "")
 	if err != nil {
 		t.Fatalf("CreateAPK: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestCreateAPK_EmptyDestDir(t *testing.T) {
 		Version: "1.0.0",
 	}
 
-	apkPath, err := CreateAPK(unit, destDir, outputDir, "x86_64")
+	apkPath, err := CreateAPK(unit, destDir, outputDir, "x86_64", "")
 	if err != nil {
 		t.Fatalf("CreateAPK: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestGeneratePKGINFO(t *testing.T) {
 		RuntimeDeps: []string{"zlib", "openssl"},
 	}
 
-	info := generatePKGINFO(unit, t.TempDir(), "abc123", "x86_64")
+	info := generatePKGINFO(unit, t.TempDir(), "abc123", "x86_64", "deadbeef")
 
 	if !strings.Contains(info, "pkgname = test") {
 		t.Error("missing pkgname")
@@ -181,41 +181,11 @@ func TestGeneratePKGINFO(t *testing.T) {
 	if !strings.Contains(info, "depend = openssl") {
 		t.Error("missing depend openssl")
 	}
-}
-
-func _disabledTestDebugAPKStreams(t *testing.T) {
-	destDir := filepath.Join(t.TempDir(), "destdir")
-	os.MkdirAll(filepath.Join(destDir, "usr", "bin"), 0755)
-	os.WriteFile(filepath.Join(destDir, "usr", "bin", "hello"), []byte("hi"), 0755)
-	
-	// Verify files exist
-	dataTar, derr := buildDataTar(destDir)
-	t.Logf("dataTar: %d bytes, err: %v", len(dataTar), derr)
-
-	unit := &yoestar.Unit{Name: "test", Version: "1.0"}
-	apkPath, _ := CreateAPK(unit, destDir, filepath.Join(t.TempDir(), "out"), "x86_64")
-	
-	data, _ := os.ReadFile(apkPath)
-	t.Logf("APK size: %d bytes", len(data))
-	
-	f, _ := os.Open(apkPath)
-	defer f.Close()
-	
-	stream := 0
-	for {
-		gr, err := gzip.NewReader(f)
-		if err != nil { t.Logf("No more gzip streams after %d (err: %v)", stream, err); break }
-		stream++
-		tr := tar.NewReader(gr)
-		for {
-			hdr, err := tr.Next()
-			if err != nil { break }
-			t.Logf("  stream %d: %s (%d bytes)", stream, hdr.Name, hdr.Size)
-		}
-		gr.Close()
+	if !strings.Contains(info, "origin = test") {
+		t.Errorf("missing origin: %s", info)
 	}
-	
-	if stream < 2 {
-		t.Errorf("expected at least 2 gzip streams, got %d", stream)
+	if !strings.Contains(info, "commit = deadbeef") {
+		t.Errorf("missing commit: %s", info)
 	}
 }
+

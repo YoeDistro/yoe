@@ -8,6 +8,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Yoe-built apks install with upstream Alpine apk-tools.** `.apk` files and
+  `APKINDEX` produced by yoe now round-trip through stock
+  `apk add --allow-untrusted`: no checksum errors, no format warnings, and
+  package metadata (name, version, arch, deps, origin, commit, install size)
+  matches what `apk index` itself would emit. This is the foundation for using
+  `apk add` to assemble image rootfs in a future release.
 - **Nine new units in `dev-image`** — `e2fsprogs` (mkfs.ext4 / fsck.ext4 /
   tune2fs on the target), `eudev` (full udev for dynamic /dev), `iproute2` (full
   `ip`/`tc`), `dhcpcd` (a DHCP client beyond busybox udhcpc), `bash`, `less`,
