@@ -192,6 +192,17 @@ If the build fails, use the diagnose workflow to fix it iteratively.
   `--prefix=$PREFIX` (the class handles it).
 - **license** — use SPDX identifiers. Check the upstream project carefully.
 - **description** — one sentence, lowercase start, no trailing period
+- **provides** — almost always omit. `provides` is reserved for **leaf
+  artifacts** that get swapped per machine or per project: kernel, base-files,
+  init, bootloader. Do **not** set `provides` on a build-time library, a generic
+  tool (less, htop, file, etc.), or a daemon that has a busybox alternative —
+  those should ship side-by-side and be selected at boot from init scripts.
+  Misusing `provides` forks every transitive consumer into a machine-specific
+  apk variant. See `docs/naming-and-resolution.md` §"When NOT to use provides".
+- **Generic units must not depend on machine-flavored units.** A library or
+  tool's `deps` and `runtime_deps` should reference only other libraries and
+  tools. Never add `linux`, `base-files`, or any unit that varies by machine to
+  a generic unit's deps — it will fork that unit's apk per machine.
 
 ## Dependency Policy
 

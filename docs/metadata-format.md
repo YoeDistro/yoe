@@ -142,15 +142,7 @@ produces `openssl`, `openssl-dev`, `openssl-dbg`, etc.), so the plumbing in apk
 is already proven — what `[yoe]` needs to build is the Starlark surface, the
 split engine, and the default strip logic in the shared classes.
 
-### Dependency resolution at image time (planned)
-
-> **Status:** Image assembly currently reads the unit metadata, not the package
-> metadata. `internal/image/rootfs.go` walks `unit.RuntimeDeps` recursively from
-> the in-memory Starlark project and then extracts each resolved `.apk` with
-> `tar xzf --exclude=.PKGINFO` — bypassing apk's resolver entirely. `.PKGINFO`
-> is written (`internal/artifact/apk.go` emits `depend =` lines) but not
-> consulted during image assembly. This section describes the planned move to
-> package-metadata-driven resolution.
+### Dependency resolution at image time
 
 There are two places dependency information lives in `[yoe]`, and they serve
 different phases:
@@ -164,47 +156,29 @@ different phases:
 
 The unit author writes `runtime_deps = [...]` once; the build emits those into
 `.PKGINFO` as `depend =` lines. From that point the package metadata is
-authoritative for installation.
+authoritative for installation: image assembly invokes
+`apk add --root <rootfs> -X <local-repo>` inside the build container, and
+apk-tools resolves the install graph from APKINDEX. The Starlark-side
+`_resolve_runtime_deps` is still used to flatten the artifact list for the build
+DAG (so all required apks get built first), but apk-tools owns install-time
+ordering, file-conflict detection, and `/lib/apk/db/installed` population.
 
-**Planned: move image-time resolution to package metadata.** Image assembly will
-resolve dependencies by reading the `APKINDEX` / `.PKGINFO` of the already-built
-packages — either by parsing directly or by invoking
-`apk --root <rootfs> add <pkgs>` inside the build container. The unit's
-`runtime_deps` field stays authoritative for _generating_ PKGINFO; PKGINFO
-becomes authoritative for _installing_.
+**Why this is the right split:**
 
-**Why change:**
-
-- **Subpackages need it.** Once `openssl` splits into `openssl` and
-  `openssl-dev`, the unit graph no longer has a node named `openssl-dev`. The
-  dep `openssl-dev → openssl = ${version}` lives only in the generated PKGINFO.
-  A unit-graph walker cannot see it.
+- **Subpackages.** When `openssl` splits into `openssl` and `openssl-dev`, the
+  unit graph no longer has a node named `openssl-dev`. The dep
+  `openssl-dev → openssl = ${version}` lives only in the generated PKGINFO. A
+  unit-graph walker cannot see it; apk's resolver can.
 - **`provides:` / `replaces:` / `conflicts:`.** apk's metadata supports virtual
   packages and alternatives (e.g., two SSH implementations both
   `provides = ssh`, one `replaces` the other). A Starlark-only walker would have
   to re-implement apk's resolver to honor these.
-- **External repositories compose cleanly.** If a project pulls packages from an
-  Alpine aports mirror or a vendor BSP repo, there is no Starlark unit to walk —
-  only APKINDEX metadata. Delegating to apk makes these interchangeable with
-  yoe-built packages.
+- **External repositories compose cleanly.** A project that pulls packages from
+  an Alpine aports mirror or a vendor BSP repo has no Starlark unit to walk —
+  only APKINDEX metadata. apk treats yoe-built packages and external-repo
+  packages identically.
 - **Single source of truth on the device.** What the image builder sees is what
   the on-device `apk upgrade` sees: same metadata, same resolver.
-
-**Tradeoff.** `apk` becomes a required tool during image assembly. In practice
-this is a non-issue because apk already runs inside the build container for
-other operations; the change is "also invoke it here" rather than a new host
-dependency.
-
-**Migration sketch** (future work):
-
-1. Generate an `APKINDEX` in the local repo (`yoe repo index` already exists for
-   this).
-2. Replace the `tar xzf` loop in `internal/image/rootfs.go` with
-   `apk add --root <rootfs> --repository <localrepo> --repository <others> ...`.
-3. Drop the Starlark-side runtime-dep walker in `resolvePackageDeps`; keep the
-   build-side walker (for build ordering and per-unit sysroots) unchanged.
-4. Allow `artifacts = [...]` in image units to reference subpackage names
-   (`openssl-dev`) and external-repo packages (`alpine:curl`) uniformly.
 
 ## Why Starlark
 

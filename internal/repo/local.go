@@ -22,14 +22,23 @@ func RepoDir(proj *yoestar.Project, projectDir string) string {
 	return filepath.Join(projectDir, "repo")
 }
 
-// Publish copies an .apk file to the local repository.
-func Publish(apkPath, repoDir string) error {
-	if err := os.MkdirAll(repoDir, 0755); err != nil {
+// Publish copies an .apk file into the per-arch subdirectory of the local
+// repository and regenerates the APKINDEX for that arch. The on-disk layout
+// matches Alpine's convention so `apk add -X <repoDir>` Just Works:
+//
+//	<repoDir>/<archDir>/<pkg>-<ver>-r<N>.apk
+//	<repoDir>/<archDir>/APKINDEX.tar.gz
+//
+// archDir is the package's arch ("x86_64", "aarch64", ...) or the literal
+// "noarch" for portable packages.
+func Publish(apkPath, repoDir, archDir string) error {
+	archPath := filepath.Join(repoDir, archDir)
+	if err := os.MkdirAll(archPath, 0755); err != nil {
 		return err
 	}
 
 	name := filepath.Base(apkPath)
-	dst := filepath.Join(repoDir, name)
+	dst := filepath.Join(archPath, name)
 
 	src, err := os.Open(apkPath)
 	if err != nil {
@@ -47,99 +56,139 @@ func Publish(apkPath, repoDir string) error {
 		return err
 	}
 
-	return GenerateIndex(repoDir)
+	return GenerateIndex(archPath)
 }
 
-// List prints all packages in the local repository.
-func List(repoDir string, w io.Writer) error {
+// ArchDirs returns the per-arch subdirectories that hold .apk files in repoDir.
+// Useful for callers that need to walk every arch's contents (list, info,
+// remove, and the image-rootfs assembler that searches multiple arch dirs).
+func ArchDirs(repoDir string) ([]string, error) {
 	entries, err := os.ReadDir(repoDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			fmt.Fprintln(w, "No packages in repository")
-			return nil
+			return nil, nil
 		}
+		return nil, err
+	}
+	var out []string
+	for _, e := range entries {
+		if e.IsDir() {
+			out = append(out, e.Name())
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// List prints all packages in the local repository, grouped by arch.
+func List(repoDir string, w io.Writer) error {
+	archDirs, err := ArchDirs(repoDir)
+	if err != nil {
 		return err
 	}
-
-	var apks []string
-	for _, e := range entries {
-		if strings.HasSuffix(e.Name(), ".apk") {
-			apks = append(apks, e.Name())
-		}
-	}
-	sort.Strings(apks)
-
-	if len(apks) == 0 {
+	if len(archDirs) == 0 {
 		fmt.Fprintln(w, "No packages in repository")
 		return nil
 	}
 
-	fmt.Fprintf(w, "Repository: %s\n\n", repoDir)
-	for _, name := range apks {
-		info, _ := os.Stat(filepath.Join(repoDir, name))
-		size := ""
-		if info != nil {
-			size = formatSize(info.Size())
+	fmt.Fprintf(w, "Repository: %s\n", repoDir)
+	total := 0
+	for _, ad := range archDirs {
+		archPath := filepath.Join(repoDir, ad)
+		entries, err := os.ReadDir(archPath)
+		if err != nil {
+			return err
 		}
-		fmt.Fprintf(w, "  %-40s %s\n", name, size)
+		var apks []string
+		for _, e := range entries {
+			if strings.HasSuffix(e.Name(), ".apk") {
+				apks = append(apks, e.Name())
+			}
+		}
+		if len(apks) == 0 {
+			continue
+		}
+		sort.Strings(apks)
+		fmt.Fprintf(w, "\n[%s]\n", ad)
+		for _, name := range apks {
+			info, _ := os.Stat(filepath.Join(archPath, name))
+			size := ""
+			if info != nil {
+				size = formatSize(info.Size())
+			}
+			fmt.Fprintf(w, "  %-40s %s\n", name, size)
+		}
+		total += len(apks)
 	}
-	fmt.Fprintf(w, "\n%d package(s)\n", len(apks))
-
+	if total == 0 {
+		fmt.Fprintln(w, "No packages in repository")
+		return nil
+	}
+	fmt.Fprintf(w, "\n%d package(s)\n", total)
 	return nil
 }
 
-// Info shows details about a specific package in the repository.
+// Info shows details about the first matching package across every arch
+// subdirectory in the repository.
 func Info(repoDir, pkgName string, w io.Writer) error {
-	// Find the package (allow partial name match)
-	entries, err := os.ReadDir(repoDir)
+	archDirs, err := ArchDirs(repoDir)
 	if err != nil {
 		return err
 	}
 
-	var match string
-	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), pkgName) && strings.HasSuffix(e.Name(), ".apk") {
-			match = e.Name()
-			break
+	for _, ad := range archDirs {
+		archPath := filepath.Join(repoDir, ad)
+		entries, err := os.ReadDir(archPath)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), pkgName) && strings.HasSuffix(e.Name(), ".apk") {
+				apkPath := filepath.Join(archPath, e.Name())
+				hash, err := artifact.APKHash(apkPath)
+				if err != nil {
+					return err
+				}
+				info, _ := os.Stat(apkPath)
+				fmt.Fprintf(w, "Package:  %s\n", e.Name())
+				fmt.Fprintf(w, "Arch:     %s\n", ad)
+				fmt.Fprintf(w, "SHA256:   %s\n", hash)
+				if info != nil {
+					fmt.Fprintf(w, "Size:     %s\n", formatSize(info.Size()))
+				}
+				return nil
+			}
 		}
 	}
-
-	if match == "" {
-		return fmt.Errorf("package %q not found in repository", pkgName)
-	}
-
-	apkPath := filepath.Join(repoDir, match)
-	hash, err := artifact.APKHash(apkPath)
-	if err != nil {
-		return err
-	}
-
-	info, _ := os.Stat(apkPath)
-	fmt.Fprintf(w, "Package:  %s\n", match)
-	fmt.Fprintf(w, "SHA256:   %s\n", hash)
-	if info != nil {
-		fmt.Fprintf(w, "Size:     %s\n", formatSize(info.Size()))
-	}
-
-	return nil
+	return fmt.Errorf("package %q not found in repository", pkgName)
 }
 
-// Remove deletes a package from the local repository.
+// Remove deletes every matching package from the local repository, walking
+// each arch subdirectory.
 func Remove(repoDir, pkgName string, w io.Writer) error {
-	entries, err := os.ReadDir(repoDir)
+	archDirs, err := ArchDirs(repoDir)
 	if err != nil {
 		return err
 	}
 
 	removed := 0
-	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), pkgName) && strings.HasSuffix(e.Name(), ".apk") {
-			path := filepath.Join(repoDir, e.Name())
-			if err := os.Remove(path); err != nil {
-				return fmt.Errorf("removing %s: %w", e.Name(), err)
+	dirtyArches := map[string]struct{}{}
+	for _, ad := range archDirs {
+		archPath := filepath.Join(repoDir, ad)
+		entries, err := os.ReadDir(archPath)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), pkgName) && strings.HasSuffix(e.Name(), ".apk") {
+				path := filepath.Join(archPath, e.Name())
+				if err := os.Remove(path); err != nil {
+					return fmt.Errorf("removing %s: %w", e.Name(), err)
+				}
+				fmt.Fprintf(w, "Removed %s/%s\n", ad, e.Name())
+				removed++
+				dirtyArches[ad] = struct{}{}
 			}
-			fmt.Fprintf(w, "Removed %s\n", e.Name())
-			removed++
 		}
 	}
 
@@ -147,6 +196,13 @@ func Remove(repoDir, pkgName string, w io.Writer) error {
 		return fmt.Errorf("package %q not found in repository", pkgName)
 	}
 
+	// Regenerate APKINDEX for every arch we touched so the index doesn't
+	// reference deleted files.
+	for ad := range dirtyArches {
+		if err := GenerateIndex(filepath.Join(repoDir, ad)); err != nil {
+			return fmt.Errorf("regenerating APKINDEX for %s: %w", ad, err)
+		}
+	}
 	return nil
 }
 

@@ -41,12 +41,43 @@ def image(name, artifacts=[], hostname="", timezone="", locale="",
     )
 
 def _assemble_rootfs(packages, hostname, timezone, locale):
+    """Install packages into the rootfs using apk-tools.
+
+    apk handles dependency resolution from APKINDEX, enforces file-conflict
+    detection, and populates /lib/apk/db/installed automatically. The
+    `packages` list still includes transitive runtime deps from
+    `_resolve_runtime_deps` so the build-time DAG schedules everything,
+    but apk will re-resolve install order itself.
+
+    Flags:
+      --root           — destination rootfs
+      --initdb         — create /lib/apk/db on a fresh rootfs
+      --allow-untrusted — until phase 3 of the apk-compat plan adds signing
+      --no-network     — never reach the public Alpine mirrors
+      --no-cache       — keep /etc/apk/cache out of the rootfs
+      --no-scripts     — don't try to run pre/post-install scripts during
+                          assembly; the rootfs has no /bin/sh yet, and
+                          yoe-built apks don't ship scripts today anyway
+      -X $REPO         — yoe's local Alpine-layout repo
+
+    Intentional file shadows (busybox stubs vs the real util-linux/iproute2/
+    procps-ng/etc.) are declared per-unit via `replaces = [...]`, which apk
+    honors at install time. Without those annotations, a file conflict here
+    is a real bug — let apk fail the build instead of papering over it with
+    --force-overwrite.
+    """
     run("mkdir -p $DESTDIR/rootfs")
-    for pkg in packages:
-        apk = _find_apk(pkg)
-        if not apk:
-            fail("package %s not found in repo — its build may have been cancelled or its apk removed. Rebuild it with: yoe build --force %s" % (pkg, pkg))
-        run("tar xzf %s -C $DESTDIR/rootfs --exclude=.PKGINFO" % apk)
+
+    pkg_args = " ".join(packages)
+    run("apk add " +
+        "--root $DESTDIR/rootfs " +
+        "--initdb " +
+        "--allow-untrusted " +
+        "--no-network " +
+        "--no-cache " +
+        "--no-scripts " +
+        "-X $REPO " +
+        pkg_args)
 
     if hostname:
         run("mkdir -p $DESTDIR/rootfs/etc")
@@ -55,34 +86,10 @@ def _assemble_rootfs(packages, hostname, timezone, locale):
     if timezone:
         run("mkdir -p $DESTDIR/rootfs/etc")
         run("echo %s > $DESTDIR/rootfs/etc/timezone" % timezone)
-
-    # Auto-enable services declared in package metadata.
-    # Read "service = <name>" lines from .PKGINFO in each installed APK.
-    _enable_services(packages)
-
-def _enable_services(packages):
-    """Read service metadata from installed APKs and create init symlinks."""
-    for pkg in packages:
-        apk = _find_apk(pkg)
-        if not apk:
-            continue
-        # Extract service lines from .PKGINFO
-        result = run(
-            "tar xzf %s .PKGINFO -O 2>/dev/null | grep '^service = ' | cut -d' ' -f3" % apk,
-            check=False)
-        if result.exit_code != 0:
-            continue
-        for line in str(result.stdout).strip().split("\n"):
-            svc = line.strip()
-            if not svc:
-                continue
-            # If name starts with S followed by digits, it's already named
-            # for rcS to find — no symlink needed. Otherwise create S50 symlink.
-            if len(svc) > 2 and svc[0] == "S" and svc[1].isdigit():
-                # Already has S<NN> prefix, rcS will find it directly
-                pass
-            else:
-                run("test -f $DESTDIR/rootfs/etc/init.d/%s && ln -sf ../init.d/%s $DESTDIR/rootfs/etc/init.d/S50%s || true" % (svc, svc, svc))
+    # Note: init.d service symlinks are baked into each apk's data tar at
+    # package-time (see internal/artifact/apk.go's materializeServiceSymlinks),
+    # so apk add — image-time or on-target — produces the same rootfs. yoe
+    # does not patch the rootfs after install.
 
 def _create_disk_image(name, partitions):
     if not partitions:
@@ -233,17 +240,6 @@ def _resolve_runtime_deps(packages):
     for name in remaining:
         ordered.append(name)
     return ordered
-
-def _find_apk(pkg):
-    """Find the APK file for a package, searching by scope priority:
-    machine-specific first, then arch-specific, then noarch.
-    Uses $MACHINE and $ARCH env vars (always correct at build time).
-    """
-    for scope in ["$MACHINE", "$ARCH", "noarch"]:
-        result = run("ls $REPO/%s-*.%s.apk 2>/dev/null | head -1" % (pkg, scope), check=False)
-        if result.exit_code == 0 and str(result.stdout).strip() != "":
-            return str(result.stdout).strip()
-    return ""
 
 def _parse_size_mb(size_str, default=256):
     """Parse a size string like '64M', '1G', or 'fill' into megabytes."""

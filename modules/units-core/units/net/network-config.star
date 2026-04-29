@@ -2,7 +2,7 @@ unit(
     name = "network-config",
     version = "1.0.0",
     license = "MIT",
-    description = "DHCP networking via busybox udhcpc on eth0",
+    description = "DHCP networking on eth0 — uses dhcpcd if installed, else busybox udhcpc",
     services = ["S10network"],
     runtime_deps = ["busybox"],
     deps = ["toolchain-musl"],

@@ -105,7 +105,7 @@ func TestStage0Commands_ExplicitBuild(t *testing.T) {
 
 func TestVerifyStage0_Missing(t *testing.T) {
 	repoDir := t.TempDir()
-	err := verifyStage0(repoDir)
+	err := verifyStage0(repoDir, "x86_64")
 	if err == nil {
 		t.Fatal("expected error for empty repo")
 	}

@@ -6,6 +6,9 @@ unit(
     license = "GPL-2.0",
     description = "Swiss army knife of embedded Linux",
     deps = ["toolchain-musl"],
+    # busybox ships its own clear/reset, which we let win over ncurses' real
+    # ones — declare the replacement so apk doesn't refuse the install.
+    replaces = ["ncurses"],
     container = "toolchain-musl",
     container_arch = "target",
     tasks = [

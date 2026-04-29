@@ -13,6 +13,7 @@ autotools(
     description = "essential system utilities for mounting, partitioning, and device management",
     deps = ["ncurses", "zlib"],
     runtime_deps = ["ncurses", "zlib"],
+    replaces = ["busybox"],
     tasks = [
         task("build", steps=[
             "test -f configure || autoreconf -fi",

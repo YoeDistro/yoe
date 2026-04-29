@@ -8,6 +8,77 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.8.4] - 2026-04-29
+
+- **Networking picks the better DHCP client when available.** The default
+  `S10network` runs `dhcpcd` if it's on `PATH` (IPv6 SLAAC, DHCPv6, IPv4LL
+  fallback) and falls back to busybox `udhcpc` otherwise — so an image that
+  ships `dhcpcd` gets the modern client without changing the init script.
+- **File conflicts in image builds now fail loudly.** Units can declare
+  `replaces = ["pkg", ...]` to opt into shadowing another package's files (e.g.
+  `util-linux` over busybox's `/bin/dmesg`); apk honors that at install time and
+  rejects any conflict that wasn't declared. Image assembly no longer passes
+  `--force-overwrite`, so a new shadow becomes a real error instead of a buried
+  warning.
+- **Unit edits no longer get masked by stale cache hits.** Editing a unit's
+  description, license, runtime deps, replaces, conffiles, build environment,
+  scope, image partitions, image excludes, or install-step files now invalidates
+  the cache as it should — previously these silently kept the old apk. A new
+  test in `internal/resolve` fails if a future Unit field is added without being
+  incorporated into the cache key.
+- **`ip` works again on `dev-image`.** iproute2 no longer pulls in libelf at
+  link time, so `/sbin/ip` runs without "Error relocating /sbin/ip: elf_getdata:
+  symbol not found" on images that don't ship elfutils.
+- **Boot no longer hangs when DHCP fails.** The default network init script
+  waits briefly for the link to come up before starting udhcpc, runs udhcpc in
+  the background, and limits its retries — so `dev-image` reaches a login shell
+  even when no DHCP server is reachable, instead of looping on "Network is
+  down".
+- **Image rootfs is assembled by upstream `apk add`.** yoe no longer loops
+  `tar xzf` over each apk; image builds run `apk add` against the project's
+  local repo, getting real dependency resolution, file-conflict detection, and
+  an installed-package database in `/lib/apk/db` for free. On-target you can now
+  `apk info`, `apk verify`, and (once apk-tools ships as a unit) `apk add` and
+  `apk upgrade` against the same repo.
+- **Service symlinks ship inside the apk.** A unit's `services = [...]`
+  declaration is materialized as real `/etc/init.d/SXX<name>` symlinks inside
+  the package's data tar at build time. On-target `apk add <pkg>` produces the
+  same rootfs as image-time assembly — yoe never patches the rootfs after
+  install.
+- **Repo layout switched to Alpine-native** —
+  `repo/<project>/<arch>/<pkg>-<ver>-r<N>.apk` plus a per-arch
+  `APKINDEX.tar.gz`. `.apk` filenames no longer carry a scope suffix. Existing
+  `repo/` directories are obsolete; the next build repopulates the new layout.
+- **Yoe-built apks install with upstream Alpine apk-tools.** `.apk` files and
+  `APKINDEX` produced by yoe now round-trip through stock
+  `apk add --allow-untrusted`: no checksum errors, no format warnings, and
+  package metadata (name, version, arch, deps, origin, commit, install size)
+  matches what `apk index` itself would emit.
+- **Nine new units in `dev-image`** — `e2fsprogs` (mkfs.ext4 / fsck.ext4 /
+  tune2fs on the target), `eudev` (full udev for dynamic /dev), `iproute2` (full
+  `ip`/`tc`), `dhcpcd` (a DHCP client beyond busybox udhcpc), `bash`, `less`,
+  `file`, `procps-ng` (real `ps`/`top`/`free`/`vmstat`), and `htop` are now
+  built and included in `dev-image` so they're available out of the box on a
+  booted dev system. `gperf` is also added as a build-time dependency for eudev.
+- **Updated units roadmap** — `util-linux`, `kmod`, and `ca-certificates` are
+  marked done; `dropbear` is dropped (the project standardizes on `openssh`);
+  remaining work is now `nftables` (blocked on libmnl/libnftnl/gmp deps) and
+  `dbus`.
+- **Documented when NOT to use `provides`** — `docs/naming-and-resolution.md`
+  now spells out that `provides` is for leaf artifacts only (kernel, base-files,
+  init, bootloader). Using it for build-time libraries or runtime alternatives
+  forks every transitive consumer into a per-machine apk. Runtime alternatives
+  like `mdev` vs `eudev` should ship side-by-side and be selected at boot from
+  init scripts.
+- **Image rootfs assembly now warns on path collisions** — when two packages
+  install to the same path (e.g., busybox's `/sbin/ip` symlink vs iproute2's
+  full binary), the later package silently overwrote the earlier one with no
+  trace. Image assembly now emits a `warning:` line per collision naming the
+  surviving package and the shadowed ones, plus a total count. The warnings
+  appear in the image's `build.log` (and on terminal when `yoe build -v` is
+  used). Existing dev-image builds surface 27 expected shadows of busybox
+  applets by full alternatives — no behavior change, just visibility.
+
 ## [0.8.3] - 2026-04-28
 
 - **mDNS via new `mdnsd` unit** — the dev-image now answers `<hostname>.local`

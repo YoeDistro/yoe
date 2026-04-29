@@ -239,6 +239,41 @@ the specific name (e.g., `base-files-som`) are clearer and more traceable. Use
 transparent replacement only when a core package must be overridden without
 changing image definitions.
 
+### When NOT to use provides
+
+`provides` is powerful but has a hidden cost: the build cache hashes resolved
+deps recursively, so a `provides` swap forks **every transitive consumer** into
+a machine-specific apk variant. Used carelessly it can turn a clean cross-
+machine apk repo into hundreds of near-identical packages.
+
+The rule that keeps the apk repo lean:
+
+> `provides` is for **leaf artifacts** referenced by other units only as
+> `runtime_deps` — kernel, base-files, init, bootloader. It is **not** for
+> build-time libraries, and **not** for runtime alternatives that can be
+> selected at boot.
+
+This means:
+
+- **Don't `provides` a build-time library.** Swapping `openssl` ↔ `libressl` via
+  `provides` would fan out every `curl`, `openssh`, `python` apk per selection.
+  If you need a different crypto library, give it a different name and have
+  consumers reference it explicitly.
+- **Don't put machine-flavored units in a generic library's build-time `deps`.**
+  A library should depend on other libraries, never on `linux`, `base-files`, or
+  any unit that varies by machine — otherwise the library's apk forks per
+  machine even though its compiled output is identical.
+- **Don't use `provides` for runtime alternatives.** For pairs like `mdev`
+  (busybox) vs `eudev`, `udhcpc` (busybox) vs `dhcpcd`, or busybox `ntpd` vs
+  `ntp-client`, install both packages and pick which daemon runs at boot from an
+  init script. The init script lives in a config unit (e.g., `network-config`)
+  that's already project- or machine-flavored, so the choice doesn't propagate
+  into generic library hashes.
+
+In short: keep machine variability at the **edges** of the DAG (kernel,
+bootloader, machine config, init scripts). Generic libraries and tools should
+have one hash regardless of which machine the project targets.
+
 ## Module composition
 
 Modules extend upstream units without modifying them by importing the unit as a

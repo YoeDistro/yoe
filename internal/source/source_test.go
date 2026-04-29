@@ -1,6 +1,8 @@
 package source
 
 import (
+	"archive/zip"
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -290,5 +292,124 @@ func run(t *testing.T, dir, name string, args ...string) {
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("%s %s: %v\n%s", name, strings.Join(args, " "), err, out)
+	}
+}
+
+func TestExtractZipStripsTopLevelDir(t *testing.T) {
+	tmp := t.TempDir()
+	zipPath := filepath.Join(tmp, "sample.zip")
+	createTestZip(t, zipPath, []zipEntry{
+		{name: "tool-1.0/", isDir: true},
+		{name: "tool-1.0/bin/", isDir: true},
+		{name: "tool-1.0/bin/tool", body: []byte("#!/bin/sh\necho hi\n"), mode: 0o755},
+		{name: "tool-1.0/README", body: []byte("docs"), mode: 0o644},
+	})
+
+	dest := filepath.Join(tmp, "out")
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := extractZip(zipPath, dest); err != nil {
+		t.Fatalf("extractZip: %v", err)
+	}
+
+	tool := filepath.Join(dest, "bin", "tool")
+	st, err := os.Stat(tool)
+	if err != nil {
+		t.Fatalf("expected bin/tool: %v", err)
+	}
+	if st.Mode().Perm()&0o100 == 0 {
+		t.Errorf("expected executable bit on bin/tool, got mode %v", st.Mode())
+	}
+	body, _ := os.ReadFile(tool)
+	if !strings.Contains(string(body), "echo hi") {
+		t.Errorf("body mismatch: %q", body)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "README")); err != nil {
+		t.Errorf("expected README at top level: %v", err)
+	}
+}
+
+func TestExtractZipNoCommonPrefix(t *testing.T) {
+	tmp := t.TempDir()
+	zipPath := filepath.Join(tmp, "flat.zip")
+	createTestZip(t, zipPath, []zipEntry{
+		{name: "tool", body: []byte("bin"), mode: 0o755},
+		{name: "LICENSE", body: []byte("license"), mode: 0o644},
+	})
+
+	dest := filepath.Join(tmp, "out")
+	os.MkdirAll(dest, 0o755)
+	if err := extractZip(zipPath, dest); err != nil {
+		t.Fatalf("extractZip: %v", err)
+	}
+
+	for _, name := range []string{"tool", "LICENSE"} {
+		if _, err := os.Stat(filepath.Join(dest, name)); err != nil {
+			t.Errorf("expected %s at top level: %v", name, err)
+		}
+	}
+}
+
+type zipEntry struct {
+	name  string
+	body  []byte
+	mode  os.FileMode
+	isDir bool
+}
+
+func TestCopyBareSourceELF(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "kubectl")
+	body := append([]byte{0x7f, 'E', 'L', 'F'}, bytes.Repeat([]byte{0}, 60)...)
+	if err := os.WriteFile(src, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	dest := filepath.Join(tmp, "out")
+	os.MkdirAll(dest, 0o755)
+
+	if err := copyBareSource(src, dest); err != nil {
+		t.Fatalf("copyBareSource: %v", err)
+	}
+
+	target := filepath.Join(dest, "kubectl")
+	st, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("expected %s: %v", target, err)
+	}
+	if st.Mode().Perm()&0o100 == 0 {
+		t.Errorf("expected executable bit, got %v", st.Mode())
+	}
+	got, _ := os.ReadFile(target)
+	if !bytes.Equal(got, body) {
+		t.Errorf("bytes mismatch")
+	}
+}
+
+func createTestZip(t *testing.T, path string, entries []zipEntry) {
+	t.Helper()
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	zw := zip.NewWriter(f)
+	defer zw.Close()
+	for _, e := range entries {
+		hdr := &zip.FileHeader{Name: e.name, Method: zip.Deflate}
+		if e.mode != 0 {
+			hdr.SetMode(e.mode)
+		}
+		w, err := zw.CreateHeader(hdr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !e.isDir {
+			if _, err := w.Write(e.body); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 }

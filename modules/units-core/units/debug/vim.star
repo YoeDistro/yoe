@@ -7,6 +7,7 @@ unit(
     description = "Vi IMproved text editor",
     deps = ["ncurses", "toolchain-musl"],
     runtime_deps = ["ncurses"],
+    replaces = ["busybox"],
     container = "toolchain-musl",
     container_arch = "target",
     tasks = [
