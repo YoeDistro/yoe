@@ -5,36 +5,51 @@ Units needed for a complete base Linux system. Existing units can be found via
 
 ## Needed Units
 
-### High Priority — Required for a Functional System
+### Medium Priority — Networking and Security
 
-- [ ] `util-linux` — mount, fdisk, blkid, lsblk, login, agetty; essential for
-      booting and managing disks
-- [ ] `kmod` — modprobe, insmod, depmod; kernel module loading
-- [ ] `eudev` — device manager for dynamic /dev; alternative is busybox mdev but
-      eudev is more capable
-- [ ] `e2fsprogs` — mkfs.ext4, fsck.ext4; required for ext4 filesystem
-      maintenance
-
-### Medium Priority — Required for Networking and Security
-
-- [ ] `ca-certificates` — root CA bundle for TLS verification; without this,
-      curl and openssh cannot verify peers
-- [ ] `iproute2` — `ip` command for network configuration; busybox version is
-      limited
-- [ ] `dhcpcd` — DHCP client; busybox udhcpc works but dhcpcd handles more edge
-      cases
-- [ ] `iptables` or `nftables` — firewall; important for any networked device
+- [ ] `nftables` — modern firewall (preferred over legacy iptables). Requires
+      new dep units `libmnl`, `libnftnl`, and `gmp` before it can be written.
 
 ### Low Priority — Nice to Have
 
-- [ ] `dbus` — IPC message bus; dependency for many higher-level services
-- [ ] `bash` — full shell if busybox ash is insufficient
-- [ ] `less` — pager with more features than busybox less
-- [ ] `file` — file type identification
-- [ ] `procps` — ps, top, free, vmstat; more capable than busybox versions
-- [ ] `htop` — interactive process viewer
-- [ ] `dropbear` — lightweight SSH alternative to openssh for constrained
-      devices
+- [ ] `dbus` — IPC message bus; dependency for many higher-level services. Pulls
+      in expat (already present) plus a service supervisor — non-trivial, defer
+      until a unit needs it.
+
+## Implemented
+
+The following base-system units are in `modules/units-core/units/`:
+
+### Base
+
+- `util-linux` — mount, fdisk, blkid, lsblk, agetty, etc.
+- `kmod` — modprobe, insmod, depmod
+- `ca-certificates` — Mozilla CA bundle for TLS verification
+- `e2fsprogs` — mkfs.ext4, fsck.ext4, tune2fs, e2fsck
+- `eudev` — dynamic /dev manager (udevd, udevadm)
+- `bash` — full GNU shell
+- `less` — pager
+- `file` — file type identification
+- `busybox`, `coreutils`, `musl`, `linux`, `base-files`
+
+### Networking
+
+- `openssh`, `curl`, `mdnsd`, `ntp-client`, `network-config`, `simpleiot`
+- `iproute2` — full ip(8)/tc(8)
+- `dhcpcd` — DHCPv4/DHCPv6 client
+
+### Libraries
+
+- `openssl`, `zlib`, `zstd`, `xz`, `ncurses`, `readline`, `expat`, `gettext`,
+  `libffi`
+
+### Debug / Tools
+
+- `strace`, `vim`, `procps-ng` (ps, top, free, vmstat), `htop`
+
+### Bootloaders / Build tools
+
+- `syslinux`, `meson`, `samurai`, `gawk`
 
 ## Notes
 
@@ -44,3 +59,5 @@ Units needed for a complete base Linux system. Existing units can be found via
   configure flags over adding build tool units.
 - Check Alpine, Yocto, and Buildroot packaging before writing new units — they
   are good references for configure flags, deps, and patches.
+- `dropbear` is intentionally not on the roadmap; the project standardizes on
+  `openssh`.

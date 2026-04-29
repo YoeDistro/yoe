@@ -42,11 +42,31 @@ def image(name, artifacts=[], hostname="", timezone="", locale="",
 
 def _assemble_rootfs(packages, hostname, timezone, locale):
     run("mkdir -p $DESTDIR/rootfs")
+    run("rm -f $DESTDIR/.yoe-manifest")
+
     for pkg in packages:
         apk = _find_apk(pkg)
         if not apk:
             fail("package %s not found in repo — its build may have been cancelled or its apk removed. Rebuild it with: yoe build --force %s" % (pkg, pkg))
+        # Record file/symlink paths this package contributes so we can
+        # detect collisions. tar tvzf gives "drwxr.../-rwxr.../lrwxr..." in
+        # column 1; keep only files (-) and symlinks (l). The path comes
+        # after the time column (HH:MM); strip any " -> target" suffix on
+        # symlinks. Format written: "<pkg>|<path>" per line.
+        run("""tar tvzf %s 2>/dev/null | awk '/^[-l]/ {
+    match($0, /[0-9]+:[0-9]+ /);
+    if (RSTART > 0) {
+        path = substr($0, RSTART + RLENGTH);
+        idx = index(path, " -> ");
+        if (idx > 0) path = substr(path, 1, idx - 1);
+        if (path != ".PKGINFO") print "%s|" path;
+    }
+}' >> $DESTDIR/.yoe-manifest""" % (apk, pkg))
         run("tar xzf %s -C $DESTDIR/rootfs --exclude=.PKGINFO" % apk)
+
+    # Detect path collisions. Two packages writing the same path means the
+    # last extraction silently wins; warn so the conflict is visible.
+    _report_path_collisions()
 
     if hostname:
         run("mkdir -p $DESTDIR/rootfs/etc")
@@ -59,6 +79,24 @@ def _assemble_rootfs(packages, hostname, timezone, locale):
     # Auto-enable services declared in package metadata.
     # Read "service = <name>" lines from .PKGINFO in each installed APK.
     _enable_services(packages)
+
+def _report_path_collisions():
+    run("""
+awk -F'[|]' '
+    $2 in seen { losers[$2] = losers[$2] " " seen[$2] }
+    { seen[$2] = $1 }
+    END {
+        n = 0
+        for (p in losers) {
+            n++
+            sub(/^ /, "", losers[p])
+            printf "warning: /%s overwritten by %s (shadows: %s)\\n", p, seen[p], losers[p] > "/dev/stderr"
+        }
+        if (n > 0) printf "warning: %d file(s) had path conflicts during rootfs assembly\\n", n > "/dev/stderr"
+    }
+' $DESTDIR/.yoe-manifest
+rm -f $DESTDIR/.yoe-manifest
+""")
 
 def _enable_services(packages):
     """Read service metadata from installed APKs and create init symlinks."""

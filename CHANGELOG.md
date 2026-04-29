@@ -8,6 +8,31 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Nine new units in `dev-image`** — `e2fsprogs` (mkfs.ext4 / fsck.ext4 /
+  tune2fs on the target), `eudev` (full udev for dynamic /dev), `iproute2` (full
+  `ip`/`tc`), `dhcpcd` (a DHCP client beyond busybox udhcpc), `bash`, `less`,
+  `file`, `procps-ng` (real `ps`/`top`/`free`/`vmstat`), and `htop` are now
+  built and included in `dev-image` so they're available out of the box on a
+  booted dev system. `gperf` is also added as a build-time dependency for eudev.
+- **Updated units roadmap** — `util-linux`, `kmod`, and `ca-certificates` are
+  marked done; `dropbear` is dropped (the project standardizes on `openssh`);
+  remaining work is now `nftables` (blocked on libmnl/libnftnl/gmp deps) and
+  `dbus`.
+- **Documented when NOT to use `provides`** — `docs/naming-and-resolution.md`
+  now spells out that `provides` is for leaf artifacts only (kernel, base-files,
+  init, bootloader). Using it for build-time libraries or runtime alternatives
+  forks every transitive consumer into a per-machine apk. Runtime alternatives
+  like `mdev` vs `eudev` should ship side-by-side and be selected at boot from
+  init scripts.
+- **Image rootfs assembly now warns on path collisions** — when two packages
+  install to the same path (e.g., busybox's `/sbin/ip` symlink vs iproute2's
+  full binary), the later package silently overwrote the earlier one with no
+  trace. Image assembly now emits a `warning:` line per collision naming the
+  surviving package and the shadowed ones, plus a total count. The warnings
+  appear in the image's `build.log` (and on terminal when `yoe build -v` is
+  used). Existing dev-image builds surface 27 expected shadows of busybox
+  applets by full alternatives — no behavior change, just visibility.
+
 ## [0.8.3] - 2026-04-28
 
 - **mDNS via new `mdnsd` unit** — the dev-image now answers `<hostname>.local`
