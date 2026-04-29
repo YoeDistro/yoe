@@ -28,7 +28,7 @@ func TestGenerateIndex(t *testing.T) {
 		License:     "MIT",
 	}
 
-	apkPath, err := artifact.CreateAPK(unit, destDir, outputDir, "x86_64", "")
+	apkPath, err := artifact.CreateAPK(unit, destDir, outputDir, "x86_64", "", nil)
 	if err != nil {
 		t.Fatalf("CreateAPK: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestGenerateIndex(t *testing.T) {
 	}
 
 	// Generate index
-	if err := GenerateIndex(repoDir); err != nil {
+	if err := GenerateIndex(repoDir, nil); err != nil {
 		t.Fatalf("GenerateIndex: %v", err)
 	}
 
@@ -90,7 +90,7 @@ func TestGenerateIndex_EmptyRepo(t *testing.T) {
 	repoDir := t.TempDir()
 
 	// Should succeed with no apks
-	if err := GenerateIndex(repoDir); err != nil {
+	if err := GenerateIndex(repoDir, nil); err != nil {
 		t.Fatalf("GenerateIndex on empty repo: %v", err)
 	}
 

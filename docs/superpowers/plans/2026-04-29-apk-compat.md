@@ -265,31 +265,53 @@ on the target so `apk` runs without `--allow-untrusted`.
 
 ### Task 3.1: Key management
 
-- [ ] Add a `signing_key` field to `project()` (path to RSA private key).
-- [ ] If unset, generate a key on first build and write it to
-      `~/.config/yoe/keys/<project>.rsa` (gitignored). Document.
-- [ ] Add `yoe key generate` and `yoe key info` subcommands.
+- [x] Add a `signing_key` field to `project()` (path to RSA private key).
+      _(`Project.SigningKey` plumbed through `internal/starlark/types.go`
+      and `builtins.go`.)_
+- [x] If unset, generate a key on first build and write it to
+      `~/.config/yoe/keys/<project>.rsa`. Document.
+      _(`artifact.LoadOrGenerateSigner` writes a 2048-bit RSA key and the
+      matching PKIX/SubjectPublicKeyInfo public key on first call.
+      `docs/signing.md` covers the operator workflow.)_
+- [x] Add `yoe key generate` and `yoe key info` subcommands.
+      _(`cmd/yoe/key.go` — both subcommands print the resolved key path,
+      key name, and a SHA-256 fingerprint of the public key bytes.)_
 
 ### Task 3.2: Sign individual apks
 
-- [ ] In `internal/artifact/apk.go`, after writing the control tar, sign its
+- [x] In `internal/artifact/apk.go`, after writing the control tar, sign its
       bytes with the project key (RSA-PKCS#1 v1.5, SHA-1 — what apk2 expects)
       and prepend a `.SIGN.RSA.<keyname>.rsa.pub` entry as the first
-      concatenated gzip stream.
+      concatenated gzip stream. _(Implementation in `internal/artifact/sign.go`
+      with `Signer.SignStream`; `CreateAPK` writes `sigGz + controlGz +
+      dataGz` to the .apk file.)_
 - [ ] Re-run phase 1's round-trip test without `--allow-untrusted`. Should
-      succeed once the public key is in `/etc/apk/keys/`.
+      succeed once the public key is in `/etc/apk/keys/`. _(Verification
+      pending: existing `apk_compat_test.go` still uses --allow-untrusted;
+      a follow-up test should drop it and use --keys-dir instead, proving
+      signature verification works against stock apk-tools.)_
 
 ### Task 3.3: Sign APKINDEX
 
-- [ ] Apply the same signing flow to `APKINDEX.tar.gz` so apk doesn't warn about
-      untrusted indexes.
-- [ ] Verify with `apk update` against the local repo.
+- [x] Apply the same signing flow to `APKINDEX.tar.gz` so apk doesn't warn about
+      untrusted indexes. _(`repo.GenerateIndex` builds the index into a
+      buffer and prepends the signature stream when a Signer is supplied.)_
+- [ ] Verify with `apk update` against the local repo. _(Verification
+      pending: same as 3.2 — needs a CI test that runs `apk update`
+      against a yoe-built repo with --keys-dir but without
+      --allow-untrusted.)_
 
 ### Task 3.4: Public key in rootfs
 
-- [ ] Update `base-files` to install the project public key under
-      `/etc/apk/keys/<keyname>.rsa.pub`.
-- [ ] Drop `--allow-untrusted` from the phase-2 `apk add` invocation.
+- [x] Update `base-files` to install the project public key under
+      `/etc/apk/keys/<keyname>.rsa.pub`. _(base-files reads
+      `$YOE_KEYS_DIR/$YOE_KEY_NAME` — both env vars are populated by the
+      executor when a Signer is in scope. The build-time copy step lands
+      the key at `/etc/apk/keys/<keyname>.rsa.pub` in the rootfs.)_
+- [x] Drop `--allow-untrusted` from the phase-2 `apk add` invocation.
+      _(image.star now uses `--keys-dir $YOE_KEYS_DIR`. yoe pre-publishes
+      the public key under `<repo>/keys/` before any unit builds, and
+      `repo.Publish` keeps it in sync on every apk emission.)_
 
 **Done when:** dev-image builds with no `--allow-untrusted` flag anywhere, apks
 and APKINDEX are signed, and on-target apk verifies them against the shipped

@@ -50,15 +50,17 @@ def _assemble_rootfs(packages, hostname, timezone, locale):
     but apk will re-resolve install order itself.
 
     Flags:
-      --root           — destination rootfs
-      --initdb         — create /lib/apk/db on a fresh rootfs
-      --allow-untrusted — until phase 3 of the apk-compat plan adds signing
-      --no-network     — never reach the public Alpine mirrors
-      --no-cache       — keep /etc/apk/cache out of the rootfs
-      --no-scripts     — don't try to run pre/post-install scripts during
+      --root            — destination rootfs
+      --initdb          — create /lib/apk/db on a fresh rootfs
+      --keys-dir        — directory with the project's signing public key;
+                          yoe publishes it next to the local repo so apk
+                          verifies signatures without --allow-untrusted
+      --no-network      — never reach the public Alpine mirrors
+      --no-cache        — keep /etc/apk/cache out of the rootfs
+      --no-scripts      — don't try to run pre/post-install scripts during
                           assembly; the rootfs has no /bin/sh yet, and
                           yoe-built apks don't ship scripts today anyway
-      -X $REPO         — yoe's local Alpine-layout repo
+      -X $REPO          — yoe's local Alpine-layout repo
 
     Intentional file shadows (busybox stubs vs the real util-linux/iproute2/
     procps-ng/etc.) are declared per-unit via `replaces = [...]`, which apk
@@ -72,7 +74,7 @@ def _assemble_rootfs(packages, hostname, timezone, locale):
     run("apk add " +
         "--root $DESTDIR/rootfs " +
         "--initdb " +
-        "--allow-untrusted " +
+        "--keys-dir $YOE_KEYS_DIR " +
         "--no-network " +
         "--no-cache " +
         "--no-scripts " +

@@ -28,10 +28,13 @@ func RepoDir(proj *yoestar.Project, projectDir string) string {
 //
 //	<repoDir>/<archDir>/<pkg>-<ver>-r<N>.apk
 //	<repoDir>/<archDir>/APKINDEX.tar.gz
+//	<repoDir>/keys/<keyname>.rsa.pub  (when signer is non-nil)
 //
 // archDir is the package's arch ("x86_64", "aarch64", ...) or the literal
-// "noarch" for portable packages.
-func Publish(apkPath, repoDir, archDir string) error {
+// "noarch" for portable packages. The public key sits in <repoDir>/keys/
+// so apk add can verify the repo via `--keys-dir <repoDir>/keys` without
+// any further configuration.
+func Publish(apkPath, repoDir, archDir string, signer *artifact.Signer) error {
 	archPath := filepath.Join(repoDir, archDir)
 	if err := os.MkdirAll(archPath, 0755); err != nil {
 		return err
@@ -56,7 +59,30 @@ func Publish(apkPath, repoDir, archDir string) error {
 		return err
 	}
 
-	return GenerateIndex(archPath)
+	if signer != nil {
+		if err := WritePublicKey(repoDir, signer); err != nil {
+			return fmt.Errorf("publishing public key: %w", err)
+		}
+	}
+
+	return GenerateIndex(archPath, signer)
+}
+
+// WritePublicKey drops the project's public key into <repoDir>/keys/ so
+// image-time apk add can find it via --keys-dir, and so anyone consuming
+// the repo can install signature verification with a single file copy.
+func WritePublicKey(repoDir string, signer *artifact.Signer) error {
+	keysDir := filepath.Join(repoDir, "keys")
+	if err := os.MkdirAll(keysDir, 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(keysDir, signer.KeyName), signer.PubPEM, 0644)
+}
+
+// KeysDir returns the directory under repoDir that holds published public
+// keys. apk's --keys-dir flag points at this path during image assembly.
+func KeysDir(repoDir string) string {
+	return filepath.Join(repoDir, "keys")
 }
 
 // ArchDirs returns the per-arch subdirectories that hold .apk files in repoDir.
@@ -164,8 +190,10 @@ func Info(repoDir, pkgName string, w io.Writer) error {
 }
 
 // Remove deletes every matching package from the local repository, walking
-// each arch subdirectory.
-func Remove(repoDir, pkgName string, w io.Writer) error {
+// each arch subdirectory. The APKINDEX is regenerated for every arch we
+// touch — using `signer` to keep the regenerated index signed and verifiable
+// by apk-tools, or unsigned when nil.
+func Remove(repoDir, pkgName string, signer *artifact.Signer, w io.Writer) error {
 	archDirs, err := ArchDirs(repoDir)
 	if err != nil {
 		return err
@@ -199,7 +227,7 @@ func Remove(repoDir, pkgName string, w io.Writer) error {
 	// Regenerate APKINDEX for every arch we touched so the index doesn't
 	// reference deleted files.
 	for ad := range dirtyArches {
-		if err := GenerateIndex(filepath.Join(repoDir, ad)); err != nil {
+		if err := GenerateIndex(filepath.Join(repoDir, ad), signer); err != nil {
 			return fmt.Errorf("regenerating APKINDEX for %s: %w", ad, err)
 		}
 	}

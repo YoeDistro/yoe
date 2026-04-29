@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	yoe "github.com/YoeDistro/yoe-ng/internal"
+	"github.com/YoeDistro/yoe-ng/internal/artifact"
 	"github.com/YoeDistro/yoe-ng/internal/bootstrap"
 	"github.com/YoeDistro/yoe-ng/internal/build"
 	"github.com/YoeDistro/yoe-ng/internal/device"
@@ -94,6 +95,8 @@ func main() {
 		cmdDiagnose(cmdArgs)
 	case "clean":
 		cmdClean(cmdArgs)
+	case "key":
+		cmdKey(cmdArgs)
 	default:
 		if !tryCustomCommand(command, cmdArgs) {
 			fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
@@ -125,6 +128,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  log [unit] [-e]         Show build log (most recent, or specific unit; -e to edit)\n")
 	fmt.Fprintf(os.Stderr, "  diagnose [unit]         Launch Claude Code to diagnose a build failure\n")
 	fmt.Fprintf(os.Stderr, "  clean                   Remove build artifacts\n")
+	fmt.Fprintf(os.Stderr, "  key <generate|info>     Manage the project's apk signing key\n")
 	fmt.Fprintf(os.Stderr, "  update                  Update yoe to the latest release\n")
 	fmt.Fprintf(os.Stderr, "  version                 Display version information\n")
 	fmt.Fprintf(os.Stderr, "\n")
@@ -839,7 +843,15 @@ func cmdRepo(args []string) {
 			fmt.Fprintf(os.Stderr, "Usage: %s repo remove <package>\n", os.Args[0])
 			os.Exit(1)
 		}
-		if err := repo.Remove(repoDir, args[1], os.Stdout); err != nil {
+		// Load the project's signing key so the regenerated APKINDEX stays
+		// signed. Failure here is fatal — an unsigned index would silently
+		// break apk add against this repo.
+		signer, err := artifact.LoadOrGenerateSigner(proj.Name, proj.SigningKey)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: loading signing key: %v\n", err)
+			os.Exit(1)
+		}
+		if err := repo.Remove(repoDir, args[1], signer, os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}

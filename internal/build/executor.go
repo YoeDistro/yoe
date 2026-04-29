@@ -39,6 +39,10 @@ type Options struct {
 	// per build so PKGINFO records build provenance. Empty means "not a git
 	// repo" or "couldn't determine" — the apk omits the `commit` field then.
 	ProjectCommit string
+	// Signer holds the project's RSA signing key, loaded once per build so
+	// each apk and the APKINDEX can be signed without per-call key I/O.
+	// Nil means "build unsigned apks" — apk add then needs --allow-untrusted.
+	Signer     *artifact.Signer
 	OnEvent    func(BuildEvent) // optional callback for build progress
 }
 
@@ -79,6 +83,27 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 	// non-fatal — apks just omit the `commit` field.
 	if opts.ProjectCommit == "" {
 		opts.ProjectCommit = readProjectCommit(opts.ProjectDir)
+	}
+
+	// Load (or auto-generate) the project signing key once per build.
+	// Subsequent apk emissions and APKINDEX generation reuse the same
+	// Signer so we don't re-read PEM bytes on every artifact.
+	if opts.Signer == nil {
+		signer, err := artifact.LoadOrGenerateSigner(proj.Name, proj.SigningKey)
+		if err != nil {
+			return fmt.Errorf("loading signing key: %w", err)
+		}
+		opts.Signer = signer
+	}
+
+	// Make the project's public key available under <repo>/keys/ before any
+	// unit's tasks run. Units that ship the key (base-files puts it under
+	// /etc/apk/keys/ in the rootfs) need it on disk during their own build,
+	// not after the first apk is published. Idempotent — Publish would
+	// rewrite the same bytes later.
+	repoDir := repo.RepoDir(proj, opts.ProjectDir)
+	if err := repo.WritePublicKey(repoDir, opts.Signer); err != nil {
+		return fmt.Errorf("publishing project public key: %w", err)
 	}
 
 	dag, err := resolve.BuildDAG(proj)
@@ -339,6 +364,16 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		"REPO":            filepath.Join("/project", repoRelPath(proj, opts.ProjectDir)),
 	}
 
+	// Expose the project's signing key info so units that need to ship the
+	// public key (e.g., base-files installs it under /etc/apk/keys/) can
+	// find it without hard-coding paths. YOE_KEYS_DIR is a directory; the
+	// key file is YOE_KEY_NAME inside it. Both are unset when the build
+	// runs without a Signer (apk add then needs --allow-untrusted).
+	if opts.Signer != nil {
+		env["YOE_KEYS_DIR"] = filepath.Join("/project", repoRelPath(proj, opts.ProjectDir), "keys")
+		env["YOE_KEY_NAME"] = opts.Signer.KeyName
+	}
+
 	// Merge unit-level environment variables (from classes like go_binary)
 	for k, v := range unit.Environment {
 		env[k] = v
@@ -471,14 +506,14 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	// Then stage destdir for downstream units' per-unit sysroots.
 	if unit.Class != "image" && unit.Class != "container" {
 		archDir := RepoArchDir(unit, opts.Arch)
-		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), archDir, opts.ProjectCommit)
+		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), archDir, opts.ProjectCommit, opts.Signer)
 		if err != nil {
 			return fmt.Errorf("creating apk: %w", err)
 		}
 		fmt.Fprintf(w, "  → %s\n", filepath.Base(apkPath))
 
 		repoDir := repo.RepoDir(proj, opts.ProjectDir)
-		if err := repo.Publish(apkPath, repoDir, archDir); err != nil {
+		if err := repo.Publish(apkPath, repoDir, archDir, opts.Signer); err != nil {
 			return fmt.Errorf("publishing to repo: %w", err)
 		}
 

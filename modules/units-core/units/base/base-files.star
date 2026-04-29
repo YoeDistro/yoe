@@ -26,7 +26,7 @@ def base_files(name = "base-files", users = None):
     unit(
         name = name,
         version = "1.0.0",
-        release = 3,
+        release = 4,
         scope = "machine",
         license = "MIT",
         description = "Base filesystem skeleton: users, groups, dirs, inittab, boot config",
@@ -38,7 +38,8 @@ def base_files(name = "base-files", users = None):
                 [
                     "mkdir -p $DESTDIR/etc $DESTDIR/root $DESTDIR/proc $DESTDIR/sys"
                     + " $DESTDIR/dev $DESTDIR/tmp $DESTDIR/run $DESTDIR/var/run"
-                    + " $DESTDIR/etc/init.d $DESTDIR/boot/extlinux",
+                    + " $DESTDIR/etc/init.d $DESTDIR/boot/extlinux"
+                    + " $DESTDIR/etc/apk/keys",
                 ]
                 + users_commands(users)
                 + [
@@ -47,6 +48,12 @@ def base_files(name = "base-files", users = None):
                     install_template("os-release.tmpl", "$DESTDIR/etc/os-release"),
                     install_file("extlinux.conf",
                                  "$DESTDIR/boot/extlinux/extlinux.conf"),
+                    # Ship the project's apk signing public key so on-target
+                    # `apk add`/`apk upgrade` verify packages without
+                    # --allow-untrusted. yoe writes the key under
+                    # <repo>/keys/<name>.rsa.pub before any unit builds; the
+                    # paths come in via $YOE_KEYS_DIR / $YOE_KEY_NAME.
+                    "cp \"$YOE_KEYS_DIR/$YOE_KEY_NAME\" \"$DESTDIR/etc/apk/keys/$YOE_KEY_NAME\"",
                 ]
             )),
         ],

@@ -8,6 +8,18 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Signed apks and APKINDEX.** Every `.apk` and the per-arch
+  `APKINDEX.tar.gz` are now RSA-signed at build time. yoe auto-generates a
+  2048-bit RSA keypair at `~/.config/yoe/keys/<project>.rsa` on first
+  build (or loads an explicit one via `signing_key` on `project()`),
+  ships the matching public key into the rootfs at
+  `/etc/apk/keys/<keyname>.rsa.pub` via `base-files`, and points
+  image-time `apk add` at `--keys-dir` instead of `--allow-untrusted`. On
+  the target, stock `apk add` and `apk upgrade` verify signatures without
+  any extra flags. New `yoe key generate` and `yoe key info` subcommands
+  manage the project's key; `docs/signing.md` covers the operator
+  workflow.
+
 - **`provides` is now a list, matching apk semantics.** A unit can declare
   multiple virtual names it satisfies (`provides = ["init", "service-mgr"]`),
   not just one. PKGINFO emits one `provides = X` line per entry; the build

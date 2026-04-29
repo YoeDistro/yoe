@@ -2,6 +2,7 @@ package repo
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"crypto/sha1"
 	"encoding/base64"
@@ -12,11 +13,15 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/YoeDistro/yoe-ng/internal/artifact"
 )
 
 // GenerateIndex scans repoDir for .apk files and produces an
-// APKINDEX.tar.gz that apk(8) can use for dependency resolution.
-func GenerateIndex(repoDir string) error {
+// APKINDEX.tar.gz that apk(8) can use for dependency resolution. When
+// signer is non-nil the index is signed (a signature stream is prepended)
+// so apk update accepts it without --allow-untrusted.
+func GenerateIndex(repoDir string, signer *artifact.Signer) error {
 	entries, err := os.ReadDir(repoDir)
 	if err != nil {
 		return fmt.Errorf("reading repo dir: %w", err)
@@ -106,19 +111,10 @@ func GenerateIndex(repoDir string) error {
 		}
 	}
 
-	// Write APKINDEX.tar.gz
-	indexPath := filepath.Join(repoDir, "APKINDEX.tar.gz")
-	f, err := os.Create(indexPath)
-	if err != nil {
-		return fmt.Errorf("creating APKINDEX.tar.gz: %w", err)
-	}
-	defer f.Close()
-
-	gw := gzip.NewWriter(f)
-	defer gw.Close()
-
+	// Build APKINDEX.tar.gz into a buffer so we can sign it before writing.
+	var indexBuf bytes.Buffer
+	gw := gzip.NewWriter(&indexBuf)
 	tw := tar.NewWriter(gw)
-	defer tw.Close()
 
 	content := []byte(buf.String())
 	hdr := &tar.Header{
@@ -132,6 +128,35 @@ func GenerateIndex(repoDir string) error {
 	}
 	if _, err := tw.Write(content); err != nil {
 		return fmt.Errorf("writing tar content: %w", err)
+	}
+	if err := tw.Close(); err != nil {
+		return fmt.Errorf("closing index tar: %w", err)
+	}
+	if err := gw.Close(); err != nil {
+		return fmt.Errorf("closing index gzip: %w", err)
+	}
+
+	// Write signature + index. apk-tools 2.x reads APKINDEX.tar.gz as a
+	// concatenated gzip stream: optional .SIGN.RSA.* signature, then the
+	// actual index. Without signing, just the index stream.
+	indexPath := filepath.Join(repoDir, "APKINDEX.tar.gz")
+	f, err := os.Create(indexPath)
+	if err != nil {
+		return fmt.Errorf("creating APKINDEX.tar.gz: %w", err)
+	}
+	defer f.Close()
+
+	if signer != nil {
+		sigGz, err := signer.SignStream(indexBuf.Bytes())
+		if err != nil {
+			return fmt.Errorf("signing APKINDEX: %w", err)
+		}
+		if _, err := f.Write(sigGz); err != nil {
+			return fmt.Errorf("writing index signature: %w", err)
+		}
+	}
+	if _, err := f.Write(indexBuf.Bytes()); err != nil {
+		return fmt.Errorf("writing APKINDEX body: %w", err)
 	}
 
 	return nil

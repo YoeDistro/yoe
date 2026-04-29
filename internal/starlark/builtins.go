@@ -427,6 +427,7 @@ func (e *Engine) fnProject(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 		Cache: CacheConfig{
 			Path: structString(cacheS, "path"),
 		},
+		SigningKey: kwString(kwargs, "signing_key"),
 	}
 
 	// Parse modules list
