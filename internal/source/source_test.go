@@ -2,6 +2,7 @@ package source
 
 import (
 	"archive/zip"
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -355,6 +356,35 @@ type zipEntry struct {
 	body  []byte
 	mode  os.FileMode
 	isDir bool
+}
+
+func TestCopyBareSourceELF(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "kubectl")
+	body := append([]byte{0x7f, 'E', 'L', 'F'}, bytes.Repeat([]byte{0}, 60)...)
+	if err := os.WriteFile(src, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	dest := filepath.Join(tmp, "out")
+	os.MkdirAll(dest, 0o755)
+
+	if err := copyBareSource(src, dest); err != nil {
+		t.Fatalf("copyBareSource: %v", err)
+	}
+
+	target := filepath.Join(dest, "kubectl")
+	st, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("expected %s: %v", target, err)
+	}
+	if st.Mode().Perm()&0o100 == 0 {
+		t.Errorf("expected executable bit, got %v", st.Mode())
+	}
+	got, _ := os.ReadFile(target)
+	if !bytes.Equal(got, body) {
+		t.Errorf("bytes mismatch")
+	}
 }
 
 func createTestZip(t *testing.T, path string, entries []zipEntry) {

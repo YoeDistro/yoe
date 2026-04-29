@@ -262,6 +262,34 @@ func extractZip(zipPath, destDir string) error {
 	return nil
 }
 
+// copyBareSource copies a non-archive source file into srcDir under its
+// original basename and marks it executable. Used for bare-binary
+// downloads (kubectl, single-file releases) where there's nothing to
+// extract.
+func copyBareSource(filePath, destDir string) error {
+	base := filepath.Base(filePath)
+	target := filepath.Join(destDir, base)
+
+	in, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	if err := out.Close(); err != nil {
+		return err
+	}
+	return os.Chmod(target, 0o755)
+}
+
 func extractWithTar(tarPath, destDir string) error {
 	cmd := exec.Command("tar", "xf", tarPath, "--strip-components=1", "-C", destDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
