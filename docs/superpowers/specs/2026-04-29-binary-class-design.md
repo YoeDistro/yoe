@@ -37,7 +37,7 @@ load("//classes/binary.star", "binary")
 binary(
     name = "kubectl",
     version = "1.29.0",
-    base_url = "https://dl.k8s.io/release/v1.29.0/bin/linux",
+    base_url = "https://dl.k8s.io/release/v{version}/bin/linux",
     asset = "{arch}/kubectl",
     sha256 = {"x86_64": "...", "arm64": "..."},
     license = "Apache-2.0",
@@ -50,7 +50,7 @@ binary(
     name = "helm",
     version = "3.14.0",
     base_url = "https://get.helm.sh",
-    asset = "helm-v3.14.0-linux-{arch}.tar.gz",
+    asset = "helm-v{version}-linux-{arch}.tar.gz",
     sha256 = {"x86_64": "...", "arm64": "..."},
     license = "Apache-2.0",
 )
@@ -61,7 +61,7 @@ binary(
 binary(
     name = "fly",
     version = "0.2.0",
-    base_url = "https://github.com/superfly/flyctl/releases/download/v0.2.0",
+    base_url = "https://github.com/superfly/flyctl/releases/download/v{version}",
     assets = {
         "x86_64": "fly-x86_64-unknown-linux-musl.tar.gz",
         "arm64":  "fly-aarch64-unknown-linux-musl.tar.gz",
@@ -75,7 +75,7 @@ binary(
     name = "tarsnap",
     version = "1.0.40",
     base_url = "...",
-    asset = "...",
+    asset = "tarsnap-{version}-linux-{arch}.tar.gz",
     sha256 = {...},
     binaries = ["bin/tarsnap", "bin/tarsnap-keygen", "bin/tarsnap-keymgmt"],
 )
@@ -86,7 +86,7 @@ binary(
     name = "go",
     version = "1.22.0",
     base_url = "https://go.dev/dl",
-    asset = "go1.22.0.linux-{arch}.tar.gz",
+    asset = "go{version}.linux-{arch}.tar.gz",
     sha256 = {"x86_64": "...", "arm64": "..."},
     install_tree = "$PREFIX/lib/go",
     binaries = ["bin/go", "bin/gofmt"],
@@ -101,10 +101,10 @@ binary(
 binary(
     name = "helix",
     version = "24.07",
-    base_url = "https://github.com/helix-editor/helix/releases/download/24.07",
+    base_url = "https://github.com/helix-editor/helix/releases/download/{version}",
     assets = {
-        "x86_64": "helix-24.07-x86_64-linux.tar.xz",
-        "arm64":  "helix-24.07-aarch64-linux.tar.xz",
+        "x86_64": "helix-{version}-x86_64-linux.tar.xz",
+        "arm64":  "helix-{version}-aarch64-linux.tar.xz",
     },
     sha256 = {"x86_64": "...", "arm64": "..."},
     install_tree = "$PREFIX/lib/helix",
@@ -118,7 +118,7 @@ binary(
     name = "flyctl",
     version = "0.2.0",
     base_url = "...",
-    asset = "...",
+    asset = "fly-v{version}-linux-{arch}.tar.gz",
     sha256 = {...},
     binaries = {"flyctl": "fly"},                      # install $SRCDIR/fly as $PREFIX/bin/flyctl
 )
@@ -129,9 +129,9 @@ binary(
 | field                                                                                       | type             | required                  | meaning                                                                                                                                                                                                                                                                                            |
 | ------------------------------------------------------------------------------------------- | ---------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`, `version`                                                                           | str              | yes                       | standard                                                                                                                                                                                                                                                                                           |
-| `base_url`                                                                                  | str              | yes                       | URL prefix                                                                                                                                                                                                                                                                                         |
-| `asset`                                                                                     | str              | one of `asset` / `assets` | single template, with `{arch}` substitution                                                                                                                                                                                                                                                        |
-| `assets`                                                                                    | dict             | one of `asset` / `assets` | per-arch literal asset paths (no templating)                                                                                                                                                                                                                                                       |
+| `base_url`                                                                                  | str              | yes                       | URL prefix; `{version}` substitution available                                                                                                                                                                                                                                                     |
+| `asset`                                                                                     | str              | one of `asset` / `assets` | single template, with `{arch}` and `{version}` substitution                                                                                                                                                                                                                                        |
+| `assets`                                                                                    | dict             | one of `asset` / `assets` | per-arch asset paths; `{version}` allowed (no `{arch}` — the dict key already selects arch)                                                                                                                                                                                                        |
 | `arch_map`                                                                                  | dict             | no                        | yoe arch → token substituted into `{arch}` in `asset`; default `{x86_64: amd64, arm64: arm64}`; ignored when `assets` (literal) is used                                                                                                                                                            |
 | `sha256`                                                                                    | dict             | yes                       | per-arch literal SHA256; never templated                                                                                                                                                                                                                                                           |
 | `binaries`                                                                                  | list **or** dict | no                        | primary binaries to expose on `$PATH`. **List form**: each entry is a path inside `$SRCDIR`; basename becomes install name. **Dict form**: `{install_name: src_path_in_srcdir}`. Default: `[name]`. Use `[]` to disable default install. `{arch}` allowed in src paths.                            |
@@ -140,9 +140,23 @@ binary(
 | `symlinks`                                                                                  | dict             | no                        | `dst_path → target` (relative or absolute); created after install. For aliases beyond the binaries list.                                                                                                                                                                                           |
 | `license`, `description`, `services`, `conffiles`, `runtime_deps`, `deps`, `tasks`, `scope` |                  | no                        | passed through to `unit()`                                                                                                                                                                                                                                                                         |
 
-`{arch}` substitution applies to `asset`, src paths in `binaries`, and src paths
-in `extras`. It does **not** apply to `sha256`, `symlinks`, install names, or
-any `dst` path — hashes and install destinations are always literal.
+### Templating
+
+Two placeholders are supported, both substituted at Starlark eval time:
+
+- `{version}` — replaced with the unit's `version` field. The class never
+  injects a `v` prefix or any other decoration; if the upstream URL needs
+  `v3.14.0`, write `v{version}`.
+- `{arch}` — replaced with `arch_map[ARCH]` (in `asset`) or with the yoe arch
+  token directly (in src paths inside `binaries` / `extras` / `install_tree`).
+
+Both placeholders apply to: `base_url`, `asset`, values in the `assets` dict,
+src paths in `binaries`, src paths in `extras`, `install_tree`, and `symlinks`
+values (target paths).
+
+Neither placeholder applies to: `sha256` values, `binaries` install names (dict
+keys), `symlinks` keys (destination paths), or `arch_map` itself. Hashes and
+install destinations are always literal.
 
 ### Validation (Starlark eval time)
 
@@ -191,18 +205,21 @@ a recognised extension.
 ## Class internals
 
 1. **Resolve URL and SHA at Starlark eval time.** Read predeclared `ARCH`.
-   Validate as above. Compose:
-   - `asset_path = assets[ARCH]` if `assets` is set, else
-     `asset.replace("{arch}", arch_map[ARCH])`.
-   - `source = base_url + "/" + asset_path`.
-   - `sha = sha256[ARCH]`.
+   Validate as above. Define a substitution helper that replaces both
+   `{version}` (with the unit's `version` field) and `{arch}` (with
+   `arch_map[ARCH]` for the templated `asset` form, or with the yoe arch token
+   directly elsewhere). Then compose:
+   - `asset_path = subst(assets[ARCH])` if `assets` is set, else `subst(asset)`.
+   - `source = subst(base_url) + "/" + asset_path`.
+   - `sha = sha256[ARCH]` (literal — no substitution).
 2. **Normalise `binaries`** into a canonical list of `(install_name, src_path)`
    tuples:
    - `[]` → no entries.
    - List of strings → `[(basename(p), p) for p in list]`.
    - Dict → `list(dict.items())`.
    - Default (field omitted) → `[(name, name)]`.
-   - Apply `{arch}` substitution to each `src_path`.
+   - Apply `{version}` and `{arch}` substitution to each `src_path`. Install
+     names (dict keys) are literal.
 3. **Call
    `unit(source=source, sha256=sha, container="toolchain-musl", sandbox=False, ...)`.**
    Cache keying is per-URL, so each arch gets its own cache slot for free.
