@@ -8,6 +8,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **New `binary` class for prebuilt binaries.** Units can now declare
+  per-arch upstream release URLs and SHA256 hashes and let yoe fetch,
+  verify, and install without rebuilding from source. `binaries`, `extras`,
+  `install_tree`, and `symlinks` cover bare-binary downloads (kubectl-style),
+  toolchain bundles (Go, helix's runtime), and anything in between.
+  Three example units ship today: `go` (toolchain bundle, install_tree),
+  `helix` (modal text editor, install_tree with runtime/), and `yazi`
+  (terminal file manager, dual-binary direct install).
+
 - **APKINDEX `C:` hash is correct for signed apks.** When yoe started
   signing apks, the on-disk first stream became the signature, not the
   control block. The index generator was hashing the first stream

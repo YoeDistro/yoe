@@ -57,10 +57,12 @@ func Prepare(projectDir, scopeDir string, unit *yoestar.Unit, w io.Writer) (stri
 			return "", err
 		}
 	} else {
-		if err := extractTarball(cachedPath, srcDir); err != nil {
+		if err := prepareNonGitSource(cachedPath, srcDir); err != nil {
 			return "", err
 		}
-		// Tarball needs git init + commit + tag
+		// Non-git sources need git init + commit + tag so the rest of
+		// the pipeline (patches, tagUpstream invariants) can rely on a
+		// real repo even when the upstream is a bare binary.
 		if err := initGitRepo(srcDir); err != nil {
 			return "", err
 		}
@@ -116,6 +118,41 @@ func checkoutGit(barePath, srcDir string, unit *yoestar.Unit) error {
 	}
 
 	return nil
+}
+
+// prepareNonGitSource decides how to materialise a fetched non-git source
+// into srcDir. Picks an extractor by filename extension first, falling back
+// to magic-byte sniffing for files with no/unknown extension. Bare files
+// that aren't recognised archives are copied as-is (binary class case).
+func prepareNonGitSource(cachedPath, destDir string) error {
+	switch {
+	case strings.HasSuffix(cachedPath, ".tar.gz"),
+		strings.HasSuffix(cachedPath, ".tgz"),
+		strings.HasSuffix(cachedPath, ".tar.xz"),
+		strings.HasSuffix(cachedPath, ".tar.bz2"),
+		strings.HasSuffix(cachedPath, ".tbz2"),
+		strings.HasSuffix(cachedPath, ".tar"):
+		return extractTarball(cachedPath, destDir)
+	case strings.HasSuffix(cachedPath, ".zip"):
+		return extractZip(cachedPath, destDir)
+	}
+
+	// No recognised extension — sniff the first 4 bytes.
+	f, err := os.Open(cachedPath)
+	if err != nil {
+		return err
+	}
+	var magic [4]byte
+	n, _ := io.ReadFull(f, magic[:])
+	f.Close()
+
+	if n >= 2 && magic[0] == 0x1f && magic[1] == 0x8b {
+		return extractTarball(cachedPath, destDir)
+	}
+	if n == 4 && magic[0] == 0x50 && magic[1] == 0x4b && magic[2] == 0x03 && magic[3] == 0x04 {
+		return extractZip(cachedPath, destDir)
+	}
+	return copyBareSource(cachedPath, destDir)
 }
 
 func extractTarball(tarPath, destDir string) error {

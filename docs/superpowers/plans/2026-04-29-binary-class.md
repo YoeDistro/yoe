@@ -1,5 +1,12 @@
 # `binary` class implementation plan
 
+> **Status (2026-04-29):** Tasks 1–4, 6, 7 implemented. Task 5's kubectl
+> example was substituted with `helix` (modal text editor, install_tree
+> with runtime/) and `yazi` (multi-binary direct install) since both
+> exercise the same code paths and are more useful additions to
+> dev-image. Task 8 (build-and-boot verification) is left to the user's
+> dev loop. The example units are wired and ready to build.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
 > superpowers:executing-plans to implement this plan task-by-task. Steps use
