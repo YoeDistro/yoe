@@ -14,28 +14,28 @@ and this project adheres to
   ships `dhcpcd` gets the modern client without changing the init script.
 
 - **File conflicts in image builds now fail loudly.** Units can declare
-  `replaces = ["pkg", ...]` to opt into shadowing another package's files
-  (e.g. `util-linux` over busybox's `/bin/dmesg`); apk honors that at install
-  time and rejects any conflict that wasn't declared. Image assembly no
-  longer passes `--force-overwrite`, so a new shadow becomes a real error
-  instead of a buried warning.
+  `replaces = ["pkg", ...]` to opt into shadowing another package's files (e.g.
+  `util-linux` over busybox's `/bin/dmesg`); apk honors that at install time and
+  rejects any conflict that wasn't declared. Image assembly no longer passes
+  `--force-overwrite`, so a new shadow becomes a real error instead of a buried
+  warning.
 
 - **Unit edits no longer get masked by stale cache hits.** Editing a unit's
   description, license, runtime deps, replaces, conffiles, build environment,
-  scope, image partitions, image excludes, or install-step files now
-  invalidates the cache as it should — previously these silently kept the
-  old apk. A new test in `internal/resolve` fails if a future Unit field is
-  added without being incorporated into the cache key.
+  scope, image partitions, image excludes, or install-step files now invalidates
+  the cache as it should — previously these silently kept the old apk. A new
+  test in `internal/resolve` fails if a future Unit field is added without being
+  incorporated into the cache key.
 
 - **`ip` works again on `dev-image`.** iproute2 no longer pulls in libelf at
-  link time, so `/sbin/ip` runs without "Error relocating /sbin/ip:
-  elf_getdata: symbol not found" on images that don't ship elfutils.
+  link time, so `/sbin/ip` runs without "Error relocating /sbin/ip: elf_getdata:
+  symbol not found" on images that don't ship elfutils.
 
 - **Boot no longer hangs when DHCP fails.** The default network init script
   waits briefly for the link to come up before starting udhcpc, runs udhcpc in
-  the background, and limits its retries — so `dev-image` reaches a login
-  shell even when no DHCP server is reachable, instead of looping on
-  "Network is down".
+  the background, and limits its retries — so `dev-image` reaches a login shell
+  even when no DHCP server is reachable, instead of looping on "Network is
+  down".
 - **Image rootfs is assembled by upstream `apk add`.** yoe no longer loops
   `tar xzf` over each apk; image builds run `apk add` against the project's
   local repo, getting real dependency resolution, file-conflict detection, and
