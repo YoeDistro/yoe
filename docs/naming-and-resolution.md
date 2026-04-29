@@ -136,8 +136,8 @@ machine(
     kernel = kernel(unit = "linux-rpi4", provides = "linux"),
 )
 
-# Unit can also declare provides:
-unit(name = "linux-rpi4", provides = "linux", ...)
+# Unit can also declare provides — apk-style list of virtual names:
+unit(name = "linux-rpi4", provides = ["linux"], ...)
 
 # Image uses the virtual name:
 image(name = "base-image", artifacts = ["busybox", "linux", "init"], ...)
@@ -151,10 +151,10 @@ providing the concrete implementation:
 
 ```python
 # modules/config-systemd/units/init.star
-unit(name = "systemd", ..., provides = "init")
+unit(name = "systemd", ..., provides = ["init"])
 
 # modules/config-busybox-init/units/init.star
-unit(name = "busybox-init", ..., provides = "init")
+unit(name = "busybox-init", ..., provides = ["init"])
 ```
 
 The project selects which init system to use by including the appropriate
@@ -199,7 +199,7 @@ project(name = "product", modules = [
 ])
 ```
 
-When a unit in a higher-priority module declares `provides = "base-files"`, it
+When a unit in a higher-priority module declares `provides = ["base-files"]`, it
 takes precedence over the real unit named `base-files` from a lower-priority
 module. A notice is emitted to stderr. The shadowed unit remains registered but
 is unreachable via the virtual name — it will not be pulled into the DAG.
@@ -226,7 +226,7 @@ base_files_soc()
 load("@soc-module//units/base-files-soc.star", "base_files_soc")
 
 base_files_soc(name = "base-files-som", extra_deps = ["som-wifi-config"],
-               provides = "base-files")
+               provides = ["base-files"])
 ```
 
 All three units (`base-files`, `base-files-soc`, `base-files-som`) are
@@ -273,6 +273,89 @@ This means:
 In short: keep machine variability at the **edges** of the DAG (kernel,
 bootloader, machine config, init scripts). Generic libraries and tools should
 have one hash regardless of which machine the project targets.
+
+## Shadow files (REPLACES)
+
+When two packages legitimately ship the same file path — most often a real
+implementation overriding a busybox stub — the owning package needs to opt
+into the shadow with `replaces`. apk refuses to install a package whose
+files conflict with already-installed ones unless the installing package
+declares it's allowed to overwrite the loser.
+
+```python
+# util-linux ships real /bin/dmesg, /bin/mount, /bin/umount, /sbin/fsck,
+# /sbin/hwclock, /sbin/losetup, /sbin/switch_root, /usr/bin/logger,
+# /usr/bin/nsenter, /usr/bin/unshare — all paths busybox also claims.
+unit(
+    name = "util-linux",
+    ...
+    replaces = ["busybox"],
+)
+```
+
+Mechanics worth remembering:
+
+- **Direction is per-file: the package that overwrites is the one that
+  declares.** If util-linux installs after busybox and overwrites busybox's
+  stubs, util-linux declares `replaces = ["busybox"]`. Declaring it on
+  busybox would only help if busybox were the one installing later.
+- **apk install order is set by the dep graph.** ncurses precedes busybox
+  in the dev-image not because of the artifact list but because ncurses is
+  a runtime dep of util-linux, less, vim, htop, and procps-ng — apk has to
+  install it first. busybox is a dependency-graph leaf, so it lands later
+  and is the one whose `clear`/`reset` overwrite ncurses'. Hence
+  `busybox` declares `replaces = ["ncurses"]`.
+- **`replaces` is not a package fork.** The annotation lives on a single
+  generic .apk that every project shares. apk uses it to decide who owns
+  the file in `/lib/apk/db/installed`, so future operations on either
+  package do the right thing.
+
+When you see a "trying to overwrite X owned by Y" install error, the fix
+is one of:
+
+1. Add `replaces = ["Y"]` to the unit that owns the overwriting package.
+2. Stop the duplication at its source — e.g., split a package into a
+   subpackage that doesn't ship the conflicting paths (subpackages are a
+   future apk-compat phase; until then `replaces` is the lever).
+3. Disable the offending applet in the loser via runtime config — only if
+   it can be done without forking the unit's build, which is rarely
+   possible for fine-grained busybox knobs.
+
+## Keep units generic — resolve variation at runtime
+
+The previous section is one expression of a broader principle: **a unit
+produces one .apk that every project and every machine shares.** When two
+images need different behavior from the same package, the answer is almost
+never "fork the package." It's "resolve the difference at runtime, in a
+component that's allowed to vary."
+
+Concretely, when you reach for a per-project or per-machine variant of a
+generic unit, prefer instead:
+
+- **Init scripts that detect what's installed.** `S10network` checks
+  `command -v dhcpcd` and falls back to busybox `udhcpc` when it's missing
+  — one network-config unit, two viable runtimes, no DHCP-client fork.
+- **Conditional config files** in a project- or machine-scoped config unit
+  (e.g., `base-files-<project>`, `network-config`). Those units are already
+  flavored, so they're the right place for choices that have to vary.
+- **`replaces:` annotations on the unit that owns the shadow.** When
+  busybox and ncurses both ship `/usr/bin/clear`, declaring `replaces` on
+  one of them lets apk pick a winner without touching either build. Both
+  apks stay generic.
+- **Runtime alternative selection at boot** — install both candidates,
+  start one from an init script.
+
+Reach for build-flag forking only when runtime resolution is genuinely
+impossible: kernel `defconfig` (the kernel binary literally varies by
+machine), bootloader target, machine-specific firmware blobs. Everything
+else — busybox config knobs, library build flags, optional features — has
+to stay one .apk for every consumer.
+
+The cost of forking generic units is real: build cache surface multiplies,
+binary reuse across projects breaks, and complexity moves from a few clean
+conditionals in one config unit into N parallel build configurations
+scattered across the tree. The cost of runtime resolution is a small init
+script or a one-line `replaces` annotation — pay that instead.
 
 ## Module composition
 
@@ -345,7 +428,7 @@ project's module list, its units don't exist for that build.
 
 This reduces the collision problem: instead of needing `replaces` or shadow
 semantics, a project simply includes only the modules it needs. A vendor module
-that provides its own `openssh-vendor` with `provides = "openssh"` works cleanly
+that provides its own `openssh-vendor` with `provides = ["openssh"]` works cleanly
 when the project doesn't include a second module that also provides `openssh`.
 
 A single repository may define multiple projects (similar to KAS YAML files in

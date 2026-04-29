@@ -581,7 +581,7 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 		ContainerArch: kwString(kwargs, "container_arch"),
 		Sandbox:       kwBool(kwargs, "sandbox"),
 		Shell:         kwString(kwargs, "shell"),
-		Provides:    kwString(kwargs, "provides"),
+		Provides:    kwStringList(kwargs, "provides"),
 		Replaces:    kwStringList(kwargs, "replaces"),
 		Services:    kwStringList(kwargs, "services"),
 		Conffiles:   kwStringList(kwargs, "conffiles"),

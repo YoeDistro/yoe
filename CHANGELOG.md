@@ -8,6 +8,29 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **`provides` is now a list, matching apk semantics.** A unit can declare
+  multiple virtual names it satisfies (`provides = ["init", "service-mgr"]`),
+  not just one. PKGINFO emits one `provides = X` line per entry; the build
+  cache hashes them as a set. `provides = "x"` (string form) is no longer
+  accepted — update to `provides = ["x"]`. Internal: `Unit.Provides` is now
+  `[]string` end-to-end through types/builtins/loader/hash.
+
+- **`replaces` is documented end-to-end.** A new "Shadow files (REPLACES)"
+  section in `docs/naming-and-resolution.md` walks through the
+  busybox/util-linux example, why install order is set by the dep graph,
+  and how to read apk's "trying to overwrite" install errors. Both
+  `new-unit` and `audit-unit` skills now mention the field with usage
+  rules.
+
+- **Documented the "one .apk per unit" principle.** A new section in
+  `docs/naming-and-resolution.md` (and a matching note in `CLAUDE.md`)
+  spells out that units produce a single artifact every project and machine
+  shares; image-to-image variation is resolved at runtime via init scripts,
+  conditional configs, `replaces:` annotations, or boot-time alternative
+  selection — not by forking units into project- or machine-specific
+  builds. Build-flag forking is reserved for things that genuinely can't be
+  resolved at runtime (kernel defconfig, bootloader target).
+
 ## [0.8.4] - 2026-04-29
 
 - **Networking picks the better DHCP client when available.** The default

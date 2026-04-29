@@ -310,6 +310,12 @@ func generatePKGINFO(unit *yoestar.Unit, destDir, dataHashHex, arch, commit stri
 		fmt.Fprintf(&b, "depend = %s\n", dep)
 	}
 
+	// Virtual package names this unit satisfies — apk consumers can depend
+	// on the virtual name and apk picks any package that provides it.
+	for _, p := range unit.Provides {
+		fmt.Fprintf(&b, "provides = %s\n", p)
+	}
+
 	// Packages whose files this one is allowed to overwrite at install time.
 	// apk reads this to scope file-conflict overrides — without it, a
 	// shadowing package (e.g. util-linux over busybox's /bin/dmesg) fails

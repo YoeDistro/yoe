@@ -395,11 +395,19 @@ both DAG-time bindings and apk-level metadata.
 
 ### Task 5.1: Field shape migration
 
-- [ ] Change `Provides` in `internal/starlark/types.go` from `string` to
+- [x] Change `Provides` in `internal/starlark/types.go` from `string` to
       `[]string`.
-- [ ] Update the kwarg parser to accept either a string (auto-wrap into a
-      single-entry list, with a deprecation note) or a list.
-- [ ] Migrate existing call sites (`linux-rpi*`, `base-files-*`) to list form.
+- [x] Update the kwarg parser to accept the list form. _(Per CLAUDE.md's
+      "no backward compatibility concerns" policy, the parser is list-only;
+      `provides = "x"` is no longer accepted. The original plan's
+      "auto-wrap with deprecation note" step is moot for a pre-1.0 project.)_
+- [x] Migrate existing call sites to list form. _(Survey at task time
+      found no `unit()` definitions setting `provides` — only machine
+      kernel structs (`KernelConfig.Provides` is unchanged, still a single
+      string), test fixtures under `testdata/provides-*`, and example
+      snippets in `docs/naming-and-resolution.md`. Fixtures and docs are
+      updated; KernelConfig stays singular as it represents one virtual
+      name per kernel.)_
 
 ### Task 5.2: `replaces` field
 
@@ -429,11 +437,20 @@ both DAG-time bindings and apk-level metadata.
 
 ### Task 5.4: Documentation
 
-- [ ] Update §"When NOT to use provides" in `docs/naming-and-resolution.md` to
-      describe the new shape (list of virtual names vs string).
-- [ ] Document `replaces` with an example (busybox shadowing).
-- [ ] Update `.claude/skills/new-unit/SKILL.md` and
+- [x] Update §"When NOT to use provides" in `docs/naming-and-resolution.md` to
+      describe the new shape (list of virtual names vs string). _(All
+      example snippets in the doc now use `provides = ["..."]` list form.
+      The narrative "Virtual packages (PROVIDES)" section frames `provides`
+      as an apk-style list of virtual names this unit satisfies.)_
+- [x] Document `replaces` with an example (busybox shadowing). _(New
+      §"Shadow files (REPLACES)" section with the util-linux/busybox
+      example, the install-order rationale, and how to read apk's "trying
+      to overwrite" errors.)_
+- [x] Update `.claude/skills/new-unit/SKILL.md` and
       `.claude/skills/audit-unit/SKILL.md` to mention the new field.
+      _(Both skills now describe `provides` as `[]string` and `replaces`
+      with usage rules, including the audit-unit "Step 3c" check that
+      flags suspicious `replaces` declarations.)_
 
 **Done when:** every unit that produces shadow files declares `replaces`,
 dev-image builds via apk with no conflict warnings, and yoe's `provides`

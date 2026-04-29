@@ -129,7 +129,7 @@ type Unit struct {
 	Sandbox       bool   // use bwrap sandbox inside container (default false)
 	Shell         string // shell for build commands: "sh" (default) or "bash"
 	Tasks     []Task
-	Provides    string   // virtual package name
+	Provides    []string // virtual package names this unit satisfies (e.g., "linux", "ssh")
 	Replaces    []string // package names whose files this unit may overwrite at install time
 	Module      string   // module that registered this unit (empty = project root)
 	ModuleIndex int    // module priority (0 = project root, 1+ = declaration order)
