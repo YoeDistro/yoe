@@ -12,7 +12,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"unicode"
 )
 
 // GenerateIndex scans repoDir for .apk files and produces an
@@ -51,15 +50,13 @@ func GenerateIndex(repoDir string) error {
 		}
 
 		pkginfo := extractPKGINFO(apkPath)
-		// Prefer PKGINFO's authoritative pkgname/pkgver/arch; fall back to
-		// filename only if PKGINFO is unreadable (in which case the apk is
-		// broken anyway, but we still want to emit something useful).
+		// pkgname/pkgver/arch come from PKGINFO authoritatively. A missing
+		// PKGINFO means the apk is malformed; we still emit an entry with
+		// empty fields so the rest of the index isn't lost, but apk-tools
+		// will reject it.
 		pkgName := pkginfo.Get("pkgname")
 		version := pkginfo.Get("pkgver")
 		scope := pkginfo.Get("arch")
-		if pkgName == "" {
-			pkgName, version, scope = parseAPKFilename(name)
-		}
 		installedSize := pkginfoSize(pkginfo)
 		description := pkginfo.Get("pkgdesc")
 		license := pkginfo.Get("license")
@@ -134,64 +131,6 @@ func GenerateIndex(repoDir string) error {
 	}
 
 	return nil
-}
-
-// parseAPKFilename parses "name-version-rN.apk" into (name, version-rN).
-// It strips .apk, finds the last -rN suffix, then splits name from version
-// at the last dash before a digit.
-func parseAPKFilename(filename string) (name, version, scope string) {
-	// Strip .apk extension
-	s := strings.TrimSuffix(filename, ".apk")
-
-	// Extract scope suffix (e.g., ".arm64", ".raspberrypi4", ".noarch")
-	if idx := strings.LastIndex(s, "."); idx > 0 {
-		scope = s[idx+1:]
-		s = s[:idx]
-	}
-
-	// Find the last "-rN" revision suffix by scanning backwards.
-	// The revision is always at the end: "-r" followed by digits.
-	revIdx := strings.LastIndex(s, "-r")
-	if revIdx < 0 {
-		return s, "", scope
-	}
-	// Verify everything after "-r" is digits
-	rev := s[revIdx+2:]
-	allDigits := len(rev) > 0
-	for _, c := range rev {
-		if !unicode.IsDigit(c) {
-			allDigits = false
-			break
-		}
-	}
-	if !allDigits {
-		return s, "", scope
-	}
-
-	// Now we have e.g. "hello-1.0.0" with revision "r0"
-	nameVer := s[:revIdx] // "hello-1.0.0"
-	revision := s[revIdx:]  // "-r0"
-
-	// Find version separator: scan backwards for last dash before a digit
-	verIdx := -1
-	for i := len(nameVer) - 1; i >= 0; i-- {
-		if nameVer[i] == '-' {
-			// Check if next char is a digit (start of version)
-			if i+1 < len(nameVer) && unicode.IsDigit(rune(nameVer[i+1])) {
-				verIdx = i
-				break
-			}
-		}
-	}
-
-	if verIdx < 0 {
-		return nameVer, revision[1:], scope
-	}
-
-	name = nameVer[:verIdx]
-	version = nameVer[verIdx+1:] + revision
-
-	return name, version, scope
 }
 
 // sha1base64 returns the base64-encoded SHA1 of an apk's control stream

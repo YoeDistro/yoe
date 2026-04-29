@@ -33,13 +33,30 @@ import (
 // apk's mpart-gzip reader passes compressed bytes through the digest
 // before decompressing them, so the hash is over the on-disk gzip blob.
 // Without datahash apk reports "BAD signature" even with --allow-untrusted.
-func CreateAPK(unit *yoestar.Unit, destDir, outputDir, scopeDir, commit string) (string, error) {
+// arch is the value emitted as PKGINFO `arch=` and the directory the apk will
+// later be published into (`<repo>/<arch>/<filename>.apk`). For arch-scoped
+// and machine-scoped units this is the target architecture (e.g., x86_64,
+// aarch64); for noarch units it is the literal string "noarch".
+func CreateAPK(unit *yoestar.Unit, destDir, outputDir, arch, commit string) (string, error) {
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return "", fmt.Errorf("creating output dir: %w", err)
 	}
 
-	apkName := fmt.Sprintf("%s-%s-r%d.%s.apk", unit.Name, unit.Version, unit.Release, scopeDir)
+	// Filename matches Alpine's convention: <name>-<ver>-r<N>.apk. The arch
+	// is recorded inside PKGINFO and reflected in the repo directory name,
+	// not in the filename — apk-tools constructs fetch URLs from the index
+	// as <repo>/<arch>/<pkgname>-<pkgver>.apk and won't find a file with
+	// any extra suffix.
+	apkName := fmt.Sprintf("%s-%s-r%d.apk", unit.Name, unit.Version, unit.Release)
 	apkPath := filepath.Join(outputDir, apkName)
+
+	// Materialise `services = [...]` as actual init-script symlinks inside
+	// destDir before we tar it. The symlinks become regular package
+	// content, so on-target `apk add` and image-time `apk add` produce the
+	// same result — yoe never patches the rootfs after apk has run.
+	if err := materializeServiceSymlinks(unit, destDir); err != nil {
+		return "", fmt.Errorf("creating service symlinks: %w", err)
+	}
 
 	// Build the data tar (uncompressed), then gzip it and hash the
 	// compressed bytes for PKGINFO's datahash.
@@ -59,7 +76,7 @@ func CreateAPK(unit *yoestar.Unit, destDir, outputDir, scopeDir, commit string) 
 	dataHashHex := fmt.Sprintf("%x", dataHash[:])
 
 	// Generate PKGINFO with the data hash baked in.
-	pkginfo := generatePKGINFO(unit, destDir, dataHashHex, scopeDir, commit)
+	pkginfo := generatePKGINFO(unit, destDir, dataHashHex, arch, commit)
 
 	// Open output and write the two concatenated gzip streams.
 	f, err := os.Create(apkPath)
@@ -293,12 +310,81 @@ func generatePKGINFO(unit *yoestar.Unit, destDir, dataHashHex, arch, commit stri
 		fmt.Fprintf(&b, "depend = %s\n", dep)
 	}
 
-	// Services (init scripts this package provides)
-	for _, svc := range unit.Services {
-		fmt.Fprintf(&b, "service = %s\n", svc)
-	}
+	// Note: yoe's `services = [...]` declaration becomes actual init.d
+	// symlinks in the data tar (see materializeServiceSymlinks). We don't
+	// emit a custom `service =` PKGINFO field because apk-tools 2.x
+	// silently discards unknown fields when populating
+	// `/lib/apk/db/installed`, so it would never round-trip to the target.
 
 	return b.String()
+}
+
+// materializeServiceSymlinks turns the unit's `services = [...]` declaration
+// into init.d symlinks inside destDir, so the apk's data tar carries them as
+// regular files. This lets `apk add` (image-time or on-target) produce a
+// rootfs with `/etc/init.d/SXX<svc>` already in place — yoe never has to
+// patch the rootfs after the install.
+//
+// Naming convention follows yoe's existing _enable_services logic:
+//
+//   - if the service name already starts with `S<digit>` (e.g., `S20ntp`,
+//     `S30mdnsd`), it's used directly — the unit author has chosen the
+//     boot-order prefix.
+//   - otherwise, an `S50<svc>` symlink pointing to `../init.d/<svc>` is
+//     created (default boot priority 50).
+//
+// The target script (`<destDir>/etc/init.d/<svc>`) must already exist; if
+// it doesn't, that's the unit's bug — we don't silently swallow it.
+func materializeServiceSymlinks(unit *yoestar.Unit, destDir string) error {
+	if len(unit.Services) == 0 {
+		return nil
+	}
+	initd := filepath.Join(destDir, "etc", "init.d")
+	for _, svc := range unit.Services {
+		linkName := svc
+		if !startsWithSPriority(svc) {
+			linkName = "S50" + svc
+		}
+		// If the unit already shipped its own SXX symlink (e.g., units
+		// that bake their own init.d/SXX file), don't overwrite it.
+		linkPath := filepath.Join(initd, linkName)
+		if _, err := os.Lstat(linkPath); err == nil {
+			continue
+		}
+		// Verify the target script exists so a typo in `services` fails
+		// loudly instead of producing a dangling symlink.
+		target := svc
+		if startsWithSPriority(svc) {
+			// SXX<name> → target is <name> (drop the SXX prefix).
+			// We don't have a generic way to derive <name> here without
+			// knowing the prefix length, so trust that the unit ships
+			// the script under exactly the name the symlink points at.
+			// For SXX-prefixed entries the unit usually ships the
+			// symlink itself, hit the early-continue above.
+			target = strings.TrimLeft(svc, "S0123456789")
+		}
+		targetPath := filepath.Join(initd, target)
+		if _, err := os.Stat(targetPath); err != nil {
+			return fmt.Errorf("service %q declared but %s missing in destdir", svc, filepath.Join("/etc/init.d", target))
+		}
+		if err := os.MkdirAll(initd, 0755); err != nil {
+			return err
+		}
+		relTarget := filepath.Join("..", "init.d", target)
+		if err := os.Symlink(relTarget, linkPath); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// startsWithSPriority reports whether name looks like an init.d priority
+// prefix — `S` followed by at least one digit (e.g., `S20`, `S99foo`).
+func startsWithSPriority(name string) bool {
+	if len(name) < 2 || name[0] != 'S' {
+		return false
+	}
+	return name[1] >= '0' && name[1] <= '9'
 }
 
 // APKHash computes the SHA256 hash of an .apk file.

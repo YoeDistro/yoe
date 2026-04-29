@@ -22,7 +22,7 @@ func Assemble(unit *yoestar.Unit, proj *yoestar.Project, projectDir, outputDir, 
 
 	// Step 1: Install packages into rootfs — resolve deps so libraries
 	// are included automatically (e.g., openssh pulls in openssl, zlib).
-	// The flat repo has scope in filenames (e.g., busybox-1.36.1-r0.arm64.apk).
+	// The repo follows Alpine layout (<repo>/<arch>/<pkg>.apk).
 	repoDir := repo.RepoDir(proj, projectDir)
 	allPackages := resolvePackageDeps(unit.Artifacts, proj)
 	if err := installPackages(rootfs, repoDir, allPackages, w); err != nil {
@@ -85,8 +85,8 @@ func resolvePackageDeps(packages []string, proj *yoestar.Project) []string {
 	return result
 }
 
-// installPackages installs packages from a flat repo directory into the rootfs.
-// Package filenames include scope (e.g., busybox-1.36.1-r0.arm64.apk).
+// installPackages installs packages from an Alpine-layout repo
+// (<repo>/<arch>/<pkg>.apk) into the rootfs.
 func installPackages(rootfs, repoDir string, packages []string, w io.Writer) error {
 	if len(packages) == 0 {
 		fmt.Fprintln(w, "  (no packages to install)")
@@ -114,16 +114,28 @@ func installPackages(rootfs, repoDir string, packages []string, w io.Writer) err
 	return nil
 }
 
-// findAPK finds the .apk file for a package in a flat repo directory.
-// Matches by package name prefix (e.g., "busybox" matches "busybox-1.36.1-r0.arm64.apk").
+// findAPK locates a package across every per-arch subdirectory under repoDir.
+// Matches by package-name prefix (e.g., "busybox" matches
+// "busybox-1.36.1-r0.apk"). Returns the first match in directory-name sort
+// order, which gives noarch and arch dirs deterministic priority.
 func findAPK(repoDir, pkgName string) string {
-	entries, err := os.ReadDir(repoDir)
+	archDirs, err := os.ReadDir(repoDir)
 	if err != nil {
 		return ""
 	}
-	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), pkgName+"-") && strings.HasSuffix(e.Name(), ".apk") {
-			return filepath.Join(repoDir, e.Name())
+	for _, ad := range archDirs {
+		if !ad.IsDir() {
+			continue
+		}
+		archPath := filepath.Join(repoDir, ad.Name())
+		entries, err := os.ReadDir(archPath)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), pkgName+"-") && strings.HasSuffix(e.Name(), ".apk") {
+				return filepath.Join(archPath, e.Name())
+			}
 		}
 	}
 	return ""

@@ -174,26 +174,51 @@ detection, depsolving, and `/lib/apk/db/installed` population for free.
 
 ### Task 2.1: apk add against the local repo
 
-- [ ] In the build container, confirm
-      `apk add --root $DESTDIR/rootfs --no-network --allow-untrusted --initdb --repositories-file /dev/null -X $REPO --force-no-chroot $packages`
-      works against a yoe-built repo.
-- [ ] Identify which `--*` flags are truly needed (likely `--no-network`,
-      `--initdb`, `--root`, `--allow-untrusted`, `-X`).
-- [ ] Document any apk behaviour that conflicts with yoe's build-environment
-      assumptions (e.g., user/group resolution inside chroot).
+- [x] In the build container, confirm `apk add` against a yoe-built repo works.
+      _(Verified: stock alpine:3.21 installs from a yoe-built repo via
+      `apk add --allow-untrusted --root /tmp/test --initdb -X /repo     --no-network <pkg>`;
+      transitive deps resolve from APKINDEX. This required reshaping the on-disk
+      repo to Alpine's `<repo>/<arch>/APKINDEX.tar.gz` layout — Phase 2.1a
+      refactor.)_
+- [x] Identify which `--*` flags are truly needed. _(Final set: `--root`,
+      `--initdb`, `--allow-untrusted`, `--no-network`, `--no-cache`,
+      `--force-no-chroot`, `--force-overwrite`, `-X`. `--force-no-chroot` skips
+      apk's chroot step (the rootfs has no `/bin/sh` yet); `--force-overwrite`
+      is a phase-2 expedient until phase 5 ships `replaces:`.)_
+- [x] Document any apk behaviour that conflicts with yoe's build-environment
+      assumptions. _(Two: apk normally chroots into `--root` for trigger scripts
+      → silenced with `--force-no-chroot`; apk refuses to install packages whose
+      files conflict with already-installed ones → `--force-overwrite` until
+      phase 5.)_
+
+### Task 2.1a: Repo layout refactor
+
+(Added during execution — wasn't anticipated in the original plan but is the
+critical prerequisite for `apk add` against the yoe repo.)
+
+- [x] Move apks from flat `<repo>/<filename>.<scope>.apk` to Alpine-native
+      `<repo>/<arch>/<filename>.apk`.
+- [x] Generate per-arch `APKINDEX.tar.gz` (was already per-dir; just called
+      against the new arch subdirs).
+- [x] Update `repo.Publish`, `List`, `Info`, `Remove`, `cacheValid`, bootstrap
+      status check, image rootfs `findAPK`, and Starlark `_find_apk` to walk
+      per-arch dirs.
+- [x] Drop `parseAPKFilename` and its test — pkgname/pkgver/arch now come from
+      PKGINFO via `extractPKGINFO`.
+- [x] PKGINFO `arch=` for machine-scoped units now records the actual
+      architecture instead of the machine name (was a latent bug; matters now
+      that apk-tools reads the field).
 
 ### Task 2.2: Replace `_assemble_rootfs`
 
-- [ ] Rewrite `_assemble_rootfs` to:
-  1. Initialise the rootfs apk db (`apk add --initdb`)
-  2. Run a single `apk add` with the resolved package list
-  3. Capture and pass through stderr so the user sees any conflict / dep errors
-     directly
-- [ ] Remove `_resolve_runtime_deps` once `apk add` is the install path — the
-      index-based depsolver replaces it.
-- [ ] Keep `_report_path_collisions` short-term as a sanity check; remove after
-      one or two release cycles of confidence.
-- [ ] Verify hostname / timezone / service-symlink steps still run after the
+- [x] Rewrite `_assemble_rootfs` to call `apk add` once against `$REPO`.
+- [ ] Remove `_resolve_runtime_deps` — _deferred_. apk handles install-time
+      resolution, but the build DAG still needs the transitive list to schedule
+      which apks to compile. Drop only when the build executor learns to read
+      APKINDEX directly.
+- [x] Drop `_report_path_collisions` — apk now detects file conflicts natively;
+      we silence them with `--force-overwrite` until phase 5.
+- [x] Verify hostname / timezone / service-symlink steps still run after the
       apk-driven install.
 
 ### Task 2.3: Re-baseline dev-image

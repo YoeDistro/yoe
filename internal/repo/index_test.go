@@ -101,35 +101,6 @@ func TestGenerateIndex_EmptyRepo(t *testing.T) {
 	}
 }
 
-func TestParseAPKFilename(t *testing.T) {
-	tests := []struct {
-		filename    string
-		wantName    string
-		wantVersion string
-		wantScope   string
-	}{
-		{"hello-1.0.0-r0.arm64.apk", "hello", "1.0.0-r0", "arm64"},
-		{"lib-foo-2.3.1-r5.x86_64.apk", "lib-foo", "2.3.1-r5", "x86_64"},
-		{"zlib-1.2.13-r0.noarch.apk", "zlib", "1.2.13-r0", "noarch"},
-		{"linux-rpi4-6.12-r0.raspberrypi4.apk", "linux-rpi4", "6.12-r0", "raspberrypi4"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.filename, func(t *testing.T) {
-			name, version, scope := parseAPKFilename(tt.filename)
-			if name != tt.wantName {
-				t.Errorf("name = %q, want %q", name, tt.wantName)
-			}
-			if version != tt.wantVersion {
-				t.Errorf("version = %q, want %q", version, tt.wantVersion)
-			}
-			if scope != tt.wantScope {
-				t.Errorf("scope = %q, want %q", scope, tt.wantScope)
-			}
-		})
-	}
-}
-
 func readAPKINDEX(t *testing.T, path string) string {
 	t.Helper()
 

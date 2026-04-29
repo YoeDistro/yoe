@@ -97,7 +97,7 @@ func Stage0(proj *yoestar.Project, projectDir string, w io.Writer) error {
 		}
 
 		// Publish to the local repo
-		if err := repo.Publish(apkPath, repoDir); err != nil {
+		if err := repo.Publish(apkPath, repoDir, arch); err != nil {
 			return fmt.Errorf("publishing %s: %w", unit.Name, err)
 		}
 
@@ -119,7 +119,7 @@ func Stage1(proj *yoestar.Project, projectDir string, w io.Writer) error {
 	repoDir := repo.RepoDir(proj, projectDir)
 
 	// Verify Stage 0 packages exist in the repo
-	if err := verifyStage0(repoDir); err != nil {
+	if err := verifyStage0(repoDir, arch); err != nil {
 		return fmt.Errorf("stage 0 not complete: %w\nRun 'yoe bootstrap stage0' first", err)
 	}
 
@@ -174,7 +174,7 @@ func Stage1(proj *yoestar.Project, projectDir string, w io.Writer) error {
 		if err != nil {
 			return fmt.Errorf("packaging %s: %w", unit.Name, err)
 		}
-		if err := repo.Publish(apkPath, repoDir); err != nil {
+		if err := repo.Publish(apkPath, repoDir, arch); err != nil {
 			return fmt.Errorf("publishing %s: %w", unit.Name, err)
 		}
 
@@ -188,10 +188,12 @@ func Stage1(proj *yoestar.Project, projectDir string, w io.Writer) error {
 // Status shows the current bootstrap state.
 func Status(proj *yoestar.Project, projectDir string, w io.Writer) error {
 	repoDir := repo.RepoDir(proj, projectDir)
+	arch := build.Arch()
+	archDir := filepath.Join(repoDir, arch)
 
 	fmt.Fprintf(w, "Bootstrap status for %s\n\n", proj.Name)
 	fmt.Fprintf(w, "Repository: %s\n", repoDir)
-	fmt.Fprintf(w, "Architecture: %s\n\n", build.Arch())
+	fmt.Fprintf(w, "Architecture: %s\n\n", arch)
 
 	for _, name := range bootstrapUnits {
 		status := "missing"
@@ -199,8 +201,8 @@ func Status(proj *yoestar.Project, projectDir string, w io.Writer) error {
 			status = "unit found"
 		}
 
-		// Check if package exists in repo
-		entries, err := os.ReadDir(repoDir)
+		// Check if package exists in repo's per-arch subdir
+		entries, err := os.ReadDir(archDir)
 		if err == nil {
 			for _, e := range entries {
 				if strings.HasPrefix(e.Name(), name+"-") && strings.HasSuffix(e.Name(), ".apk") {
@@ -229,10 +231,11 @@ func stage0Commands(unit *yoestar.Unit) []string {
 	return cmds
 }
 
-func verifyStage0(repoDir string) error {
-	entries, err := os.ReadDir(repoDir)
+func verifyStage0(repoDir, arch string) error {
+	archDir := filepath.Join(repoDir, arch)
+	entries, err := os.ReadDir(archDir)
 	if err != nil {
-		return fmt.Errorf("repo not found at %s", repoDir)
+		return fmt.Errorf("repo arch dir not found at %s", archDir)
 	}
 
 	for _, name := range bootstrapUnits {
@@ -244,7 +247,7 @@ func verifyStage0(repoDir string) error {
 			}
 		}
 		if !found {
-			return fmt.Errorf("package %s not found in repo", name)
+			return fmt.Errorf("package %s not found in repo (arch=%s)", name, arch)
 		}
 	}
 
@@ -257,13 +260,17 @@ func createBuildRoot(buildRoot, repoDir, projectDir string, w io.Writer) error {
 	os.RemoveAll(buildRoot)
 	os.MkdirAll(buildRoot, 0755)
 
-	// Use apk inside the container to install base packages
+	// Use apk inside the container to install base packages. The repo is
+	// in Alpine layout (`/build/repo/<arch>/APKINDEX.tar.gz`), so passing
+	// the parent path as a repository works directly. --allow-untrusted is
+	// required until we add signing in phase 3 of the apk-compat plan.
 	args := []string{
 		"apk",
 		"--root", "/build/buildroot",
 		"--initdb",
 		"--no-scripts",
 		"--no-cache",
+		"--allow-untrusted",
 		"--repository", "/build/repo",
 		"add",
 	}

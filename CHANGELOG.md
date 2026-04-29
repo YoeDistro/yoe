@@ -8,12 +8,26 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Image rootfs is assembled by upstream `apk add`.** yoe no longer loops
+  `tar xzf` over each apk; image builds run `apk add` against the project's
+  local repo, getting real dependency resolution, file-conflict detection, and
+  an installed-package database in `/lib/apk/db` for free. On-target you can now
+  `apk info`, `apk verify`, and (once apk-tools ships as a unit) `apk add` and
+  `apk upgrade` against the same repo.
+- **Service symlinks ship inside the apk.** A unit's `services = [...]`
+  declaration is materialized as real `/etc/init.d/SXX<name>` symlinks inside
+  the package's data tar at build time. On-target `apk add <pkg>` produces the
+  same rootfs as image-time assembly — yoe never patches the rootfs after
+  install.
+- **Repo layout switched to Alpine-native** —
+  `repo/<project>/<arch>/<pkg>-<ver>-r<N>.apk` plus a per-arch
+  `APKINDEX.tar.gz`. `.apk` filenames no longer carry a scope suffix. Existing
+  `repo/` directories are obsolete; the next build repopulates the new layout.
 - **Yoe-built apks install with upstream Alpine apk-tools.** `.apk` files and
   `APKINDEX` produced by yoe now round-trip through stock
   `apk add --allow-untrusted`: no checksum errors, no format warnings, and
   package metadata (name, version, arch, deps, origin, commit, install size)
-  matches what `apk index` itself would emit. This is the foundation for using
-  `apk add` to assemble image rootfs in a future release.
+  matches what `apk index` itself would emit.
 - **Nine new units in `dev-image`** — `e2fsprogs` (mkfs.ext4 / fsck.ext4 /
   tune2fs on the target), `eudev` (full udev for dynamic /dev), `iproute2` (full
   `ip`/`tc`), `dhcpcd` (a DHCP client beyond busybox udhcpc), `bash`, `less`,

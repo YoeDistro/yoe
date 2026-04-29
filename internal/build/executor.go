@@ -44,6 +44,10 @@ type Options struct {
 
 // ScopeDir returns the build subdirectory for a unit based on its scope.
 // "machine" → machine name, "noarch" → "noarch", default → arch.
+//
+// This drives where we keep build state under build/ — it's a per-build
+// concept, not a packaging concept. Machine-scoped units need their own
+// build dir so two machines targeting the same arch don't collide.
 func ScopeDir(unit *yoestar.Unit, arch, machine string) string {
 	switch unit.Scope {
 	case "machine":
@@ -53,6 +57,20 @@ func ScopeDir(unit *yoestar.Unit, arch, machine string) string {
 	default:
 		return arch
 	}
+}
+
+// RepoArchDir returns the per-arch subdirectory under repo/ where a unit's
+// .apk is published. apk-tools expects `<repo>/<arch>/APKINDEX.tar.gz`, so
+// this is always either an actual architecture (e.g., "x86_64", "aarch64")
+// or the literal "noarch" — never a machine name. Machine-scoped units are
+// built for a specific arch and live alongside arch-scoped apks of the same
+// arch; the unique pkgname (e.g., `linux-rpi4` vs `linux-imx6ul`) keeps them
+// from colliding.
+func RepoArchDir(unit *yoestar.Unit, arch string) string {
+	if unit.Scope == "noarch" {
+		return "noarch"
+	}
+	return arch
 }
 
 // BuildUnits builds the specified units (or all if names is empty).
@@ -109,7 +127,7 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		unit := proj.Units[name]
 		sd := ScopeDir(unit, opts.Arch, opts.Machine)
 		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
-		if !forceThis && !opts.NoCache && cacheValid(proj, opts.ProjectDir, unit, sd, hash) {
+		if !forceThis && !opts.NoCache && cacheValid(proj, opts.ProjectDir, unit, sd, opts.Arch, hash) {
 			notify(name, "cached")
 		} else {
 			notify(name, "waiting")
@@ -153,7 +171,7 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		}
 
 		if !forceThis && !opts.NoCache && !depRebuilt {
-			if cacheValid(proj, opts.ProjectDir, unit, sd, hash) {
+			if cacheValid(proj, opts.ProjectDir, unit, sd, opts.Arch, hash) {
 				fmt.Fprintf(w, "%-20s [cached] %s\n", name, hash[:12])
 				continue
 			}
@@ -452,14 +470,15 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	// Package the output into an .apk and publish to the local repo.
 	// Then stage destdir for downstream units' per-unit sysroots.
 	if unit.Class != "image" && unit.Class != "container" {
-		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), sd, opts.ProjectCommit)
+		archDir := RepoArchDir(unit, opts.Arch)
+		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), archDir, opts.ProjectCommit)
 		if err != nil {
 			return fmt.Errorf("creating apk: %w", err)
 		}
 		fmt.Fprintf(w, "  → %s\n", filepath.Base(apkPath))
 
 		repoDir := repo.RepoDir(proj, opts.ProjectDir)
-		if err := repo.Publish(apkPath, repoDir); err != nil {
+		if err := repo.Publish(apkPath, repoDir, archDir); err != nil {
 			return fmt.Errorf("publishing to repo: %w", err)
 		}
 
@@ -521,7 +540,7 @@ func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[strin
 		sd := ScopeDir(unit, opts.Arch, opts.Machine)
 		cached := ""
 		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
-		if !forceThis && cacheValid(proj, opts.ProjectDir, unit, sd, hashes[name]) {
+		if !forceThis && cacheValid(proj, opts.ProjectDir, unit, sd, opts.Arch, hashes[name]) {
 			cached = " [cached, skip]"
 		}
 		fmt.Fprintf(w, "  %-20s [%s] %s%s\n", name, unit.Class, hashes[name][:12], cached)
@@ -585,15 +604,20 @@ func IsBuildCached(projectDir, arch, name, hash string) bool {
 // can outlive the apk (deleted manually, or written racily by a parallel run
 // while the actual build was cancelled). When the apk is gone, the cache is
 // stale and the unit must be rebuilt.
-func cacheValid(proj *yoestar.Project, projectDir string, unit *yoestar.Unit, scopeDir, hash string) bool {
+// cacheValid takes both scopeDir (build-tree subdir, may be a machine name)
+// and arch (the actual target architecture) because they diverge for
+// machine-scoped units: the build cache lives under build/<machine>/, but
+// the apk lives under repo/.../<arch>/.
+func cacheValid(proj *yoestar.Project, projectDir string, unit *yoestar.Unit, scopeDir, arch, hash string) bool {
 	if !IsBuildCached(projectDir, scopeDir, unit.Name, hash) {
 		return false
 	}
 	if unit.Class == "image" || unit.Class == "container" {
 		return true
 	}
-	apkName := fmt.Sprintf("%s-%s-r%d.%s.apk", unit.Name, unit.Version, unit.Release, scopeDir)
-	_, err := os.Stat(filepath.Join(repo.RepoDir(proj, projectDir), apkName))
+	archDir := RepoArchDir(unit, arch)
+	apkName := fmt.Sprintf("%s-%s-r%d.apk", unit.Name, unit.Version, unit.Release)
+	_, err := os.Stat(filepath.Join(repo.RepoDir(proj, projectDir), archDir, apkName))
 	return err == nil
 }
 

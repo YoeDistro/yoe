@@ -117,10 +117,7 @@ func TestAPKRepoInstallWithUpstreamApk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateAPK: %v", err)
 	}
-	// Drop the arch suffix: Alpine's repo layout puts the arch in the
-	// directory, not the filename, and apk computes the canonical
-	// filename as `<pkg>-<ver>.apk`.
-	dst := filepath.Join(repoDir, "hello-1.0.0-r0.apk")
+	dst := filepath.Join(repoDir, filepath.Base(apkPath))
 	if err := copyFile(apkPath, dst); err != nil {
 		t.Fatal(err)
 	}
