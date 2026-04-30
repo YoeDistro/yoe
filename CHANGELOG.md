@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **`apk-tools` builds without lua or scdoc.** The unit was reaching for
+  build-time helper tools (lua for help text, scdoc for man pages) that
+  yoe's container doesn't ship. apk-tools now skips them and just builds
+  the apk binary used on yoe targets.
+
 - **SSH works out of the box on `dev-image`.** Booted images now start
   `sshd` automatically, generate per-device host keys on first boot, and
   let you connect over the QEMU port-forward (`ssh -p 2222 user@localhost`,

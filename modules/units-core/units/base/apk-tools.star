@@ -3,9 +3,12 @@
 # against the project's signed repo — the same .apk files and APKINDEX
 # yoe builds at image-assembly time also work for live OTA-style updates.
 #
-# Build system is plain GNU Make: no autotools, no cmake. LUAAPK=no skips
-# the optional lua bindings (yoe doesn't ship lua); pkg-config locates
-# zlib and openssl from the per-unit sysroot.
+# Build system is plain GNU Make: no autotools, no cmake. LUA=no skips both
+# the optional lua bindings and the lua-based help-text generator (yoe
+# doesn't ship lua); the sed step strips doc/ from the top-level subdirs
+# list so neither build nor install descends into the man pages, which
+# would otherwise require scdoc; pkg-config locates zlib and openssl from
+# the per-unit sysroot.
 unit(
     name = "apk-tools",
     version = "2.14.10",
@@ -21,8 +24,9 @@ unit(
     shell = "bash",
     tasks = [
         task("build", steps = [
-            "make CC=cc LUAAPK=no -j$NPROC",
-            "make CC=cc LUAAPK=no DESTDIR=$DESTDIR install",
+            "sed -i 's|^subdirs\\s*:=.*|subdirs := libfetch/ src/|' Makefile",
+            "make CC=cc LUA=no -j$NPROC",
+            "make CC=cc LUA=no DESTDIR=$DESTDIR install",
         ]),
     ],
 )
