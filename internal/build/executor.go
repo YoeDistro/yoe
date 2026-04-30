@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	yoe "github.com/YoeDistro/yoe-ng/internal"
 	"github.com/YoeDistro/yoe-ng/internal/artifact"
 	"github.com/YoeDistro/yoe-ng/internal/repo"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
@@ -302,14 +303,35 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	srcDir := filepath.Join(buildDir, "src")
 	destDir := filepath.Join(buildDir, "destdir")
 
-	if opts.Clean {
-		os.RemoveAll(srcDir)
-		os.RemoveAll(destDir)
+	// Resolve container image early so destdir cleanup can recover from
+	// root-owned files left by a previous failed image build.
+	containerImage := resolveContainerImage(proj, unit, opts.Arch)
+
+	// Image-class units chown rootfs to root for mkfs.ext4 -d and chown back
+	// only on success. If anything between fails, the destdir is left owned
+	// by root and the host can't clean it up. Restore ownership after every
+	// image build (success or failure) so the next build can proceed.
+	if unit.Class == "image" {
+		defer func() {
+			if err := chownDirToHost(ctx, destDir, opts.ProjectDir, containerImage); err != nil {
+				fmt.Fprintf(w, "  (warning: restoring destdir ownership failed: %v)\n", err)
+			}
+		}()
 	}
 
-	// Always start with an empty destdir
-	os.RemoveAll(destDir)
-	EnsureDir(destDir)
+	if opts.Clean {
+		if err := removeDirRobust(ctx, srcDir, opts.ProjectDir, containerImage); err != nil {
+			return fmt.Errorf("removing srcdir: %w", err)
+		}
+	}
+
+	// Always start with an empty destdir.
+	if err := removeDirRobust(ctx, destDir, opts.ProjectDir, containerImage); err != nil {
+		return fmt.Errorf("removing destdir: %w", err)
+	}
+	if err := EnsureDir(destDir); err != nil {
+		return fmt.Errorf("creating destdir: %w", err)
+	}
 
 	// Prepare source (fetch + extract + patch, or reuse dev source).
 	// Units without a source field (e.g., musl) skip this step.
@@ -378,9 +400,6 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	for k, v := range unit.Environment {
 		env[k] = v
 	}
-
-	// Resolve container image for this unit
-	containerImage := resolveContainerImage(proj, unit, opts.Arch)
 
 	// For container units, set the host working directory to the .star file's
 	// directory so docker build can find the Dockerfile.
@@ -618,6 +637,53 @@ func resolveContainerImage(proj *yoestar.Project, unit *yoestar.Unit, arch strin
 	}
 
 	return container
+}
+
+// removeDirRobust removes dir and its contents. If RemoveAll fails (typically
+// because a previous failed image build left root-owned files behind), it
+// attempts to chown the tree back to the host user via the container, then
+// retries. Returns an error if the directory cannot be removed.
+func removeDirRobust(ctx context.Context, dir, projectDir, image string) error {
+	err := os.RemoveAll(dir)
+	if err == nil {
+		return nil
+	}
+	if _, statErr := os.Stat(dir); os.IsNotExist(statErr) {
+		return nil
+	}
+	if cerr := chownDirToHost(ctx, dir, projectDir, image); cerr != nil {
+		return fmt.Errorf("%w (and ownership recovery failed: %v)", err, cerr)
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return fmt.Errorf("removing after ownership recovery: %w", err)
+	}
+	return nil
+}
+
+// chownDirToHost runs chown -R uid:gid on dir inside the container, where
+// the container has the privilege to chown root-owned files. Used to recover
+// destdir ownership after a failed image build (image class chowns rootfs to
+// root for mkfs.ext4 -d). No-op if dir does not exist.
+func chownDirToHost(ctx context.Context, dir, projectDir, image string) error {
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return nil
+	}
+	if image == "" {
+		return fmt.Errorf("no container image available for ownership recovery of %s", dir)
+	}
+	parent := filepath.Dir(dir)
+	base := filepath.Base(dir)
+	uid := os.Getuid()
+	gid := os.Getgid()
+	return yoe.RunInContainer(yoe.ContainerRunConfig{
+		Ctx:        ctx,
+		Image:      image,
+		Command:    fmt.Sprintf("chown -R %d:%d /__yoe_cleanup/%s", uid, gid, base),
+		ProjectDir: projectDir,
+		Mounts:     []yoe.Mount{{Host: parent, Container: "/__yoe_cleanup"}},
+		NoUser:     true,
+		Quiet:      true,
+	})
 }
 
 // --- Simple file-based cache ---

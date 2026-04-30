@@ -56,6 +56,7 @@ type ContainerRunConfig struct {
 	NoUser      bool              // run as root (for losetup/mount)
 	Stdout      io.Writer         // override stdout (default: os.Stdout)
 	Stderr      io.Writer         // override stderr (default: os.Stderr)
+	Quiet       bool              // suppress the "[yoe] container: ..." trace line
 }
 
 // OnNotify is an optional callback for global notifications (e.g., TUI).
@@ -104,7 +105,9 @@ func RunInContainer(cfg ContainerRunConfig) error {
 	if stderr == nil {
 		stderr = os.Stderr
 	}
-	fmt.Fprintf(stderr, "[yoe] container: %s\n", cfg.Command)
+	if !cfg.Quiet {
+		fmt.Fprintf(stderr, "[yoe] container: %s\n", cfg.Command)
+	}
 
 	ctx := cfg.Ctx
 	if ctx == nil {

@@ -8,6 +8,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Image rebuilds recover from prior failed builds.** When an image build
+  failed mid-way, the next build used to silently ignore root-owned
+  leftovers in its destdir and fail later with a confusing "Permission
+  denied". Yoe now surfaces the original cleanup error and auto-recovers
+  by chowning the tree back to the host user, so re-running the build
+  just works.
+
+- **Zellij terminal multiplexer.** A new `zellij` unit installs the upstream
+  prebuilt static binary, so dev images can ship a layout-aware terminal
+  workspace alongside helix and yazi.
+
 - **New `binary` class for prebuilt binaries.** Units can now declare
   per-arch upstream release URLs and SHA256 hashes and let yoe fetch,
   verify, and install without rebuilding from source. `binaries`, `extras`,
