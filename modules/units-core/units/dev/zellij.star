@@ -17,7 +17,7 @@ binary(
     },
     sha256 = {
         "x86_64": "669825021d529fca5d939888263c9d2a90762145191fa07581a15250e8af2b49",
-        "arm64":  "d3e87f35a4426d837346a69882e36f4bf21f117612c28c1dede915e5c599d8f4",
+        "arm64":  "6f028bb569d29be968c961249c5f80d5336ad4ad4b3cd79af8e32afab57b0948",
     },
     license = "MIT",
     description = "Terminal workspace and multiplexer written in Rust",
