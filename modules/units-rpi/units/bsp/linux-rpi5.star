@@ -12,7 +12,7 @@ unit(
     tasks = [
         task("build", steps=[
             "make ARCH=arm64 bcm2712_defconfig",
-            "make ARCH=arm64 -j$NPROC Image dtbs",
+            "make ARCH=arm64 -j$NPROC Image modules dtbs",
             # Install kernel as kernel_2712.img (RPi5 naming convention)
             "install -D arch/arm64/boot/Image $DESTDIR/boot/kernel_2712.img",
             # Install device trees
@@ -20,6 +20,11 @@ unit(
             # Install overlays directory
             "mkdir -p $DESTDIR/boot/overlays",
             "cp arch/arm64/boot/dts/overlays/*.dtbo $DESTDIR/boot/overlays/ 2>/dev/null || true",
+            # Install modules into rootfs at /lib/modules/<kver>/.
+            # DEPMOD=true skips depmod (not in build container); target runs it.
+            "make ARCH=arm64 INSTALL_MOD_PATH=$DESTDIR DEPMOD=true modules_install",
+            # Drop broken build/source symlinks pointing into the host build tree.
+            "rm -f $DESTDIR/lib/modules/*/build $DESTDIR/lib/modules/*/source",
         ]),
     ],
 )

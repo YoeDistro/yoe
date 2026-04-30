@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/bubbles/progress"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	yoe "github.com/YoeDistro/yoe-ng/internal"
 	"github.com/YoeDistro/yoe-ng/internal/build"
@@ -1180,7 +1181,7 @@ func (m model) detailAllLines() []string {
 		allLines = append(allLines, dimStyle.Render("  (no output yet)"))
 	} else {
 		for _, line := range m.outputLines {
-			allLines = append(allLines, "  "+line)
+			allLines = append(allLines, m.wrapLine("  "+line)...)
 		}
 	}
 
@@ -1191,11 +1192,35 @@ func (m model) detailAllLines() []string {
 		allLines = append(allLines, dimStyle.Render("  (no build log)"))
 	} else {
 		for _, line := range m.logLines {
-			allLines = append(allLines, "  "+line)
+			allLines = append(allLines, m.wrapLine("  "+line)...)
 		}
 	}
 
 	return allLines
+}
+
+// wrapLine hard-wraps a single logical line into one or more display lines
+// that fit within the current terminal width. Continuation lines get an
+// extra indent so wrapped content is visually distinct from a fresh line.
+func (m model) wrapLine(line string) []string {
+	w := m.width
+	if w <= 0 || ansi.StringWidth(line) <= w {
+		return []string{line}
+	}
+	const contIndent = "    "
+	// First chunk fits the full width.
+	first := ansi.Truncate(line, w, "")
+	out := []string{first}
+	rest := line[len(first):]
+	for rest != "" {
+		chunk := ansi.Truncate(rest, w-len(contIndent), "")
+		if chunk == "" {
+			break
+		}
+		out = append(out, contIndent+chunk)
+		rest = rest[len(chunk):]
+	}
+	return out
 }
 
 func (m model) viewDetail() string {
@@ -1450,22 +1475,10 @@ func (m model) detailViewportHeight() int {
 	return h
 }
 
-// detailTotalLines returns the total number of lines in the combined detail content.
+// detailTotalLines returns the total number of display lines in the combined
+// detail content (after wrapping).
 func (m model) detailTotalLines() int {
-	n := 1 // BUILD OUTPUT header
-	if len(m.outputLines) == 0 {
-		n++ // "(no output yet)"
-	} else {
-		n += len(m.outputLines)
-	}
-	n++ // separator
-	n++ // BUILD LOG header
-	if len(m.logLines) == 0 {
-		n++ // "(no build log)"
-	} else {
-		n += len(m.logLines)
-	}
-	return n
+	return len(m.detailAllLines())
 }
 
 // detailMaxScroll returns the maximum scroll offset for the detail view.

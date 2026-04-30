@@ -88,8 +88,8 @@ func fetchHTTP(cacheDir string, unit *yoestar.Unit, w io.Writer) (string, error)
 	actualHash := fmt.Sprintf("%x", h.Sum(nil))
 	if unit.SHA256 != "" && actualHash != unit.SHA256 {
 		os.Remove(tmpPath)
-		return "", fmt.Errorf("SHA256 mismatch for %s: expected %s, got %s",
-			unit.Source, unit.SHA256, actualHash)
+		return "", fmt.Errorf("SHA256 mismatch:\n  expected %s\n  got      %s",
+			unit.SHA256, actualHash)
 	}
 
 	if err := os.Rename(tmpPath, cachedPath); err != nil {
@@ -171,7 +171,7 @@ func Verify(unit *yoestar.Unit) error {
 
 	actual := fmt.Sprintf("%x", h.Sum(nil))
 	if actual != unit.SHA256 {
-		return fmt.Errorf("SHA256 mismatch for %s: expected %s, got %s",
+		return fmt.Errorf("SHA256 mismatch for %s:\n  expected %s\n  got      %s",
 			unit.Name, unit.SHA256, actual)
 	}
 

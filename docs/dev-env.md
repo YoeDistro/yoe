@@ -53,6 +53,97 @@ What makes this work:
   and never rebuilds them unless inputs change. The cache is the SDK's sysroot,
   decomposed into reusable pieces.
 
+## Working on App Code
+
+The no-SDK model gives every developer a uniform toolchain. The other half of
+the app-developer loop is editing source and seeing the change on a device.
+Three pieces make that work:
+
+### Local-path sources
+
+Units can reference a working tree on disk instead of (or alongside) a git URL:
+
+```python
+unit(
+    name = "myapp",
+    source = path("./"),     # build from this repo's working tree
+    class = "go_binary",
+    ...
+)
+```
+
+`path()` sources are not cloned. yoe binds the working tree into the build
+sandbox so edits land in the next build immediately, without a commit-tag-fetch
+cycle.
+
+### Fast deploy
+
+`yoe deploy <unit> <host>` builds the apk for `<unit>` and runs `apk add` on
+`<host>` over SSH. Combined with local-path sources, the loop is:
+
+```
+edit code → yoe deploy myapp dev-pi → service running on the device
+```
+
+Same plumbing yoe uses to assemble images at build time, just targeted at a
+running device.
+
+### Watch mode
+
+`yoe dev <unit>` watches the source tree and rebuilds (and optionally redeploys)
+on save. For app projects this is the inner loop; for upstream units, it's the
+patch-and-iterate workflow.
+
+### Three workflow shapes
+
+The pieces above support three repo layouts:
+
+**Single-repo project.** App code and yoe config live in one git repo. Add
+`PROJECT.star` and a `unit.star` next to the source tree:
+
+```
+my-app/
+├── PROJECT.star      # references units-core for the base system
+├── unit.star         # source = path("./")
+└── src/...
+```
+
+`yoe build && yoe deploy` runs from the repo root. Easiest onboarding;
+yoe-specific files become part of the project.
+
+**Multi-repo (clean app).** App stays untouched in its own repo. A separate
+"system" project references it via a sibling path:
+
+```
+~/projects/
+├── my-app/                  # plain app repo, no yoe files
+└── my-system/
+    ├── PROJECT.star
+    └── apps/
+        └── my-app.star      # source = path("../../my-app")
+```
+
+The system project is what gets versioned for production. Mirrors how Rust
+workspaces and mono-repos handle service composition.
+
+**In-tree dev of an upstream unit.** `yoe dev openssh` checks out an upstream
+unit's source into a working dir; subsequent builds use that dir until you
+commit or revert. Distinct from app dev — this is the "patch upstream and try
+it" workflow.
+
+### Editor integration
+
+Run language servers and debuggers inside `yoe shell` (or a devcontainer pointed
+at the toolchain image) so they see the same headers, libraries, and target arch
+as the build:
+
+- VSCode Remote / Dev Containers attaches naturally.
+- Neovim's `distant.nvim` works the same way.
+- JetBrains Gateway connects via SSH into the container.
+
+There is no SDK to install, no `environment-setup-*` to source. The container
+the build runs in is the container the LSP runs in.
+
 ## `yoe shell`
 
 `yoe shell` opens an interactive shell inside the build sandbox for a unit —
