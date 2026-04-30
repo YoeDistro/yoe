@@ -8,20 +8,24 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Container runtime build path documented.**
+  [docs/containers.md](docs/containers.md) now walks through what it takes to
+  ship Docker, containerd, and runc on a musl yoe rootfs — why prebuilt "static"
+  binaries don't work, the per-component build breakdown, and how cgo units like
+  runc plug into yoe's existing Go toolchain and `toolchain-musl` container via
+  `deps` instead of needing a new Go+GCC container image.
 - **Rename `debug` units to `dev`.**
-- **Expand [roadmap](docs/roadmap.md).** Reorganized as a pointer index into
-  the design docs, with new sections for the app-developer build/deploy
-  loop, hardware access, testing, self-hosting, and distribution variants.
-- **New testing design doc** at [docs/testing.md](docs/testing.md) covers
-  the planned `yoe test` driver, build-time package QA, on-device
-  upstream tests (Yocto `ptest` analog), image smoke tests, and CI
-  integration.
+- **Expand [roadmap](docs/roadmap.md).** Reorganized as a pointer index into the
+  design docs, with new sections for the app-developer build/deploy loop,
+  hardware access, testing, self-hosting, and distribution variants.
+- **New testing design doc** at [docs/testing.md](docs/testing.md) covers the
+  planned `yoe test` driver, build-time package QA, on-device upstream tests
+  (Yocto `ptest` analog), image smoke tests, and CI integration.
 - **Kernel modules now ship in images** — the `linux`, `linux-rpi4`, and
-  `linux-rpi5` units previously built only the in-tree kernel image, so
-  drivers compiled as loadable modules (Wi-Fi, USB, sound, many
-  filesystems) were silently dropped. Modules are now built and installed
-  to `/lib/modules/<kver>/` in the rootfs, so `modprobe` finds them at
-  runtime.
+  `linux-rpi5` units previously built only the in-tree kernel image, so drivers
+  compiled as loadable modules (Wi-Fi, USB, sound, many filesystems) were
+  silently dropped. Modules are now built and installed to
+  `/lib/modules/<kver>/` in the rootfs, so `modprobe` finds them at runtime.
 
 ## [0.8.5] - 2026-04-30
 

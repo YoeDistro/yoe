@@ -140,6 +140,73 @@ Three credible options, in rough order of embedded-friendliness:
 - What users ask for by name because of familiarity
 - Worth adding after containerd is working, if there is demand
 
+## Building from Source
+
+Docker's prebuilt "static" binaries (from `download.docker.com/linux/static/`)
+are not truly static — `dockerd`, `containerd`, and `runc` are linked against
+glibc and pull in `libseccomp`/`libdevmapper` dynamically on some releases — so
+they will not run on a musl-based yoe rootfs. Building from source is the only
+serious path.
+
+The toolchain side is already solved: `modules/units-core/units/dev/go.star`
+provides a Go toolchain (currently Go 1.26.2) and `classes/go.star` gives Go
+units a build class. The component breakdown:
+
+- **`docker` CLI** — pure Go, `CGO_ENABLED=0`, no system-library deps
+- **`containerd`** — mostly pure Go, builds with `CGO_ENABLED=0` for the daemon
+  and `ctr`
+- **`runc`** — effectively requires cgo + `libseccomp` to be useful; without
+  seccomp filtering it is not a serious container runtime, so a `libseccomp`
+  unit must land first
+- **`dockerd`** — optional cgo paths for graphdrivers (devicemapper, btrfs), all
+  avoidable with overlay2 as the default storage driver
+- **`tini`** (`docker-init`) — small C program, trivial autotools build
+
+So the work is one C library unit (`libseccomp`), four Go units (`runc`,
+`containerd`, `docker`, `dockerd`), and one trivial autotools unit (`tini`). The
+genuinely hard pieces are the runtime concerns covered elsewhere in this
+document — kernel config, init integration, iptables/nftables, the
+`/var/lib/docker` data partition — not the source builds themselves.
+
+Alpine's `aports` tree (`community/docker`, `community/containerd`,
+`community/runc`) is the obvious reference: those packages are already
+musl-native and the APKBUILDs document the exact configure flags, ldflags, and
+patches that work in practice.
+
+### Building cgo Units (runc, libseccomp consumers)
+
+The pure-Go components (`docker` CLI, `containerd`) drop into the existing
+`go_binary` class without ceremony — that class already pulls the upstream
+`golang:1.24` container and builds with `CGO_ENABLED=0`. The interesting case is
+`runc`, which needs cgo + a working C compiler + `libseccomp` headers and
+libraries, all in the same build environment.
+
+The Yoe-native answer is to use the existing `units/dev/go.star` as a build-time
+dep rather than introducing a new "Go + GCC" container:
+
+- A unit's `deps` are installed into the build sysroot before that unit builds.
+  The Go toolchain unit installs to `$PREFIX/lib/go` with `/usr/bin/{go,gofmt}`
+  symlinks, so a unit with `deps = ["go"]` gets `go` on `PATH` at build time.
+- The same mechanism lands a `libseccomp` unit's headers and `.so` in the
+  sysroot, where `pkg-config --cflags --libs libseccomp` finds them.
+- The existing `toolchain-musl` container already provides `gcc`, `binutils`,
+  `make`, etc.
+
+So a `runc` unit is: `container = "toolchain-musl"`,
+`deps = ["go", "libseccomp"]`, and a build task that runs the upstream Makefile.
+`go build` invokes `gcc` from the container, links against `libseccomp` from the
+sysroot, and uses `go` from the sysroot. One container, three pieces, all native
+to the Yoe model.
+
+The one wrinkle: `classes/go.star::go_binary` currently hardcodes
+`container = "golang:1.24"` and `CGO_ENABLED=0`, which is fine for pure-Go units
+but cannot express the cgo + musl + sysroot-deps combination above. The class
+should grow a `cgo = True` mode that switches the container to `toolchain-musl`,
+drops the `CGO_ENABLED=0`, and relies on `deps` for the Go toolchain instead of
+the upstream Go image. This same path will be reused by anything else needing
+cgo (devmapper, btrfs, AppArmor consumers), so it is worth making first-class
+rather than hand-rolling tasks per unit.
+
 ## Resource Envelope
 
 From HAOS experience and general rules of thumb:

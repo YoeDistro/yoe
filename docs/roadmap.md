@@ -6,6 +6,12 @@
 > and link from here. If a topic doesn't have a design doc yet, leave the entry
 > brief — write the design doc when the work is actually picked up.
 
+## Next
+
+- Fast deploy: `yoe deploy <unit> <host>` — build the apk, push it over SSH, run
+  `apk add` on the device.
+  - In TUI, ask for host IP/name and cache it in local.star.
+
 ## Bugs / Improvements
 
 - `apk help` — hard to use right now.
@@ -29,8 +35,6 @@ for the design.
 
 - Local-path unit sources: `source = path("./")` so a unit builds from a working
   tree without a clone-tag cycle. Foundation for everything below.
-- Fast deploy: `yoe deploy <unit> <host>` — build the apk, push it over SSH, run
-  `apk add` on the device.
 - `yoe dev` watch mode — rebuild (and optionally redeploy) on save.
 - Language and build-system classes beyond `go_binary`: `rust_binary` (Cargo),
   `python_unit`, `node_unit`, `meson`, `zig_binary`. See the class table in
