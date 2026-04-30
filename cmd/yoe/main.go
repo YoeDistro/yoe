@@ -75,6 +75,8 @@ func main() {
 		cmdFlash(cmdArgs)
 	case "run":
 		cmdRun(cmdArgs)
+	case "serve":
+		cmdServe(cmdArgs)
 	case "config":
 		cmdConfig(cmdArgs)
 	case "repo":
@@ -117,6 +119,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  dev                     Manage source modifications (extract, diff, status)\n")
 	fmt.Fprintf(os.Stderr, "  flash <unit> <device>   Write an image to a device/SD card (also: flash list)\n")
 	fmt.Fprintf(os.Stderr, "  run                     Run an image in QEMU\n")
+	fmt.Fprintf(os.Stderr, "  serve                   Run an HTTP+mDNS feed for the project's repo\n")
 	fmt.Fprintf(os.Stderr, "  module                  Manage external modules (fetch, sync, list)\n")
 	fmt.Fprintf(os.Stderr, "  repo                    Manage the local apk package repository\n")
 	fmt.Fprintf(os.Stderr, "  cache                   Manage the build cache (local and remote)\n")
