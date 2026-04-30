@@ -101,6 +101,12 @@ def _create_disk_image(name, partitions):
     if not partitions:
         return
 
+    # Capture the rootfs size before the chown to root below — dir_size_mb
+    # walks on the host as the build user, and a post-chown walk can't enter
+    # mode-700 root-owned dirs (e.g., /root). Used by the ext4 preflight
+    # below to fail with a clear message when contents won't fit.
+    rootfs_mb = dir_size_mb("rootfs")
+
     total_mb = 1
     for p in partitions:
         total_mb += _parse_size_mb(p.size)
@@ -138,6 +144,17 @@ def _create_disk_image(name, partitions):
             # Copy boot files from rootfs (root-owned; mcopy needs read access).
             run("mcopy -sQi %s $DESTDIR/rootfs/boot/* ::/ 2>/dev/null || true" % part_img, privileged = True)
         elif p.type == "ext4":
+            # Preflight: fail with a clear message when the rootfs won't
+            # fit in the partition with enough headroom for ext4 metadata.
+            # The 25 MB margin covers block bitmaps, inode tables, journal,
+            # and reserved blocks; without it, mkfs.ext4 -d fails mid-
+            # populate with "Could not allocate block in ext2 filesystem"
+            # — accurate but gives no hint that the partition size is the
+            # knob to turn.
+            headroom_mb = 25
+            if rootfs_mb + headroom_mb > size_mb:
+                fail("\nrootfs (%d MB) won't fit in partition '%s' (%d MB) with %d MB headroom;\nincrease the partition size in your image definition" % (rootfs_mb, p.label, size_mb, headroom_mb))
+
             # Disable ext4 features that syslinux 6.03 can't read (x86 only)
             ext4_opts = "-O ^64bit,^metadata_csum,^extent " if ARCH == "x86_64" else ""
             run("mkfs.ext4 %s-d $DESTDIR/rootfs -L %s %s %dM" % (ext4_opts, p.label, part_img, size_mb),

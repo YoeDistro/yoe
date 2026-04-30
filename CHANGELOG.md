@@ -8,6 +8,14 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Clear error when an image's rootfs won't fit the partition.** Building
+  an image whose installed rootfs exceeded the partition size used to
+  fail mid-`mkfs.ext4` with a cryptic "Could not allocate block in ext2
+  filesystem" message and no hint about which knob to turn. Yoe now
+  preflights the rootfs against the partition (with 25 MB of headroom for
+  ext4 metadata) and points at the partition size in the image
+  definition.
+
 - **`apk-tools` builds without lua or scdoc.** The unit was reaching for
   build-time helper tools (lua for help text, scdoc for man pages) that
   yoe's container doesn't ship. apk-tools now skips them and just builds

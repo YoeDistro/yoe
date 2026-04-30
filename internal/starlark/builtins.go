@@ -29,6 +29,7 @@ func (e *Engine) builtins() starlark.StringDict {
 		"command":     starlark.NewBuiltin("command", e.fnCommand),
 		"arg":         starlark.NewBuiltin("arg", fnArg),
 		"run":            starlark.NewBuiltin("run", fnRunPlaceholder),
+		"dir_size_mb":    starlark.NewBuiltin("dir_size_mb", fnDirSizeMBPlaceholder),
 		"install_file":     starlark.NewBuiltin("install_file", fnInstallFile),
 		"install_template": starlark.NewBuiltin("install_template", fnInstallTemplate),
 		"True":        starlark.True,
@@ -60,6 +61,20 @@ func fnRunPlaceholder(thread *starlark.Thread, b *starlark.Builtin, args starlar
 		}
 	}
 	return nil, fmt.Errorf("run() can only be called at build time (inside a task function)")
+}
+
+// fnDirSizeMBPlaceholder mirrors fnRunPlaceholder so dir_size_mb() captures
+// at evaluation time and dispatches to the build-package implementation
+// at call time via thread-local lookup.
+func fnDirSizeMBPlaceholder(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	if thread.Local("yoe.sandbox") != nil {
+		if fn := thread.Local("yoe.dir_size_mb"); fn != nil {
+			if callable, ok := fn.(starlark.Callable); ok {
+				return starlark.Call(thread, callable, args, kwargs)
+			}
+		}
+	}
+	return nil, fmt.Errorf("dir_size_mb() can only be called at build time (inside a task function)")
 }
 
 // --- Helper: extract keyword args ---
