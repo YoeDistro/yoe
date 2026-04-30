@@ -1,26 +1,26 @@
 # On-Device Package Management
 
-`apk-tools` ships in `dev-image` and any other image that includes it, so
-booted yoe systems can install, upgrade, and inspect packages against the
-project's signed repo using stock Alpine `apk` commands.
+`apk-tools` ships in `dev-image` and any other image that includes it, so booted
+yoe systems can install, upgrade, and inspect packages against the project's
+signed repo using stock Alpine `apk` commands.
 
 ## What's already on the device
 
 After a successful `yoe build dev-image && yoe run dev-image`:
 
 - `/sbin/apk` — the apk-tools binary.
-- `/lib/apk/db/` — the installed-package database, populated at image
-  assembly time via `apk add`.
-- `/etc/apk/keys/<keyname>.rsa.pub` — the project's signing public key,
-  shipped by `base-files`. apk uses it to verify signatures on every
+- `/lib/apk/db/` — the installed-package database, populated at image assembly
+  time via `apk add`.
+- `/etc/apk/keys/<keyname>.rsa.pub` — the project's signing public key, shipped
+  by `base-files`. apk uses it to verify signatures on every
   `add`/`upgrade`/`update` without any flag-passing on your part.
-- `/etc/apk/repositories` — a commented-out template. **You override
-  this** with your project's repo URL before doing anything live.
+- `/etc/apk/repositories` — a commented-out template. **You override this** with
+  your project's repo URL before doing anything live.
 
 ## Pointing at a repository
 
-Edit `/etc/apk/repositories` and add a single line — one repo per line.
-A few common shapes:
+Edit `/etc/apk/repositories` and add a single line — one repo per line. A few
+common shapes:
 
 ```
 # Project repo served over HTTPS by an nginx behind your CA
@@ -40,8 +40,8 @@ $ apk update
 ```
 
 Yoe-built repos use Alpine's standard `<repo-root>/<arch>/APKINDEX.tar.gz`
-layout, so `apk` picks the right arch automatically — point the
-repositories file at the *root*, not at the per-arch subdirectory.
+layout, so `apk` picks the right arch automatically — point the repositories
+file at the _root_, not at the per-arch subdirectory.
 
 ## Installing and upgrading
 
@@ -56,24 +56,23 @@ $ apk info -vv | head   # list installed packages
 $ apk verify            # re-verify every installed package's hashes
 ```
 
-All of these run with signature verification on. If apk reports "BAD
-signature" or "untrusted", the public key under `/etc/apk/keys/` doesn't
-match the key the repo's apks were signed with. See `docs/signing.md` for
-the key-rotation flow.
+All of these run with signature verification on. If apk reports "BAD signature"
+or "untrusted", the public key under `/etc/apk/keys/` doesn't match the key the
+repo's apks were signed with. See `docs/signing.md` for the key-rotation flow.
 
 ## OTA flow (rebuild → publish → upgrade)
 
 The recommended OTA path for yoe-built devices:
 
-1. **Bump versions.** Edit one or more units' `version =` (or `release =`
-   if just rebuilding the same source) on your dev host.
-2. **Build the new apks.** `yoe build <unit>` produces the new `.apk`
-   files in `<projectDir>/repo/<project>/<arch>/` and refreshes
-   `APKINDEX.tar.gz`. Both are signed with the project key.
+1. **Bump versions.** Edit one or more units' `version =` (or `release =` if
+   just rebuilding the same source) on your dev host.
+2. **Build the new apks.** `yoe build <unit>` produces the new `.apk` files in
+   `<projectDir>/repo/<project>/<arch>/` and refreshes `APKINDEX.tar.gz`. Both
+   are signed with the project key.
 3. **Sync to your hosting.** Copy the entire `<projectDir>/repo/<project>`
-   subtree to wherever you serve it from — e.g., a static-site
-   bucket, an nginx vhost, or a release server. The on-disk layout is
-   already correct; no transformation needed.
+   subtree to wherever you serve it from — e.g., a static-site bucket, an nginx
+   vhost, or a release server. The on-disk layout is already correct; no
+   transformation needed.
 4. **On-device upgrade.** `apk update && apk upgrade`.
 
 ## Hosting the repo over HTTP/HTTPS
@@ -108,19 +107,18 @@ Drop your project's repo subtree under `/srv/yoe-repos/myproj/` and point
 ## Constraints worth knowing
 
 - **Kernel upgrades need a reboot.** apk doesn't restart anything; a new
-  `linux-*` apk replaces files in `/boot` and the running kernel keeps
-  running until you reboot.
-- **No automatic rollback.** If an upgrade leaves the system unbootable,
-  there's no built-in A/B rollback in this layer. For atomic-rootfs
-  workflows (RAUC-style A/B partitioning, or btrfs-snapshot rollback),
-  layer them above the apk repo — apk handles the package contents,
-  the rootfs strategy handles atomicity.
+  `linux-*` apk replaces files in `/boot` and the running kernel keeps running
+  until you reboot.
+- **No automatic rollback.** If an upgrade leaves the system unbootable, there's
+  no built-in A/B rollback in this layer. For atomic-rootfs workflows
+  (RAUC-style A/B partitioning, or btrfs-snapshot rollback), layer them above
+  the apk repo — apk handles the package contents, the rootfs strategy handles
+  atomicity.
 - **In-place upgrade is non-atomic.** apk extracts each package's files
-  individually. A power loss during `apk upgrade` can leave the rootfs
-  in a half-upgraded state. For deployments where that's not OK, ship
-  upgrades as full image artifacts via flash/A-B and use the apk repo
-  for development iteration only.
-- **No remote network at install time during image build.** Image
-  assembly runs `apk add --no-network` against the local repo. This is
-  intentional: build artifacts must be reproducible from the project
-  tree alone.
+  individually. A power loss during `apk upgrade` can leave the rootfs in a
+  half-upgraded state. For deployments where that's not OK, ship upgrades as
+  full image artifacts via flash/A-B and use the apk repo for development
+  iteration only.
+- **No remote network at install time during image build.** Image assembly runs
+  `apk add --no-network` against the local repo. This is intentional: build
+  artifacts must be reproducible from the project tree alone.

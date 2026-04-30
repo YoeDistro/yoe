@@ -58,8 +58,8 @@ Verify the unit's dependency lists:
 
 ### Step 3b: Check `provides` usage
 
-`provides` is a `[]string` of virtual package names. If the unit sets it,
-check that it's appropriate:
+`provides` is a `[]string` of virtual package names. If the unit sets it, check
+that it's appropriate:
 
 - `provides` is reserved for **leaf artifacts** that get swapped per machine or
   project: kernel, base-files, init, bootloader. Flag as a **warning** if a
@@ -72,17 +72,17 @@ check that it's appropriate:
 
 ### Step 3c: Check `replaces` usage
 
-`replaces` is a `[]string` of package names whose files this unit may
-overwrite at install time. Verify:
+`replaces` is a `[]string` of package names whose files this unit may overwrite
+at install time. Verify:
 
 - The unit only sets `replaces` if it actually ships a file path that another
   package also claims. Flag as a **warning** if `replaces` is set but no
   shadowed paths can be identified — likely a copy-paste from another unit.
-- The replaced package(s) are real units in the project (`busybox`,
-  `ncurses`, etc.). Typos silently degrade to "no shadow declared" and apk
-  will fail the install.
-- The shadow direction is correct: if pkg A overwrites pkg B's files, A
-  declares `replaces = ["B"]`, not the other way around.
+- The replaced package(s) are real units in the project (`busybox`, `ncurses`,
+  etc.). Typos silently degrade to "no shadow declared" and apk will fail the
+  install.
+- The shadow direction is correct: if pkg A overwrites pkg B's files, A declares
+  `replaces = ["B"]`, not the other way around.
 
 To check linked libraries after a successful build:
 
