@@ -12,6 +12,13 @@ type Project struct {
 	Modules   []ModuleRef
 	Machines  map[string]*Machine
 	Units     map[string]*Unit
+
+	// SigningKey is the path to an RSA private key used to sign apks and
+	// APKINDEX. If empty at build time, yoe auto-generates a key under
+	// ~/.config/yoe/keys/<project-name>.rsa and uses that. The matching
+	// public key (.rsa.pub next to it) is shipped on-device under
+	// /etc/apk/keys/ so apk verifies signatures without --allow-untrusted.
+	SigningKey string
 }
 
 type Defaults struct {
@@ -129,7 +136,7 @@ type Unit struct {
 	Sandbox       bool   // use bwrap sandbox inside container (default false)
 	Shell         string // shell for build commands: "sh" (default) or "bash"
 	Tasks     []Task
-	Provides    string   // virtual package name
+	Provides    []string // virtual package names this unit satisfies (e.g., "linux", "ssh")
 	Replaces    []string // package names whose files this unit may overwrite at install time
 	Module      string   // module that registered this unit (empty = project root)
 	ModuleIndex int    // module priority (0 = project root, 1+ = declaration order)

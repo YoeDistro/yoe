@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	yoe "github.com/YoeDistro/yoe-ng/internal"
 	"github.com/YoeDistro/yoe-ng/internal/artifact"
 	"github.com/YoeDistro/yoe-ng/internal/repo"
 	"github.com/YoeDistro/yoe-ng/internal/resolve"
@@ -39,6 +40,10 @@ type Options struct {
 	// per build so PKGINFO records build provenance. Empty means "not a git
 	// repo" or "couldn't determine" — the apk omits the `commit` field then.
 	ProjectCommit string
+	// Signer holds the project's RSA signing key, loaded once per build so
+	// each apk and the APKINDEX can be signed without per-call key I/O.
+	// Nil means "build unsigned apks" — apk add then needs --allow-untrusted.
+	Signer     *artifact.Signer
 	OnEvent    func(BuildEvent) // optional callback for build progress
 }
 
@@ -79,6 +84,27 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 	// non-fatal — apks just omit the `commit` field.
 	if opts.ProjectCommit == "" {
 		opts.ProjectCommit = readProjectCommit(opts.ProjectDir)
+	}
+
+	// Load (or auto-generate) the project signing key once per build.
+	// Subsequent apk emissions and APKINDEX generation reuse the same
+	// Signer so we don't re-read PEM bytes on every artifact.
+	if opts.Signer == nil {
+		signer, err := artifact.LoadOrGenerateSigner(proj.Name, proj.SigningKey)
+		if err != nil {
+			return fmt.Errorf("loading signing key: %w", err)
+		}
+		opts.Signer = signer
+	}
+
+	// Make the project's public key available under <repo>/keys/ before any
+	// unit's tasks run. Units that ship the key (base-files puts it under
+	// /etc/apk/keys/ in the rootfs) need it on disk during their own build,
+	// not after the first apk is published. Idempotent — Publish would
+	// rewrite the same bytes later.
+	repoDir := repo.RepoDir(proj, opts.ProjectDir)
+	if err := repo.WritePublicKey(repoDir, opts.Signer); err != nil {
+		return fmt.Errorf("publishing project public key: %w", err)
 	}
 
 	dag, err := resolve.BuildDAG(proj)
@@ -277,14 +303,35 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	srcDir := filepath.Join(buildDir, "src")
 	destDir := filepath.Join(buildDir, "destdir")
 
-	if opts.Clean {
-		os.RemoveAll(srcDir)
-		os.RemoveAll(destDir)
+	// Resolve container image early so destdir cleanup can recover from
+	// root-owned files left by a previous failed image build.
+	containerImage := resolveContainerImage(proj, unit, opts.Arch)
+
+	// Image-class units chown rootfs to root for mkfs.ext4 -d and chown back
+	// only on success. If anything between fails, the destdir is left owned
+	// by root and the host can't clean it up. Restore ownership after every
+	// image build (success or failure) so the next build can proceed.
+	if unit.Class == "image" {
+		defer func() {
+			if err := chownDirToHost(ctx, destDir, opts.ProjectDir, containerImage); err != nil {
+				fmt.Fprintf(w, "  (warning: restoring destdir ownership failed: %v)\n", err)
+			}
+		}()
 	}
 
-	// Always start with an empty destdir
-	os.RemoveAll(destDir)
-	EnsureDir(destDir)
+	if opts.Clean {
+		if err := removeDirRobust(ctx, srcDir, opts.ProjectDir, containerImage); err != nil {
+			return fmt.Errorf("removing srcdir: %w", err)
+		}
+	}
+
+	// Always start with an empty destdir.
+	if err := removeDirRobust(ctx, destDir, opts.ProjectDir, containerImage); err != nil {
+		return fmt.Errorf("removing destdir: %w", err)
+	}
+	if err := EnsureDir(destDir); err != nil {
+		return fmt.Errorf("creating destdir: %w", err)
+	}
 
 	// Prepare source (fetch + extract + patch, or reuse dev source).
 	// Units without a source field (e.g., musl) skip this step.
@@ -339,13 +386,20 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 		"REPO":            filepath.Join("/project", repoRelPath(proj, opts.ProjectDir)),
 	}
 
+	// Expose the project's signing key info so units that need to ship the
+	// public key (e.g., base-files installs it under /etc/apk/keys/) can
+	// find it without hard-coding paths. YOE_KEYS_DIR is a directory; the
+	// key file is YOE_KEY_NAME inside it. Both are unset when the build
+	// runs without a Signer (apk add then needs --allow-untrusted).
+	if opts.Signer != nil {
+		env["YOE_KEYS_DIR"] = filepath.Join("/project", repoRelPath(proj, opts.ProjectDir), "keys")
+		env["YOE_KEY_NAME"] = opts.Signer.KeyName
+	}
+
 	// Merge unit-level environment variables (from classes like go_binary)
 	for k, v := range unit.Environment {
 		env[k] = v
 	}
-
-	// Resolve container image for this unit
-	containerImage := resolveContainerImage(proj, unit, opts.Arch)
 
 	// For container units, set the host working directory to the .star file's
 	// directory so docker build can find the Dockerfile.
@@ -471,14 +525,14 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	// Then stage destdir for downstream units' per-unit sysroots.
 	if unit.Class != "image" && unit.Class != "container" {
 		archDir := RepoArchDir(unit, opts.Arch)
-		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), archDir, opts.ProjectCommit)
+		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), archDir, opts.ProjectCommit, opts.Signer)
 		if err != nil {
 			return fmt.Errorf("creating apk: %w", err)
 		}
 		fmt.Fprintf(w, "  → %s\n", filepath.Base(apkPath))
 
 		repoDir := repo.RepoDir(proj, opts.ProjectDir)
-		if err := repo.Publish(apkPath, repoDir, archDir); err != nil {
+		if err := repo.Publish(apkPath, repoDir, archDir, opts.Signer); err != nil {
 			return fmt.Errorf("publishing to repo: %w", err)
 		}
 
@@ -583,6 +637,53 @@ func resolveContainerImage(proj *yoestar.Project, unit *yoestar.Unit, arch strin
 	}
 
 	return container
+}
+
+// removeDirRobust removes dir and its contents. If RemoveAll fails (typically
+// because a previous failed image build left root-owned files behind), it
+// attempts to chown the tree back to the host user via the container, then
+// retries. Returns an error if the directory cannot be removed.
+func removeDirRobust(ctx context.Context, dir, projectDir, image string) error {
+	err := os.RemoveAll(dir)
+	if err == nil {
+		return nil
+	}
+	if _, statErr := os.Stat(dir); os.IsNotExist(statErr) {
+		return nil
+	}
+	if cerr := chownDirToHost(ctx, dir, projectDir, image); cerr != nil {
+		return fmt.Errorf("%w (and ownership recovery failed: %v)", err, cerr)
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return fmt.Errorf("removing after ownership recovery: %w", err)
+	}
+	return nil
+}
+
+// chownDirToHost runs chown -R uid:gid on dir inside the container, where
+// the container has the privilege to chown root-owned files. Used to recover
+// destdir ownership after a failed image build (image class chowns rootfs to
+// root for mkfs.ext4 -d). No-op if dir does not exist.
+func chownDirToHost(ctx context.Context, dir, projectDir, image string) error {
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return nil
+	}
+	if image == "" {
+		return fmt.Errorf("no container image available for ownership recovery of %s", dir)
+	}
+	parent := filepath.Dir(dir)
+	base := filepath.Base(dir)
+	uid := os.Getuid()
+	gid := os.Getgid()
+	return yoe.RunInContainer(yoe.ContainerRunConfig{
+		Ctx:        ctx,
+		Image:      image,
+		Command:    fmt.Sprintf("chown -R %d:%d /__yoe_cleanup/%s", uid, gid, base),
+		ProjectDir: projectDir,
+		Mounts:     []yoe.Mount{{Host: parent, Container: "/__yoe_cleanup"}},
+		NoUser:     true,
+		Quiet:      true,
+	})
 }
 
 // --- Simple file-based cache ---

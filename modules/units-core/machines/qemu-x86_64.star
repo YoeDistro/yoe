@@ -10,7 +10,7 @@ machine(
     ),
     packages = ["syslinux"],
     partitions = [
-        partition(label = "rootfs", type = "ext4", size = "256M", root = True),
+        partition(label = "rootfs", type = "ext4", size = "600M", root = True),
     ],
     qemu = qemu_config(
         machine = "q35",

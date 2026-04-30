@@ -50,15 +50,21 @@ def _assemble_rootfs(packages, hostname, timezone, locale):
     but apk will re-resolve install order itself.
 
     Flags:
-      --root           — destination rootfs
-      --initdb         — create /lib/apk/db on a fresh rootfs
-      --allow-untrusted — until phase 3 of the apk-compat plan adds signing
-      --no-network     — never reach the public Alpine mirrors
-      --no-cache       — keep /etc/apk/cache out of the rootfs
-      --no-scripts     — don't try to run pre/post-install scripts during
+      --root            — destination rootfs
+      --initdb          — create /lib/apk/db on a fresh rootfs
+      --no-network      — never reach the public Alpine mirrors
+      --no-cache        — keep /etc/apk/cache out of the rootfs
+      --no-scripts      — don't try to run pre/post-install scripts during
                           assembly; the rootfs has no /bin/sh yet, and
                           yoe-built apks don't ship scripts today anyway
-      -X $REPO         — yoe's local Alpine-layout repo
+      -X $REPO          — yoe's local Alpine-layout repo
+
+    The project's signing public key is pre-staged into the rootfs at
+    /etc/apk/keys/<keyname>.rsa.pub before `apk add` runs — apk reads
+    `<root>/etc/apk/keys/` to validate signatures, and `--keys-dir`
+    interacts oddly with `--root` in apk 2.x. base-files installs the
+    same file via its data tar, so the in-rootfs key after install is
+    identical to the pre-staged one.
 
     Intentional file shadows (busybox stubs vs the real util-linux/iproute2/
     procps-ng/etc.) are declared per-unit via `replaces = [...]`, which apk
@@ -66,13 +72,13 @@ def _assemble_rootfs(packages, hostname, timezone, locale):
     is a real bug — let apk fail the build instead of papering over it with
     --force-overwrite.
     """
-    run("mkdir -p $DESTDIR/rootfs")
+    run("mkdir -p $DESTDIR/rootfs/etc/apk/keys")
+    run("cp $YOE_KEYS_DIR/$YOE_KEY_NAME $DESTDIR/rootfs/etc/apk/keys/")
 
     pkg_args = " ".join(packages)
     run("apk add " +
         "--root $DESTDIR/rootfs " +
         "--initdb " +
-        "--allow-untrusted " +
         "--no-network " +
         "--no-cache " +
         "--no-scripts " +
@@ -94,6 +100,12 @@ def _assemble_rootfs(packages, hostname, timezone, locale):
 def _create_disk_image(name, partitions):
     if not partitions:
         return
+
+    # Capture the rootfs size before the chown to root below — dir_size_mb
+    # walks on the host as the build user, and a post-chown walk can't enter
+    # mode-700 root-owned dirs (e.g., /root). Used by the ext4 preflight
+    # below to fail with a clear message when contents won't fit.
+    rootfs_mb = dir_size_mb("rootfs")
 
     total_mb = 1
     for p in partitions:
@@ -132,6 +144,17 @@ def _create_disk_image(name, partitions):
             # Copy boot files from rootfs (root-owned; mcopy needs read access).
             run("mcopy -sQi %s $DESTDIR/rootfs/boot/* ::/ 2>/dev/null || true" % part_img, privileged = True)
         elif p.type == "ext4":
+            # Preflight: fail with a clear message when the rootfs won't
+            # fit in the partition with enough headroom for ext4 metadata.
+            # The 25 MB margin covers block bitmaps, inode tables, journal,
+            # and reserved blocks; without it, mkfs.ext4 -d fails mid-
+            # populate with "Could not allocate block in ext2 filesystem"
+            # — accurate but gives no hint that the partition size is the
+            # knob to turn.
+            headroom_mb = 25
+            if rootfs_mb + headroom_mb > size_mb:
+                fail("\nrootfs (%d MB) won't fit in partition '%s' (%d MB) with %d MB headroom;\nincrease the partition size in your image definition" % (rootfs_mb, p.label, size_mb, headroom_mb))
+
             # Disable ext4 features that syslinux 6.03 can't read (x86 only)
             ext4_opts = "-O ^64bit,^metadata_csum,^extent " if ARCH == "x86_64" else ""
             run("mkfs.ext4 %s-d $DESTDIR/rootfs -L %s %s %dM" % (ext4_opts, p.label, part_img, size_mb),

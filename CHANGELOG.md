@@ -8,6 +8,41 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.8.5] - 2026-04-30
+
+- **`Yazi, Zellij, and Go units added.**
+- **Clear error when an image's rootfs won't fit the partition.** Yoe points at
+  the partition size to bump instead of failing mid-`mkfs.ext4` with a cryptic
+  ext2 error.
+- **SSH works out of the box on `dev-image`.** `sshd` starts on boot with
+  per-device host keys; `ssh -p 2222 user@localhost` (password `password`) just
+  works, and passwordless root SSH matches the serial console.
+- **Image rebuilds recover from prior failed builds.** A previous failure no
+  longer wedges the next run on "Permission denied" — yoe reports the real error
+  and cleans up automatically.
+- **New `binary` class for prebuilt binaries.** Units can ship upstream release
+  binaries with SHA256 verification, no rebuild from source. Used by `go`,
+  `helix`, and `yazi`.
+- **`apk add` works against the signed repo.** Image-time and on-target `apk`
+  commands no longer fail with "BAD signature" or need `--allow-untrusted` /
+  `--keys-dir`.
+- **`apk add` and `apk upgrade` work on yoe-built devices.** `dev-image` ships
+  `apk-tools` and the project's signing key, so OTA-style updates use stock
+  `apk` commands. See `docs/on-device-apk.md`.
+- **Signed apks and APKINDEX.** Every artifact is RSA-signed at build time and
+  verified by stock `apk` on the target. `yoe key generate` / `yoe key info`
+  manage the project key; see `docs/signing.md`.
+- **Rootfs builds with APK**. Much faster.
+- **`provides` is now a list.** Use `provides = ["a", "b"]`; the string form
+  `provides = "x"` no longer parses.
+- **`replaces` is documented.** New "Shadow files" section in
+  `docs/naming-and-resolution.md` covers when to use it and how to read apk's
+  "trying to overwrite" errors.
+- **"One .apk per unit" principle, documented.** Image-to-image variation
+  belongs at runtime, not in build-flag forks. See
+  `docs/naming-and-resolution.md`.
+- **SSH configured to autostart and work with blank passwords for dev builds.**
+
 ## [0.8.4] - 2026-04-29
 
 - **Networking picks the better DHCP client when available.** The default

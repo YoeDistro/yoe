@@ -265,31 +265,57 @@ on the target so `apk` runs without `--allow-untrusted`.
 
 ### Task 3.1: Key management
 
-- [ ] Add a `signing_key` field to `project()` (path to RSA private key).
-- [ ] If unset, generate a key on first build and write it to
-      `~/.config/yoe/keys/<project>.rsa` (gitignored). Document.
-- [ ] Add `yoe key generate` and `yoe key info` subcommands.
+- [x] Add a `signing_key` field to `project()` (path to RSA private key).
+      _(`Project.SigningKey` plumbed through `internal/starlark/types.go` and
+      `builtins.go`.)_
+- [x] If unset, generate a key on first build and write it to
+      `~/.config/yoe/keys/<project>.rsa`. Document.
+      _(`artifact.LoadOrGenerateSigner` writes a 2048-bit RSA key and the
+      matching PKIX/SubjectPublicKeyInfo public key on first call.
+      `docs/signing.md` covers the operator workflow.)_
+- [x] Add `yoe key generate` and `yoe key info` subcommands. _(`cmd/yoe/key.go`
+      — both subcommands print the resolved key path, key name, and a SHA-256
+      fingerprint of the public key bytes.)_
 
 ### Task 3.2: Sign individual apks
 
-- [ ] In `internal/artifact/apk.go`, after writing the control tar, sign its
+- [x] In `internal/artifact/apk.go`, after writing the control tar, sign its
       bytes with the project key (RSA-PKCS#1 v1.5, SHA-1 — what apk2 expects)
       and prepend a `.SIGN.RSA.<keyname>.rsa.pub` entry as the first
-      concatenated gzip stream.
-- [ ] Re-run phase 1's round-trip test without `--allow-untrusted`. Should
+      concatenated gzip stream. _(Implementation in `internal/artifact/sign.go`
+      with `Signer.SignStream`; `CreateAPK` writes
+      `sigGz + controlGz +     dataGz` to the .apk file.)_
+- [x] Re-run phase 1's round-trip test without `--allow-untrusted`. Should
       succeed once the public key is in `/etc/apk/keys/`.
+      _(`TestAPKSignedRepoInstallWithUpstreamApk` in `apk_compat_test.go` builds
+      a signed apk + signed APKINDEX, drops the public key into the rootfs's
+      `/etc/apk/keys/`, and runs stock `apk add --root` (no --allow-untrusted,
+      no --keys-dir). Surfaced and fixed two bugs along the way: APKINDEX `C:`
+      was hashing the first stream regardless of whether it was the signature,
+      and apk 2.x's `--keys-dir` doesn't compose with `--root` the way the
+      original image.star assumed.)_
 
 ### Task 3.3: Sign APKINDEX
 
-- [ ] Apply the same signing flow to `APKINDEX.tar.gz` so apk doesn't warn about
-      untrusted indexes.
-- [ ] Verify with `apk update` against the local repo.
+- [x] Apply the same signing flow to `APKINDEX.tar.gz` so apk doesn't warn about
+      untrusted indexes. _(`repo.GenerateIndex` builds the index into a buffer
+      and prepends the signature stream when a Signer is supplied.)_
+- [x] Verify with `apk update` against the local repo. _(Same test as 3.2 —
+      `apk add` against a yoe-built repo via `--repository` now reads our signed
+      APKINDEX, verifies its signature against the pre-staged public key, and
+      resolves the package without --allow-untrusted.)_
 
 ### Task 3.4: Public key in rootfs
 
-- [ ] Update `base-files` to install the project public key under
-      `/etc/apk/keys/<keyname>.rsa.pub`.
-- [ ] Drop `--allow-untrusted` from the phase-2 `apk add` invocation.
+- [x] Update `base-files` to install the project public key under
+      `/etc/apk/keys/<keyname>.rsa.pub`. _(base-files reads
+      `$YOE_KEYS_DIR/$YOE_KEY_NAME` — both env vars are populated by the
+      executor when a Signer is in scope. The build-time copy step lands the key
+      at `/etc/apk/keys/<keyname>.rsa.pub` in the rootfs.)_
+- [x] Drop `--allow-untrusted` from the phase-2 `apk add` invocation.
+      _(image.star now uses `--keys-dir $YOE_KEYS_DIR`. yoe pre-publishes the
+      public key under `<repo>/keys/` before any unit builds, and `repo.Publish`
+      keeps it in sync on every apk emission.)_
 
 **Done when:** dev-image builds with no `--allow-untrusted` flag anywhere, apks
 and APKINDEX are signed, and on-target apk verifies them against the shipped
@@ -318,36 +344,46 @@ Booted systems can run `apk add`, `apk del`, `apk upgrade`, `apk info`,
 
 ### Task 4.1: apk-tools unit
 
-- [ ] Pin `apk-tools 2.14.x` from
+- [x] Pin `apk-tools 2.14.x` from
       `https://gitlab.alpinelinux.org/alpine/apk-tools.git`. Use a release tag.
-- [ ] Build deps: `zlib`, `openssl` (both existing units).
-- [ ] Confirm musl compat — should be clean; Alpine itself is musl.
+      _(`modules/units-core/units/base/apk-tools.star` pins v2.14.10.)_
+- [x] Build deps: `zlib`, `openssl` (both existing units). _(Wired through
+      `deps` and `runtime_deps`.)_
+- [ ] Confirm musl compat — should be clean; Alpine itself is musl. _(Pending
+      actual build; the unit is written for the toolchain-musl container so musl
+      is the only libc in scope.)_
 - [ ] Verify the resulting binary runs in the build container against the
-      project repo (`apk info --root /tmp/test`).
+      project repo (`apk info --root /tmp/test`). _(Pending build.)_
 
 ### Task 4.2: Default repository config
 
-- [ ] Ship `/etc/apk/repositories` with the project's repo URL — initially a
+- [x] Ship `/etc/apk/repositories` with the project's repo URL — initially a
       `file://` path that's invalid on-device but documented as something the
-      operator overrides.
-- [ ] Document HTTP/HTTPS hosting in `docs/on-device-apk.md` (recommend e.g.
-      nginx serving the repo dir; sample config).
+      operator overrides. _(`base-files` installs a commented-out template from
+      `units/base/base-files/repositories` with operator instructions for
+      setting their actual URL.)_
+- [x] Document HTTP/HTTPS hosting in `docs/on-device-apk.md` (recommend e.g.
+      nginx serving the repo dir; sample config). _(Includes a worked nginx
+      vhost with the right cache headers for `APKINDEX.tar.gz` vs immutable
+      `.apk` files.)_
 
 ### Task 4.3: Boot-time validation
 
 - [ ] Boot dev-image in QEMU, confirm `apk info` shows the installed package
-      list correctly.
+      list correctly. _(Pending build.)_
 - [ ] `apk add <something>` from a custom local repo bind-mounted into QEMU.
+      _(Pending build.)_
 - [ ] `apk upgrade` smoke test once a newer version of any package is published.
+      _(Pending build.)_
 
 ### Task 4.4: Document the OTA story
 
-- [ ] In `docs/on-device-apk.md`, write the recommended OTA flow:
+- [x] In `docs/on-device-apk.md`, write the recommended OTA flow:
   1. Build new apk versions on dev host.
   2. Sign with project key.
   3. Push to HTTP repo (or whatever transport).
   4. On device: `apk update && apk upgrade`.
-- [ ] Note constraints (no kernel upgrades without reboot orchestration;
+- [x] Note constraints (no kernel upgrades without reboot orchestration;
       atomic-rootfs alternatives like A/B partitioning out of scope here).
 
 **Done when:** A yoe-built device can install and upgrade packages against the
@@ -395,11 +431,19 @@ both DAG-time bindings and apk-level metadata.
 
 ### Task 5.1: Field shape migration
 
-- [ ] Change `Provides` in `internal/starlark/types.go` from `string` to
+- [x] Change `Provides` in `internal/starlark/types.go` from `string` to
       `[]string`.
-- [ ] Update the kwarg parser to accept either a string (auto-wrap into a
-      single-entry list, with a deprecation note) or a list.
-- [ ] Migrate existing call sites (`linux-rpi*`, `base-files-*`) to list form.
+- [x] Update the kwarg parser to accept the list form. _(Per CLAUDE.md's "no
+      backward compatibility concerns" policy, the parser is list-only;
+      `provides = "x"` is no longer accepted. The original plan's "auto-wrap
+      with deprecation note" step is moot for a pre-1.0 project.)_
+- [x] Migrate existing call sites to list form. _(Survey at task time found no
+      `unit()` definitions setting `provides` — only machine kernel structs
+      (`KernelConfig.Provides` is unchanged, still a single string), test
+      fixtures under `testdata/provides-*`, and example snippets in
+      `docs/naming-and-resolution.md`. Fixtures and docs are updated;
+      KernelConfig stays singular as it represents one virtual name per
+      kernel.)_
 
 ### Task 5.2: `replaces` field
 
@@ -429,11 +473,20 @@ both DAG-time bindings and apk-level metadata.
 
 ### Task 5.4: Documentation
 
-- [ ] Update §"When NOT to use provides" in `docs/naming-and-resolution.md` to
-      describe the new shape (list of virtual names vs string).
-- [ ] Document `replaces` with an example (busybox shadowing).
-- [ ] Update `.claude/skills/new-unit/SKILL.md` and
-      `.claude/skills/audit-unit/SKILL.md` to mention the new field.
+- [x] Update §"When NOT to use provides" in `docs/naming-and-resolution.md` to
+      describe the new shape (list of virtual names vs string). _(All example
+      snippets in the doc now use `provides = ["..."]` list form. The narrative
+      "Virtual packages (PROVIDES)" section frames `provides` as an apk-style
+      list of virtual names this unit satisfies.)_
+- [x] Document `replaces` with an example (busybox shadowing). _(New §"Shadow
+      files (REPLACES)" section with the util-linux/busybox example, the
+      install-order rationale, and how to read apk's "trying to overwrite"
+      errors.)_
+- [x] Update `.claude/skills/new-unit/SKILL.md` and
+      `.claude/skills/audit-unit/SKILL.md` to mention the new field. _(Both
+      skills now describe `provides` as `[]string` and `replaces` with usage
+      rules, including the audit-unit "Step 3c" check that flags suspicious
+      `replaces` declarations.)_
 
 **Done when:** every unit that produces shadow files declares `replaces`,
 dev-image builds via apk with no conflict warnings, and yoe's `provides`

@@ -25,8 +25,10 @@ import (
 //   - Stream 2: control block (.PKGINFO + checksums)
 //   - Stream 3: data block (actual files)
 //
-// For unsigned packages we write streams 2 and 3 only. apk with
-// --allow-untrusted accepts this; signing is added in Phase 3.
+// When `signer` is non-nil, stream 1 is prepended; the signature is
+// RSA-PKCS#1 v1.5 over the SHA-1 of the control stream's gzipped bytes.
+// When `signer` is nil, the apk is unsigned and apk-tools needs
+// --allow-untrusted to install it.
 //
 // The control block's PKGINFO carries a `datahash` field — the hex SHA-256
 // of the *compressed* data stream bytes (the gzipped tar, not the raw tar).
@@ -37,7 +39,7 @@ import (
 // later be published into (`<repo>/<arch>/<filename>.apk`). For arch-scoped
 // and machine-scoped units this is the target architecture (e.g., x86_64,
 // aarch64); for noarch units it is the literal string "noarch".
-func CreateAPK(unit *yoestar.Unit, destDir, outputDir, arch, commit string) (string, error) {
+func CreateAPK(unit *yoestar.Unit, destDir, outputDir, arch, commit string, signer *Signer) (string, error) {
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return "", fmt.Errorf("creating output dir: %w", err)
 	}
@@ -78,19 +80,37 @@ func CreateAPK(unit *yoestar.Unit, destDir, outputDir, arch, commit string) (str
 	// Generate PKGINFO with the data hash baked in.
 	pkginfo := generatePKGINFO(unit, destDir, dataHashHex, arch, commit)
 
-	// Open output and write the two concatenated gzip streams.
+	// Build the control stream (gzipped tar containing .PKGINFO).
+	var controlGz bytes.Buffer
+	if err := writeGzipTar(&controlGz, map[string][]byte{".PKGINFO": []byte(pkginfo)}); err != nil {
+		return "", fmt.Errorf("building control stream: %w", err)
+	}
+
+	// Open output and write the streams in order: optional signature,
+	// control, data. The signature is over the SHA-1 of the gzip-compressed
+	// control stream (verified empirically against Alpine's own signed
+	// apks: sha1(controlGz) is exactly what `openssl dgst -sha1 -verify`
+	// accepts against the .SIGN.RSA.* signature). Data integrity flows
+	// through PKGINFO `datahash`, which the control stream carries.
 	f, err := os.Create(apkPath)
 	if err != nil {
 		return "", fmt.Errorf("creating %s: %w", apkPath, err)
 	}
 	defer f.Close()
 
-	// Stream 2 — control: a gzip'd tar containing only .PKGINFO.
-	if err := writeGzipTar(f, map[string][]byte{".PKGINFO": []byte(pkginfo)}); err != nil {
-		return "", fmt.Errorf("writing control stream: %w", err)
+	if signer != nil {
+		sigGz, err := signer.SignStream(controlGz.Bytes())
+		if err != nil {
+			return "", fmt.Errorf("signing control stream: %w", err)
+		}
+		if _, err := f.Write(sigGz); err != nil {
+			return "", fmt.Errorf("writing signature stream: %w", err)
+		}
 	}
 
-	// Stream 3 — data: the gzipped tar bytes we already built and hashed.
+	if _, err := f.Write(controlGz.Bytes()); err != nil {
+		return "", fmt.Errorf("writing control stream: %w", err)
+	}
 	if _, err := f.Write(dataGz.Bytes()); err != nil {
 		return "", fmt.Errorf("writing data stream: %w", err)
 	}
@@ -308,6 +328,12 @@ func generatePKGINFO(unit *yoestar.Unit, destDir, dataHashHex, arch, commit stri
 	// Runtime dependencies
 	for _, dep := range unit.RuntimeDeps {
 		fmt.Fprintf(&b, "depend = %s\n", dep)
+	}
+
+	// Virtual package names this unit satisfies — apk consumers can depend
+	// on the virtual name and apk picks any package that provides it.
+	for _, p := range unit.Provides {
+		fmt.Fprintf(&b, "provides = %s\n", p)
 	}
 
 	// Packages whose files this one is allowed to overwrite at install time.

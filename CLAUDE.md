@@ -149,6 +149,17 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
 - **Machine-portable images** — images list abstract requirements ("linux",
   "base-files"). Machines provide concrete implementations via `provides` and
   inject hardware-specific packages/partitions via `MACHINE_CONFIG`.
+- **One unit, one .apk; resolve variation at runtime.** A unit produces a single
+  binary artifact that every project and every machine shares. When two images
+  need different behavior from the same package, prefer runtime mechanisms —
+  init scripts that detect what's installed, conditional config files,
+  alternative selection at boot, `replaces:` annotations that declare ownership
+  of shared paths — over per-project or per-machine build configurations.
+  Forking a unit's build flags into machine- or project-scoped variants is a
+  last resort: it multiplies the cache surface, breaks binary reuse across
+  projects, and pushes complexity from a few clean conditionals into N parallel
+  build configurations. Reach for it only when runtime resolution is genuinely
+  impossible (e.g., kernel defconfig, bootloader target).
 - **Explicit over implicit.** Values in Starlark units and configuration should
   not have hidden defaults. Require fields to be set explicitly — this makes it
   easier for AI to reason about the system and for humans to understand what a
@@ -185,4 +196,6 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
   the user-visible benefit (what they see, what they can now do, what was broken
   and is now fixed). Do not enumerate file paths, function names, or the
   mechanism of the fix — those belong in the commit message and the code itself.
-  Past entries are immutable history; never edit them during refactors.
+  Past entries are immutable history; never edit them during refactors. Do not
+  put blank lines between bullet entries — entries sit directly under each
+  other, and the blank line separates one version section from the next.

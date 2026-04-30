@@ -45,11 +45,22 @@ The following base-system units are in `modules/units-core/units/`:
 
 ### Debug / Tools
 
-- `strace`, `vim`, `procps-ng` (ps, top, free, vmstat), `htop`
+- `strace`, `vim`, `procps-ng` (ps, top, free, vmstat), `htop`, `helix` (modal
+  text editor, prebuilt via `binary` class), `yazi` (terminal file manager,
+  prebuilt via `binary` class)
 
 ### Bootloaders / Build tools
 
-- `syslinux`, `meson`, `samurai`, `gawk`
+- `syslinux`, `meson`, `samurai`, `gawk`, `go` (toolchain bundle, prebuilt via
+  `binary` class)
+
+### Classes
+
+- `autotools`, `cmake`, `go_binary` (build a Go program from source)
+- `binary` — install prebuilt arm64/x86_64 binaries straight from upstream
+  release URLs without a from-source rebuild. Backed by per-arch SHA256 hashes
+  and supports bare binaries (kubectl-style), multi-binary archives (yazi), and
+  full toolchain bundles (Go, Helix) via `install_tree`.
 
 ## Notes
 

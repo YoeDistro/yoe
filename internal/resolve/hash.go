@@ -89,7 +89,7 @@ func UnitHash(unit *yoestar.Unit, arch string, depHashes map[string]string) stri
 	fmt.Fprintf(h, "container_arch:%s\n", unit.ContainerArch)
 	fmt.Fprintf(h, "sandbox:%v\n", unit.Sandbox)
 	fmt.Fprintf(h, "shell:%s\n", unit.Shell)
-	fmt.Fprintf(h, "provides:%s\n", unit.Provides)
+	fmt.Fprintf(h, "provides:%s\n", strings.Join(unit.Provides, ","))
 	fmt.Fprintf(h, "replaces:%s\n", strings.Join(unit.Replaces, ","))
 	fmt.Fprintf(h, "runtime_deps:%s\n", strings.Join(unit.RuntimeDeps, ","))
 	fmt.Fprintf(h, "services:%s\n", strings.Join(unit.Services, ","))

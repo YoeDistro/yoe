@@ -91,13 +91,13 @@ func Stage0(proj *yoestar.Project, projectDir string, w io.Writer) error {
 		}
 
 		// Package the output
-		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), arch, "")
+		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), arch, "", nil)
 		if err != nil {
 			return fmt.Errorf("packaging %s: %w", unit.Name, err)
 		}
 
 		// Publish to the local repo
-		if err := repo.Publish(apkPath, repoDir, arch); err != nil {
+		if err := repo.Publish(apkPath, repoDir, arch, nil); err != nil {
 			return fmt.Errorf("publishing %s: %w", unit.Name, err)
 		}
 
@@ -170,11 +170,11 @@ func Stage1(proj *yoestar.Project, projectDir string, w io.Writer) error {
 		}
 
 		// Package and publish (overwriting Stage 0 packages)
-		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), arch, "")
+		apkPath, err := artifact.CreateAPK(unit, destDir, filepath.Join(buildDir, "pkg"), arch, "", nil)
 		if err != nil {
 			return fmt.Errorf("packaging %s: %w", unit.Name, err)
 		}
-		if err := repo.Publish(apkPath, repoDir, arch); err != nil {
+		if err := repo.Publish(apkPath, repoDir, arch, nil); err != nil {
 			return fmt.Errorf("publishing %s: %w", unit.Name, err)
 		}
 
