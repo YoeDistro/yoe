@@ -89,10 +89,14 @@ def _normalise_binaries(binaries, default_name, version, arch_token):
     fail("binary: 'binaries' must be list, dict, or omitted")
 
 def _install_steps(name, binaries_pairs, install_tree, extras, symlinks):
+    # Build steps run with CWD set to the unit's source directory
+    # (sandbox.go's `cd /build/src && ...`), so source paths are relative
+    # to the extracted tree. Using $SRCDIR here would silently expand to
+    # an empty string and cp would walk the whole rootfs from /.
     steps = []
     if install_tree:
         steps.append("mkdir -p $DESTDIR%s" % install_tree)
-        steps.append("cp -aT $SRCDIR/. $DESTDIR%s" % install_tree)
+        steps.append("cp -aT . $DESTDIR%s" % install_tree)
 
     # Primary binaries — symlinks into $PREFIX/bin when install_tree is
     # set, direct install -m0755 copies otherwise.
@@ -106,7 +110,7 @@ def _install_steps(name, binaries_pairs, install_tree, extras, symlinks):
             steps.append("ln -sfn %s %s" % (target_rel, dst))
         else:
             steps.append("mkdir -p %s" % dst_dir)
-            steps.append("install -m0755 $SRCDIR/%s %s" % (src, dst))
+            steps.append("install -m0755 ./%s %s" % (src, dst))
 
     for entry in extras:
         if len(entry) == 2:
@@ -117,7 +121,7 @@ def _install_steps(name, binaries_pairs, install_tree, extras, symlinks):
         else:
             fail("binary: extras entries must be (src, dst) or (src, dst, mode)")
         steps.append("mkdir -p $(dirname $DESTDIR%s)" % dst)
-        steps.append("cp -aT $SRCDIR/%s $DESTDIR%s" % (src, dst))
+        steps.append("cp -aT ./%s $DESTDIR%s" % (src, dst))
         if mode != None:
             steps.append("chmod %o $DESTDIR%s" % (mode, dst))
 
