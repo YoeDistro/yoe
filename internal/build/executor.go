@@ -208,6 +208,7 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 
 		if err := buildOne(ctx, proj, dag, unit, hash, opts, w); err != nil {
 			notify(name, "failed")
+			fmt.Fprintf(w, "%-20s [failed] %v\n", name, err)
 			// Show which remaining units are blocked by this failure
 			blocked := blockedUnits(dag, name, order)
 			if len(blocked) > 0 {
