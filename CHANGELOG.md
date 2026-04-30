@@ -8,104 +8,40 @@ and this project adheres to
 
 ## [Unreleased]
 
-- **`dev-image` ships yazi, helix, and zellij out of the box.** The
-  default qemu image now includes the file manager, modal editor, and
-  terminal multiplexer, so a fresh boot has a usable dev environment
-  without further installs. Qemu rootfs partitions grew to fit the new
-  tooling: 256 MB → 512 MB on arm64, 256 MB → 600 MB on x86_64.
-
-- **Clear error when an image's rootfs won't fit the partition.** Building
-  an image whose installed rootfs exceeded the partition size used to
-  fail mid-`mkfs.ext4` with a cryptic "Could not allocate block in ext2
-  filesystem" message and no hint about which knob to turn. Yoe now
-  preflights the rootfs against the partition (with 25 MB of headroom for
-  ext4 metadata) and points at the partition size in the image
-  definition.
-
-- **`apk-tools` builds without lua or scdoc.** The unit was reaching for
-  build-time helper tools (lua for help text, scdoc for man pages) that
-  yoe's container doesn't ship. apk-tools now skips them and just builds
-  the apk binary used on yoe targets.
-
-- **SSH works out of the box on `dev-image`.** Booted images now start
-  `sshd` automatically, generate per-device host keys on first boot, and
-  let you connect over the QEMU port-forward (`ssh -p 2222 user@localhost`,
-  password `password`) without touching the running system. Passwordless
-  root SSH also works on `dev-image`, matching the serial console.
-
-- **Image rebuilds recover from prior failed builds.** When an image build
-  failed mid-way, the next build used to silently ignore root-owned
-  leftovers in its destdir and fail later with a confusing "Permission
-  denied". Yoe now surfaces the original cleanup error and auto-recovers
-  by chowning the tree back to the host user, so re-running the build
-  just works.
-
-- **Zellij terminal multiplexer.** A new `zellij` unit installs the upstream
-  prebuilt static binary, so dev images can ship a layout-aware terminal
-  workspace alongside helix and yazi.
-
-- **New `binary` class for prebuilt binaries.** Units can now declare
-  per-arch upstream release URLs and SHA256 hashes and let yoe fetch,
-  verify, and install without rebuilding from source. `binaries`, `extras`,
-  `install_tree`, and `symlinks` cover bare-binary downloads (kubectl-style),
-  toolchain bundles (Go, helix's runtime), and anything in between.
-  Three example units ship today: `go` (toolchain bundle, install_tree),
-  `helix` (modal text editor, install_tree with runtime/), and `yazi`
-  (terminal file manager, dual-binary direct install).
-
-- **APKINDEX `C:` hash is correct for signed apks.** When yoe started
-  signing apks, the on-disk first stream became the signature, not the
-  control block. The index generator was hashing the first stream
-  unconditionally, which broke `apk add` against the signed repo with a
-  misleading "BAD signature" error. The hasher now skips signature
-  streams and points at the actual control block. Image-time
-  `apk add` no longer needs `--keys-dir` either — the public key is
-  pre-staged into `<root>/etc/apk/keys/` before the install runs, which
-  matches how apk 2.x actually resolves keys when `--root` is set.
-
-- **`apk add` and `apk upgrade` work on yoe-built devices.** A new
-  `apk-tools` unit (Alpine apk 2.14.10) ships in `dev-image`, so booted
-  systems can install and upgrade packages against the project's signed
-  repo using stock `apk` commands — no `--allow-untrusted`, no extra
-  flags. `base-files` installs a commented-out `/etc/apk/repositories`
-  template; operators point it at their actual repo URL (HTTPS, HTTP, or
-  a local path) and run `apk update`. `docs/on-device-apk.md` covers the
-  full OTA flow plus an nginx hosting example.
-
-- **Signed apks and APKINDEX.** Every `.apk` and the per-arch
-  `APKINDEX.tar.gz` are now RSA-signed at build time. yoe auto-generates a
-  2048-bit RSA keypair at `~/.config/yoe/keys/<project>.rsa` on first
-  build (or loads an explicit one via `signing_key` on `project()`),
-  ships the matching public key into the rootfs at
-  `/etc/apk/keys/<keyname>.rsa.pub` via `base-files`, and points
-  image-time `apk add` at `--keys-dir` instead of `--allow-untrusted`. On
-  the target, stock `apk add` and `apk upgrade` verify signatures without
-  any extra flags. New `yoe key generate` and `yoe key info` subcommands
-  manage the project's key; `docs/signing.md` covers the operator
-  workflow.
-
-- **`provides` is now a list, matching apk semantics.** A unit can declare
-  multiple virtual names it satisfies (`provides = ["init", "service-mgr"]`),
-  not just one. PKGINFO emits one `provides = X` line per entry; the build
-  cache hashes them as a set. `provides = "x"` (string form) is no longer
-  accepted — update to `provides = ["x"]`. Internal: `Unit.Provides` is now
-  `[]string` end-to-end through types/builtins/loader/hash.
-
-- **`replaces` is documented end-to-end.** A new "Shadow files (REPLACES)"
-  section in `docs/naming-and-resolution.md` walks through the
-  busybox/util-linux example, why install order is set by the dep graph,
-  and how to read apk's "trying to overwrite" install errors. Both
-  `new-unit` and `audit-unit` skills now mention the field with usage
-  rules.
-
-- **Documented the "one .apk per unit" principle.** A new section in
-  `docs/naming-and-resolution.md` (and a matching note in `CLAUDE.md`)
-  spells out that units produce a single artifact every project and machine
-  shares; image-to-image variation is resolved at runtime via init scripts,
-  conditional configs, `replaces:` annotations, or boot-time alternative
-  selection — not by forking units into project- or machine-specific
-  builds. Build-flag forking is reserved for things that genuinely can't be
-  resolved at runtime (kernel defconfig, bootloader target).
+- **`dev-image` ships yazi, helix, and zellij out of the box.** A fresh
+  boot has a file manager, modal editor, and terminal multiplexer ready
+  to use.
+- **Clear error when an image's rootfs won't fit the partition.** Yoe
+  points at the partition size to bump instead of failing mid-`mkfs.ext4`
+  with a cryptic ext2 error.
+- **SSH works out of the box on `dev-image`.** `sshd` starts on boot with
+  per-device host keys; `ssh -p 2222 user@localhost` (password `password`)
+  just works, and passwordless root SSH matches the serial console.
+- **Image rebuilds recover from prior failed builds.** A previous failure
+  no longer wedges the next run on "Permission denied" — yoe reports the
+  real error and cleans up automatically.
+- **Zellij terminal multiplexer.** Ships in `dev-image` alongside helix
+  and yazi.
+- **New `binary` class for prebuilt binaries.** Units can ship upstream
+  release binaries with SHA256 verification, no rebuild from source. Used
+  by `go`, `helix`, and `yazi`.
+- **`apk add` works against the signed repo.** Image-time and on-target
+  `apk` commands no longer fail with "BAD signature" or need
+  `--allow-untrusted` / `--keys-dir`.
+- **`apk add` and `apk upgrade` work on yoe-built devices.** `dev-image`
+  ships `apk-tools` and the project's signing key, so OTA-style updates
+  use stock `apk` commands. See `docs/on-device-apk.md`.
+- **Signed apks and APKINDEX.** Every artifact is RSA-signed at build
+  time and verified by stock `apk` on the target. `yoe key generate` /
+  `yoe key info` manage the project key; see `docs/signing.md`.
+- **`provides` is now a list.** Use `provides = ["a", "b"]`; the string
+  form `provides = "x"` no longer parses.
+- **`replaces` is documented.** New "Shadow files" section in
+  `docs/naming-and-resolution.md` covers when to use it and how to read
+  apk's "trying to overwrite" errors.
+- **"One .apk per unit" principle, documented.** Image-to-image variation
+  belongs at runtime, not in build-flag forks. See
+  `docs/naming-and-resolution.md`.
 
 ## [0.8.4] - 2026-04-29
 

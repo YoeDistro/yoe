@@ -197,4 +197,6 @@ The GitHub Actions workflow (`doc-check.yaml`) runs `prettier --check` on all
   the user-visible benefit (what they see, what they can now do, what was broken
   and is now fixed). Do not enumerate file paths, function names, or the
   mechanism of the fix — those belong in the commit message and the code itself.
-  Past entries are immutable history; never edit them during refactors.
+  Past entries are immutable history; never edit them during refactors. Do not
+  put blank lines between bullet entries — entries sit directly under each
+  other, and the blank line separates one version section from the next.
