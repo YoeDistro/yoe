@@ -77,6 +77,8 @@ func main() {
 		cmdRun(cmdArgs)
 	case "serve":
 		cmdServe(cmdArgs)
+	case "device":
+		cmdDevice(cmdArgs)
 	case "config":
 		cmdConfig(cmdArgs)
 	case "repo":
@@ -120,6 +122,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  flash <unit> <device>   Write an image to a device/SD card (also: flash list)\n")
 	fmt.Fprintf(os.Stderr, "  run                     Run an image in QEMU\n")
 	fmt.Fprintf(os.Stderr, "  serve                   Run an HTTP+mDNS feed for the project's repo\n")
+	fmt.Fprintf(os.Stderr, "  device repo             Manage apk repos on a target device (add, remove, list)\n")
 	fmt.Fprintf(os.Stderr, "  module                  Manage external modules (fetch, sync, list)\n")
 	fmt.Fprintf(os.Stderr, "  repo                    Manage the local apk package repository\n")
 	fmt.Fprintf(os.Stderr, "  cache                   Manage the build cache (local and remote)\n")
@@ -420,6 +423,27 @@ func cmdClean(args []string) {
 
 func loadProject() *yoestar.Project {
 	return loadProjectWithMachine("")
+}
+
+// tryLoadProject returns nil if no project is loadable from the cwd
+// (rather than os.Exit'ing like loadProject). Useful for commands that
+// can run inside or outside a project, like `yoe device repo list`.
+func tryLoadProject() *yoestar.Project {
+	dir := os.Getenv("YOE_PROJECT")
+	if dir == "" {
+		dir = "."
+	}
+	opts := []yoestar.LoadOption{
+		yoestar.WithModuleSync(module.SyncIfNeeded),
+	}
+	if globalProjectFile != "" {
+		opts = append(opts, yoestar.WithProjectFile(globalProjectFile))
+	}
+	proj, err := yoestar.LoadProject(dir, opts...)
+	if err != nil {
+		return nil
+	}
+	return proj
 }
 
 func loadProjectWithMachine(machineName string) *yoestar.Project {
