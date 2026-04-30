@@ -27,7 +27,7 @@ case $ARCH in
     arm64)   KARCH=arm64;   TARGET=Image;   IMAGE=arch/arm64/boot/Image ;;
     riscv64) KARCH=riscv;   TARGET=Image;   IMAGE=arch/riscv/boot/Image ;;
 esac
-make ARCH=$KARCH -j$NPROC $TARGET
+make ARCH=$KARCH -j$NPROC $TARGET modules
 """,
             """
 case $ARCH in
@@ -36,6 +36,17 @@ case $ARCH in
     riscv64) IMAGE=arch/riscv/boot/Image ;;
 esac
 install -D $IMAGE $DESTDIR/boot/vmlinuz
+""",
+            # Install modules into rootfs at /lib/modules/<kver>/.
+            # DEPMOD=true skips depmod (not in build container); target runs it.
+            """
+case $ARCH in
+    x86_64)  KARCH=x86_64 ;;
+    arm64)   KARCH=arm64  ;;
+    riscv64) KARCH=riscv  ;;
+esac
+make ARCH=$KARCH INSTALL_MOD_PATH=$DESTDIR DEPMOD=true modules_install
+rm -f $DESTDIR/lib/modules/*/build $DESTDIR/lib/modules/*/source
 """,
         ]),
     ],

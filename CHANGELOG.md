@@ -8,8 +8,14 @@ and this project adheres to
 
 ## [Unreleased]
 
-- Rename `debug` units to `dev`.
-- Expand [roadmap](docs/roadmap.md).
+- **Rename `debug` units to `dev`.**
+- **Expand [roadmap](docs/roadmap.md).**
+- **Kernel modules now ship in images** — the `linux`, `linux-rpi4`, and
+  `linux-rpi5` units previously built only the in-tree kernel image, so
+  drivers compiled as loadable modules (Wi-Fi, USB, sound, many
+  filesystems) were silently dropped. Modules are now built and installed
+  to `/lib/modules/<kver>/` in the rootfs, so `modprobe` finds them at
+  runtime.
 
 ## [0.8.5] - 2026-04-30
 
