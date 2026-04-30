@@ -9,7 +9,13 @@ and this project adheres to
 ## [Unreleased]
 
 - **Rename `debug` units to `dev`.**
-- **Expand [roadmap](docs/roadmap.md).**
+- **Expand [roadmap](docs/roadmap.md).** Reorganized as a pointer index into
+  the design docs, with new sections for the app-developer build/deploy
+  loop, hardware access, testing, self-hosting, and distribution variants.
+- **New testing design doc** at [docs/testing.md](docs/testing.md) covers
+  the planned `yoe test` driver, build-time package QA, on-device
+  upstream tests (Yocto `ptest` analog), image smoke tests, and CI
+  integration.
 - **Kernel modules now ship in images** — the `linux`, `linux-rpi4`, and
   `linux-rpi5` units previously built only the in-tree kernel image, so
   drivers compiled as loadable modules (Wi-Fi, USB, sound, many
