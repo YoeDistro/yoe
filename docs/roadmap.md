@@ -14,6 +14,7 @@
 - modprobe from busybox and kmod both in image at different locations.
 - kmod: `Error loading shared library liblzma.so.5: No such file or directory`
   (needed by `/usr/sbin/modprobe`).
+- Rename rpi machines to simple rpi names.
 
 ## Developer Experience
 
@@ -125,27 +126,25 @@ to the host via `bwrap` user namespaces. Design in
 ## Testing
 
 Today: Go unit tests under `internal/*` and a single dry-run e2e test. No
-on-device tests, no image smoke tests, no build-time package QA, no CI
-workflow that runs builds. Design and intended shape in
-[testing.md](testing.md), which also compares to Yocto's `oeqa` /
-`INSANE.bbclass` / `ptest` / `buildhistory`.
+on-device tests, no image smoke tests, no build-time package QA, no CI workflow
+that runs builds. Design and intended shape in [testing.md](testing.md), which
+also compares to Yocto's `oeqa` / `INSANE.bbclass` / `ptest` / `buildhistory`.
 
-- Build-time package QA (Yocto's `INSANE.bbclass` analog): file
-  ownership, ELF stripping, RPATH leaks, missing SONAMEs, host-path
-  contamination. Always-on; failures fail the build.
-- `yoe test <unit>` — drive per-unit, image, and HIL tests behind one
-  command.
+- Build-time package QA (Yocto's `INSANE.bbclass` analog): file ownership, ELF
+  stripping, RPATH leaks, missing SONAMEs, host-path contamination. Always-on;
+  failures fail the build.
+- `yoe test <unit>` — drive per-unit, image, and HIL tests behind one command.
 - Per-unit functional tests (destdir assertions in the build sandbox).
-- On-device upstream tests (`make check` / `cargo test` shipped as a
-  test subpackage; Yocto's `ptest` analog).
+- On-device upstream tests (`make check` / `cargo test` shipped as a test
+  subpackage; Yocto's `ptest` analog).
 - Image-level smoke tests that boot in QEMU (or attach over SSH to a real
   device) and check network, services, basic flows.
-- Build-history / regression tracking (Yocto's `buildhistory` analog) for
-  size, RDEPENDS, and file-list diffs per PR.
-- CI workflows: `go test`, dry-run image build per PR; full build +
-  smoke tests on a schedule.
-- Kernel QA: run upstream `check-config.sh` against the kernel `.config`
-  for container-host images.
+- Build-history / regression tracking (Yocto's `buildhistory` analog) for size,
+  RDEPENDS, and file-list diffs per PR.
+- CI workflows: `go test`, dry-run image build per PR; full build + smoke tests
+  on a schedule.
+- Kernel QA: run upstream `check-config.sh` against the kernel `.config` for
+  container-host images.
 
 ## A/B Updates
 
@@ -188,15 +187,15 @@ See [metadata-format.md](metadata-format.md).
 ## Distribution Variants
 
 - **glibc target.** Currently musl-only. glibc support would enable workloads
-  whose binaries require it (some cgo, prebuilt vendor SDKs, the upstream
-  Helix release, etc.).
+  whose binaries require it (some cgo, prebuilt vendor SDKs, the upstream Helix
+  release, etc.).
 
 ## Self-Hosting
 
-The ultimate dogfood test: develop yoe on a yoe-built device. Forces the
-distro to be capable enough for real engineering work, not just demo
-targets, and surfaces gaps in container hosting, editor experience, and
-the build cache all at once.
+The ultimate dogfood test: develop yoe on a yoe-built device. Forces the distro
+to be capable enough for real engineering work, not just demo targets, and
+surfaces gaps in container hosting, editor experience, and the build cache all
+at once.
 
 Compilers stay in the build containers (gcc, binutils, headers, language
 toolchains live in `toolchain-musl` and friends, not the rootfs). What the
@@ -206,11 +205,11 @@ device itself needs:
   [Container Host on Devices](#container-host-on-devices).
 - **`yoe` binary in the project's apk repo** so a yoe-built device can
   `apk add yoe` like any other unit.
-- **Go on-device** for editing yoe source comfortably (`gopls`, `delve`),
-  not for the build itself.
+- **Go on-device** for editing yoe source comfortably (`gopls`, `delve`), not
+  for the build itself.
 - **`git`** unit.
-- **An editor that runs on musl.** Fix the helix glibc issue
-  (cargo-from-source build) or commit to neovim as the default.
-- **CI gate** that builds yoe from source on a yoe-built image and runs
-  the test suite, so toolchain or libc-compatibility regressions break the
-  build instead of being discovered later.
+- **An editor that runs on musl.** Fix the helix glibc issue (cargo-from-source
+  build) or commit to neovim as the default.
+- **CI gate** that builds yoe from source on a yoe-built image and runs the test
+  suite, so toolchain or libc-compatibility regressions break the build instead
+  of being discovered later.
