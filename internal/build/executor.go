@@ -65,15 +65,29 @@ func ScopeDir(unit *yoestar.Unit, arch, machine string) string {
 }
 
 // RepoArchDir returns the per-arch subdirectory under repo/ where a unit's
-// .apk is published. apk-tools expects `<repo>/<arch>/APKINDEX.tar.gz`, so
-// this is always either an actual architecture (e.g., "x86_64", "aarch64")
-// or the literal "noarch" — never a machine name. Machine-scoped units are
-// built for a specific arch and live alongside arch-scoped apks of the same
-// arch; the unique pkgname (e.g., `linux-rpi4` vs `linux-imx6ul`) keeps them
-// from colliding.
+// .apk is published. apk-tools expects `<repo>/<arch>/APKINDEX.tar.gz` and
+// derives <arch> from `apk --print-arch` (the kernel arch name). yoe's
+// internal arch token is the Go-style "arm64", but apk reports "aarch64",
+// so we translate at the apk boundary — the repo dir, the PKGINFO `arch =`
+// field, and the APKINDEX `A:` field all need to match what apk-tools
+// looks up at install time. Machine-scoped units are built for a specific
+// arch and live alongside arch-scoped apks of the same arch; the unique
+// pkgname (e.g., `linux-rpi4` vs `linux-imx6ul`) keeps them from colliding.
 func RepoArchDir(unit *yoestar.Unit, arch string) string {
 	if unit.Scope == "noarch" {
 		return "noarch"
+	}
+	return ApkArch(arch)
+}
+
+// ApkArch translates yoe's internal architecture token to the value
+// apk-tools uses for the same architecture. yoe uses "arm64" everywhere
+// (matching Go's GOARCH and Docker's --platform), but apk-tools — like the
+// Linux kernel — calls it "aarch64". Other architectures (x86_64, riscv64)
+// share a name across both ecosystems and pass through unchanged.
+func ApkArch(arch string) string {
+	if arch == "arm64" {
+		return "aarch64"
 	}
 	return arch
 }

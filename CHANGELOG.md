@@ -16,6 +16,10 @@ and this project adheres to
   filesystems) were silently dropped. Modules are now built and installed
   to `/lib/modules/<kver>/` in the rootfs, so `modprobe` finds them at
   runtime.
+- **Better formatting and wrapping of error messages in TUI**
+- **64-bit Arm images build again.** `dev-image` on `raspberrypi4` and
+  other `arm64` machines was failing rootfs assembly with every package
+  reported as missing.
 
 ## [0.8.5] - 2026-04-30
 
