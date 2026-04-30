@@ -20,6 +20,9 @@ and this project adheres to
 - **64-bit Arm images build again.** `dev-image` on `raspberrypi4` and
   other `arm64` machines was failing rootfs assembly with every package
   reported as missing.
+- **Raspberry Pi rootfs partition fits `dev-image`.** The `raspberrypi4`
+  and `raspberrypi5` machines used a 256 MB rootfs that couldn't hold
+  the dev tooling; bumped to 1 GB.
 
 ## [0.8.5] - 2026-04-30
 
