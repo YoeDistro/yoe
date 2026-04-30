@@ -56,8 +56,8 @@ resulting `.config`.
 ## Userspace Prerequisites
 
 Container runtimes pull in userspace tools that yoe does not yet package.
-Shipping a container-capable image forces the following units from
-`docs/units-roadmap.md` to land first:
+Shipping a container-capable image forces the following units from the
+[roadmap](roadmap.md) to land first:
 
 - `iptables` or `nftables` — Docker refuses to start without one
 - `ca-certificates` — required to pull images over TLS
