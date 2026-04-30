@@ -28,6 +28,7 @@ and this project adheres to
   compiled as loadable modules (Wi-Fi, USB, sound, many filesystems) were
   silently dropped. Modules are now built and installed to
   `/lib/modules/<kver>/` in the rootfs, so `modprobe` finds them at runtime.
+- **Fix rPI4 builds** package arch did not match what apk was expecting.
 
 ## [0.8.5] - 2026-04-30
 
