@@ -43,16 +43,23 @@ def users_commands(users):
             "echo '" + u["name"] + ":x:" + str(u["gid"]) +
             ":' >> $DESTDIR/etc/group",
         )
+        # `lstchg=0` is sshd's "must change password on next login" trigger:
+        # logins then fail with "Your password has expired" and refuse
+        # non-TTY sessions. Use lstchg=1 (epoch+1 day) so the field is
+        # non-zero — combined with max=99999 (~273 years), the password
+        # never effectively expires. Leaving the field entirely blank
+        # would also disable aging, but busybox login rejects shadow
+        # entries with all-empty trailing fields.
         if u["password"]:
             cmds.append(
                 "PW=$(openssl passwd -6 '" +
                 u["password"] + "') && " +
-                "echo '" + u["name"] + ":'\"$PW\"':0:0:99999:7:::' >> $DESTDIR/etc/shadow",
+                "echo '" + u["name"] + ":'\"$PW\"':1:0:99999:7:::' >> $DESTDIR/etc/shadow",
             )
         else:
             cmds.append(
                 "echo '" + u["name"] +
-                "::0:0:99999:7:::' >> $DESTDIR/etc/shadow",
+                "::1:0:99999:7:::' >> $DESTDIR/etc/shadow",
             )
         if u["uid"] != 0:
             cmds.append("mkdir -p $DESTDIR" + u["home"])

@@ -8,6 +8,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **SSH works out of the box on `dev-image`.** Booted images now start
+  `sshd` automatically, generate per-device host keys on first boot, and
+  let you connect over the QEMU port-forward (`ssh -p 2222 user@localhost`,
+  password `password`) without touching the running system. Passwordless
+  root SSH also works on `dev-image`, matching the serial console.
+
 - **Image rebuilds recover from prior failed builds.** When an image build
   failed mid-way, the next build used to silently ignore root-owned
   leftovers in its destdir and fail later with a confusing "Permission
