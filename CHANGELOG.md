@@ -8,6 +8,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **`dev-image` ships yazi, helix, and zellij out of the box.** The
+  default qemu image now includes the file manager, modal editor, and
+  terminal multiplexer, so a fresh boot has a usable dev environment
+  without further installs. Qemu rootfs partitions grew to fit the new
+  tooling: 256 MB → 512 MB on arm64, 256 MB → 600 MB on x86_64.
+
 - **Clear error when an image's rootfs won't fit the partition.** Building
   an image whose installed rootfs exceeded the partition size used to
   fail mid-`mkfs.ext4` with a cryptic "Could not allocate block in ext2

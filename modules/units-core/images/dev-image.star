@@ -18,6 +18,7 @@ image(
         "dhcpcd", "ntp-client", "mdnsd", "openssh", "ca-certificates",
         "curl", "simpleiot", "bash", "less", "file", "procps-ng",
         "htop", "strace", "vim", "apk-tools",
+        "yazi", "helix", "zellij"
     ],
     hostname = "yoe-dev",
 )
