@@ -522,6 +522,97 @@ fleet management, brand store for distribution, Anbox Cloud, etc.), or when your
 device has ample storage (tens of GiB+) and the 2.5 GiB floor is an acceptable
 trade for the operational simplicity of signed transactional updates.
 
+## vs. Avocado OS
+
+[Avocado OS](https://www.avocadolinux.org/) is an embedded Linux distribution
+[announced in April 2025](https://blog.peridio.com/announcing-avocado-os) by
+[Peridio](https://www.peridio.com/), a US-based company with roots in the
+Elixir/Nerves OTA ecosystem. It is not a new build system — it is a curated
+**Yocto distro layer**
+([`meta-avocado`](https://github.com/avocado-linux/meta-avocado)) plus a
+**Rust-written CLI** (`avocado-cli`) layered on top of
+`systemd-sysext`/`confext` semantics. The pitch is "production-grade Linux for
+edge AI and physical AI" — heavy focus on NVIDIA Jetson Orin, NXP i.MX 8M Plus,
+Rockchip, and Raspberry Pi. The project shipped with paying customers and is
+backed by a commercial OTA SaaS
+([Peridio Core](https://www.peridio.com/avocado-os)).
+
+**What `[yoe]` adopts from Avocado OS:**
+
+- **Ergonomic CLI on top of a build system** — Avocado wraps Yocto in a Rust CLI
+  to hide BitBake's rough edges. `[yoe]` shares the diagnosis (the underlying
+  tooling needs an ergonomic front door) but reaches a different conclusion:
+  replace BitBake rather than wrap it.
+- **Immutable rootfs + atomic updates as the deployment model** — Avocado uses
+  btrfs + `systemd-sysext` overlays verified with `dm-verity`. `[yoe]` shares
+  the immutability goal (already drawn from Ubuntu Core and NixOS), though the
+  mechanism is still an open design decision (apk + atomic image, A/B, RAUC,
+  etc.).
+- **Binary extension feeds for the common case** — Avocado bets that most teams
+  consume pre-built extensions rather than customizing the base. `[yoe]`'s
+  S3-backed apk repository plays the same role: a CI build seeds the cache and
+  most developers never compile from source.
+- **Live development against the deployed image** — Avocado's NFS-mounted sysext
+  lets a developer iterate on an extension without reflashing. `yoe dev` aims at
+  the same pain point from a different angle (edit a unit's source git tree,
+  rebuild the apk, push to the device).
+
+**What `[yoe]` leaves behind:**
+
+- **BitBake / Yocto** — Avocado is still BitBake-bound for actual building.
+  Custom hardware support means writing Yocto layers on top. `[yoe]` replaces
+  the whole engine; see the Yocto section above for why.
+- **`systemd-sysext` as the runtime composition primitive** — sysext is powerful
+  but ties the OS tightly to systemd, dm-verity, and a particular filesystem
+  layout. `[yoe]` uses apk into a shared FHS rootfs; composition is at build
+  time (image units), not runtime (overlay mounts).
+- **glibc baseline** — Avocado inherits Yocto's glibc default. `[yoe]` is
+  musl-first via Alpine.
+- **Cross-compilation toolchains** — Avocado uses Yocto's standard cross
+  toolchain. `[yoe]` is native-only.
+- **Commercial OTA tie-in** — Avocado's business model is "free OS, paid Peridio
+  Core for fleet management and OTA." `[yoe]` has no commercial gate; the
+  repository, signing, and update tooling are part of the open project.
+- **Multi-language tooling stack** — Avocado mixes BitBake, Shell, and Rust
+  (`avocado-cli`, `avocadoctl`, `avocado-conn`). `[yoe]` is Go + Starlark end to
+  end.
+
+**Key differences:**
+
+|                     | Avocado OS                                 | `[yoe]`                                      |
+| ------------------- | ------------------------------------------ | -------------------------------------------- |
+| Build engine        | Yocto / BitBake (Python)                   | `yoe` (Go)                                   |
+| Recipe language     | BitBake (`.bb`/`.bbappend`)                | Starlark                                     |
+| CLI language        | Rust (`avocado-cli`)                       | Go (`yoe`)                                   |
+| Cross-compilation   | Yes (Yocto default)                        | None — native builds only                    |
+| C library           | glibc                                      | musl                                         |
+| Package format      | IPK/RPM internally; sysext DDI on device   | apk                                          |
+| Runtime composition | `systemd-sysext` overlays + `dm-verity`    | apk into shared FHS rootfs                   |
+| Init system         | systemd (required by sysext model)         | busybox init today; systemd a future option  |
+| Filesystem          | btrfs root, immutable                      | ext4 today; immutability planned             |
+| OTA mechanism       | Peridio Core (commercial SaaS)             | Self-hosted; mechanism TBD                   |
+| Build caching       | Yocto sstate                               | Content-addressed apk in S3-compatible cache |
+| Container model     | SDK containers for dev                     | Container as build worker                    |
+| Hardware focus      | Edge AI: Jetson, i.MX, Rockchip, RPi       | Generic embedded; RPi/BBB/QEMU first         |
+| Commercial backing  | Peridio (VC-backed)                        | None — open project                          |
+| Status              | Production (April 2025+), paying customers | Pre-1.0                                      |
+
+**Structural distance.** Avocado OS and `[yoe]` agree on the _symptoms_ —
+unwrapped Yocto is too sharp, embedded teams need atomic updates with rollback,
+most users want to consume binaries rather than rebuild — but disagree on the
+_cure_. Avocado keeps Yocto and bets that systemd-sysext + btrfs + dm-verity is
+the modern way to ship and update a device. `[yoe]` replaces Yocto and bets that
+a smaller, single-language, apk-based stack with content-addressed caching is
+enough, without taking on the systemd/btrfs/ dm-verity dependency.
+
+**When to use Avocado OS instead:** when you're shipping edge-AI hardware today
+on the platforms Peridio supports (especially NVIDIA Jetson Orin), want a
+vendor-backed OTA SaaS rather than running your own update infrastructure, are
+comfortable with the systemd + btrfs + dm-verity baseline, and prefer to ride
+Yocto's BSP ecosystem rather than write machine definitions for new silicon. If
+you need production deployment now and a paid support relationship is
+acceptable, Avocado is several years ahead of `[yoe]` on maturity.
+
 ## vs. NixOS / Nix
 
 Nix is the most intellectually ambitious of the systems `[yoe]` draws from. Its

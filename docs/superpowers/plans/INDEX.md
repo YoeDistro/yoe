@@ -17,4 +17,4 @@ Status of implementation plans.
 | Container units (2026-04-04)           | Done        | Container class, toolchain-musl unit, run(host=True), per-unit container                                  |
 | apk compatibility (2026-04-29)         | Not started | 5-phase plan: round-trip compat, apk-driven assembly, signing, on-device apk, provides/replaces alignment |
 | `binary` class (2026-04-29)            | Not started | Prebuilt-binary class + Go-side zip and bare-binary source prep                                           |
-| Feed server and deploy (2026-04-30)    | Not started | yoe serve, yoe deploy, yoe device repo {add,remove,list}                                                  |
+| Feed server and deploy (2026-04-30)    | Done        | yoe serve, yoe deploy, yoe device repo {add,remove,list}                                                  |

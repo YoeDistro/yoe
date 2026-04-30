@@ -15,4 +15,4 @@ Status of design specs and their corresponding implementation plans.
 | Naming and resolution (2026-04-02)     | naming-and-resolution (2026-04-02)     | Done   |
 | Container units (2026-04-04)           | container-units (2026-04-04)           | Done   |
 | `binary` class (2026-04-29)            | —                                      | Spec   |
-| Feed server and deploy (2026-04-30)    | —                                      | Spec   |
+| Feed server and deploy (2026-04-30)    | feed-server-and-deploy (2026-04-30)    | Done   |

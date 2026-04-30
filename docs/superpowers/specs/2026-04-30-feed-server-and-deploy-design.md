@@ -205,10 +205,10 @@ targets are flashed, not deployed; use `yoe flash <image>`".
 
    Run as a single ssh invocation with a heredoc so partial failures still
    report cleanly. Stdout/stderr stream back to the dev's terminal. The
-   `yoe-dev.list` file is the same name `yoe device repo add` writes by
-   default — running `yoe deploy` is therefore equivalent to running
-   `yoe device repo add` plus `apk add`, and the device is left configured
-   to keep pulling from this dev host on any future `apk` invocation.
+   `yoe-dev.list` file is the same name `yoe device repo add` writes by default
+   — running `yoe deploy` is therefore equivalent to running
+   `yoe device repo add` plus `apk add`, and the device is left configured to
+   keep pulling from this dev host on any future `apk` invocation.
 
 5. **Tear down the ephemeral feed** (skipped if step 2 reused an existing
    `yoe serve`). The repo file on the device is left in place — that's the

@@ -8,15 +8,15 @@
 **Goal:** Implement the three-command stack from
 [2026-04-30-feed-server-and-deploy-design.md](../specs/2026-04-30-feed-server-and-deploy-design.md):
 `yoe serve` (long-lived HTTP feed + mDNS), `yoe device repo {add,remove,list}`
-(configure the device's apk repo file), and `yoe deploy <unit> <host>`
-(build + ephemeral feed + ssh + apk add, persistent repo file on the device).
+(configure the device's apk repo file), and `yoe deploy <unit> <host>` (build +
+ephemeral feed + ssh + apk add, persistent repo file on the device).
 
-**Architecture:** A new `internal/feed/` package owns the HTTP server and
-mDNS advertisement. `internal/device/` (which already hosts `flash`) gains
-`repo.go` and `deploy.go` for the ssh/scp shellouts and deploy orchestration.
-CLI wiring lives in `cmd/yoe/serve.go`, `cmd/yoe/device.go`,
-`cmd/yoe/deploy.go`. ssh and scp are shelled out to so user `~/.ssh/config`
-works; mDNS uses `github.com/libp2p/zeroconf/v2`.
+**Architecture:** A new `internal/feed/` package owns the HTTP server and mDNS
+advertisement. `internal/device/` (which already hosts `flash`) gains `repo.go`
+and `deploy.go` for the ssh/scp shellouts and deploy orchestration. CLI wiring
+lives in `cmd/yoe/serve.go`, `cmd/yoe/device.go`, `cmd/yoe/deploy.go`. ssh and
+scp are shelled out to so user `~/.ssh/config` works; mDNS uses
+`github.com/libp2p/zeroconf/v2`.
 
 **Tech Stack:** Go 1.25, `net/http` stdlib, `github.com/libp2p/zeroconf/v2`,
 shelled-out `ssh` / `scp`.
@@ -43,9 +43,9 @@ manually. Phase 6 closes the loop.
 
 ## Phase 1: `internal/feed/` primitive
 
-The feed primitive is what `yoe serve` and `yoe deploy` both compose. It
-wraps an `http.Server` rooted at the project's `repo/` tree plus an mDNS
-advertisement (optional).
+The feed primitive is what `yoe serve` and `yoe deploy` both compose. It wraps
+an `http.Server` rooted at the project's `repo/` tree plus an mDNS advertisement
+(optional).
 
 **Files:**
 
@@ -85,8 +85,7 @@ git commit -m "deps: add libp2p/zeroconf/v2 for mDNS feed advertisement"
 
 ### Task 1.2: HTTP server (`internal/feed/server.go`)
 
-The HTTP server is `http.FileServer` over the repo dir, with request
-logging.
+The HTTP server is `http.FileServer` over the repo dir, with request logging.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -757,16 +756,15 @@ type projectLike interface {
 }
 ```
 
-If the existing `yoestar.Project` doesn't already have a `GetName()`
-helper, just take `*yoestar.Project` directly here — drop the interface.
-Check:
+If the existing `yoestar.Project` doesn't already have a `GetName()` helper,
+just take `*yoestar.Project` directly here — drop the interface. Check:
 
 ```bash
 grep -n "func (.*Project) Name\|GetName" internal/starlark/*.go
 ```
 
-If none, replace `projectLike` with `*yoestar.Project`. The interface is
-only there to keep this file decoupled — fine to drop.
+If none, replace `projectLike` with `*yoestar.Project`. The interface is only
+there to keep this file decoupled — fine to drop.
 
 - [ ] **Step 2: Wire dispatch in `cmd/yoe/main.go`**
 
@@ -809,15 +807,15 @@ git commit -m "feat(cli): yoe serve runs the feed primitive long-lived"
 
 ## Phase 3: Device repo ops (`internal/device/repo.go`)
 
-ssh and scp shellouts for configuring `/etc/apk/repositories.d/<name>.list`
-on a target device, plus a key push helper.
+ssh and scp shellouts for configuring `/etc/apk/repositories.d/<name>.list` on a
+target device, plus a key push helper.
 
 **Files:**
 
 - Create: `internal/device/repo.go`
 - Create: `internal/device/repo_test.go`
-- Create: `internal/device/sshcmd.go` (small helper used by repo.go and
-  later deploy.go)
+- Create: `internal/device/sshcmd.go` (small helper used by repo.go and later
+  deploy.go)
 
 ### Task 3.1: ssh / scp shell-out helper (`sshcmd.go`)
 
@@ -1044,8 +1042,8 @@ func TestRepoListPropagatesError(t *testing.T) {
 }
 ```
 
-The `ioWriter` shim avoids an `io` import in the test recorder; replace
-later if you'd rather just `import "io"`.
+The `ioWriter` shim avoids an `io` import in the test recorder; replace later if
+you'd rather just `import "io"`.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -1332,8 +1330,8 @@ func discoverFeed() (string, error) {
 }
 ```
 
-`tryLoadProject` is a helper that returns `(nil, err)` instead of os.Exit
-when no project is found. Add it to `cmd/yoe/main.go` near `loadProject`:
+`tryLoadProject` is a helper that returns `(nil, err)` instead of os.Exit when
+no project is found. Add it to `cmd/yoe/main.go` near `loadProject`:
 
 ```go
 func tryLoadProject() (*yoestar.Project, error) {
@@ -1342,11 +1340,11 @@ func tryLoadProject() (*yoestar.Project, error) {
 }
 ```
 
-If `loadProjectErr` doesn't exist yet, the simpler implementation is:
-recover the panic from `loadProject` and return nil. Easier still: just
-shell out to a check that the project file exists, and skip the
-project-name filter if not. Adapt to whatever pattern the codebase uses.
-The intent is "best-effort project name for feed filtering."
+If `loadProjectErr` doesn't exist yet, the simpler implementation is: recover
+the panic from `loadProject` and return nil. Easier still: just shell out to a
+check that the project file exists, and skip the project-name filter if not.
+Adapt to whatever pattern the codebase uses. The intent is "best-effort project
+name for feed filtering."
 
 Add `"strings"` to the import list of `device.go`.
 
@@ -1386,8 +1384,8 @@ git commit -m "feat(cli): yoe device repo {add,remove,list}"
 ## Phase 5: Deploy orchestration (`internal/device/deploy.go`)
 
 The `Deploy()` entry point: build (assumed already done by caller for
-testability), reuse-or-start a feed, ssh to the target, run apk add, tear
-down ephemeral feed.
+testability), reuse-or-start a feed, ssh to the target, run apk add, tear down
+ephemeral feed.
 
 **Files:**
 
@@ -1528,8 +1526,8 @@ git commit -m "feat(device): Deploy orchestrates ssh + apk add against a feed UR
 
 ## Phase 6: `yoe deploy` CLI
 
-Wires together the build pipeline, feed resolution, ephemeral feed (if
-needed), and `device.Deploy()`.
+Wires together the build pipeline, feed resolution, ephemeral feed (if needed),
+and `device.Deploy()`.
 
 **Files:**
 
@@ -1669,9 +1667,9 @@ func resolveOrStartFeed(proj *yoestar.Project, projDir string, port int, hostIP 
 }
 ```
 
-The `buildUnit` glue is the only fragile bit — extract a refactor-friendly
-form of `cmdBuild` during implementation. If that's too invasive, shell
-out to the same binary recursively:
+The `buildUnit` glue is the only fragile bit — extract a refactor-friendly form
+of `cmdBuild` during implementation. If that's too invasive, shell out to the
+same binary recursively:
 
 ```go
 func buildUnit(_ *yoestar.Project, unit string) error {
@@ -1707,8 +1705,8 @@ yoe_build
 yoe deploy bash dev-pi.local
 ```
 
-Expected: build runs (no-op if cached), feed starts (or reuses serve),
-device installs `bash`, deploy prints success.
+Expected: build runs (no-op if cached), feed starts (or reuses serve), device
+installs `bash`, deploy prints success.
 
 - [ ] **Step 4: Commit**
 
@@ -1731,27 +1729,25 @@ git commit -m "feat(cli): yoe deploy <unit> <host> closes the dev loop"
 
 - [ ] **Step 1: Create the doc**
 
-Write a user-focused walkthrough covering the three commands. Use the
-spec's "Examples" sections as starting material; expand with prose for
-the typical workflows:
+Write a user-focused walkthrough covering the three commands. Use the spec's
+"Examples" sections as starting material; expand with prose for the typical
+workflows:
 
 1. One-time setup against a fresh device (`yoe device repo add --push-key`).
 2. Long-running serve + repeated `apk add` from the device.
 3. One-shot deploy of a single unit.
 
-About 150–250 lines. Reference `docs/on-device-apk.md` for trust model
-context.
+About 150–250 lines. Reference `docs/on-device-apk.md` for trust model context.
 
 - [ ] **Step 2: Update `docs/on-device-apk.md`**
 
-In the section that describes `/etc/apk/repositories` (around the
-"Pointing at a repository" subsection), add a short subsection:
+In the section that describes `/etc/apk/repositories` (around the "Pointing at a
+repository" subsection), add a short subsection:
 
 > ### Pointing at a yoe-served feed
 >
-> For development, run `yoe serve` on your build host and configure the
-> device with `yoe device repo add <host>`. See
-> [feed-server.md](feed-server.md).
+> For development, run `yoe serve` on your build host and configure the device
+> with `yoe device repo add <host>`. See [feed-server.md](feed-server.md).
 
 - [ ] **Step 3: Update `docs/dev-env.md`**
 
@@ -1761,18 +1757,18 @@ pull-based semantics, linking to `feed-server.md`.
 - [ ] **Step 4: Update `docs/roadmap.md`**
 
 Move the "Fast deploy" and "Feed server" lines from the Next/Developer
-Experience sections to a new "Done" section (or remove them with a
-reference to `feed-server.md`).
+Experience sections to a new "Done" section (or remove them with a reference to
+`feed-server.md`).
 
 - [ ] **Step 5: Update `CHANGELOG.md`**
 
 Add an entry under `[Unreleased]`:
 
 ```markdown
-- **Pull-based dev loop.** `yoe deploy <unit> <host>` builds and installs a
-  unit on a running yoe device with full apk dependency resolution. Pair
-  with `yoe serve` and `yoe device repo add` to keep a device pointed at
-  your dev feed for ad-hoc `apk add` from the device. See
+- **Pull-based dev loop.** `yoe deploy <unit> <host>` builds and installs a unit
+  on a running yoe device with full apk dependency resolution. Pair with
+  `yoe serve` and `yoe device repo add` to keep a device pointed at your dev
+  feed for ad-hoc `apk add` from the device. See
   [docs/feed-server.md](docs/feed-server.md).
 ```
 
@@ -1821,8 +1817,8 @@ Final sanity checks before marking the plan complete:
 
 ## Out-of-band debt to track
 
-- The `buildUnit` helper in `cmd/yoe/deploy.go` either refactors
-  `cmdBuild` or shells out. If shelled out, leave a TODO to refactor once
-  another command needs the same path (deploy is the second).
-- mDNS testing on CI: if CI uses containers without multicast, mDNS tests
-  must use `testing.Short` and CI must pass `-short`. Verify.
+- The `buildUnit` helper in `cmd/yoe/deploy.go` either refactors `cmdBuild` or
+  shells out. If shelled out, leave a TODO to refactor once another command
+  needs the same path (deploy is the second).
+- mDNS testing on CI: if CI uses containers without multicast, mDNS tests must
+  use `testing.Short` and CI must pass `-short`. Verify.

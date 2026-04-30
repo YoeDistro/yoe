@@ -61,8 +61,7 @@ Three pieces make that work:
 
 ### Local-path sources
 
-Units can reference a working tree on disk instead of (or alongside) a git
-URL:
+Units can reference a working tree on disk instead of (or alongside) a git URL:
 
 ```python
 unit(
@@ -74,26 +73,31 @@ unit(
 ```
 
 `path()` sources are not cloned. yoe binds the working tree into the build
-sandbox so edits land in the next build immediately, without a
-commit-tag-fetch cycle.
+sandbox so edits land in the next build immediately, without a commit-tag-fetch
+cycle.
 
 ### Fast deploy
 
-`yoe deploy <unit> <host>` builds the apk for `<unit>` and runs `apk add` on
-`<host>` over SSH. Combined with local-path sources, the loop is:
+`yoe deploy <unit> <host>` builds the apk for `<unit>`, exposes the project's
+repo over an HTTP feed (reusing a running `yoe serve` if one is up), and runs
+`apk add --upgrade <unit>` on the device over SSH. Combined with local-path
+sources, the loop is:
 
 ```
 edit code → yoe deploy myapp dev-pi → service running on the device
 ```
 
-Same plumbing yoe uses to assemble images at build time, just targeted at a
-running device.
+Pull, not push: apk on the device resolves transitive deps from the same
+`APKINDEX.tar.gz` production OTA uses, so adding a runtime dep to a unit doesn't
+require updating any deploy machinery. After the first deploy the device's
+`/etc/apk/repositories.d/yoe-dev.list` stays in place, so subsequent `apk add`
+calls from the device work too. See [feed-server.md](feed-server.md).
 
 ### Watch mode
 
-`yoe dev <unit>` watches the source tree and rebuilds (and optionally
-redeploys) on save. For app projects this is the inner loop; for upstream
-units, it's the patch-and-iterate workflow.
+`yoe dev <unit>` watches the source tree and rebuilds (and optionally redeploys)
+on save. For app projects this is the inner loop; for upstream units, it's the
+patch-and-iterate workflow.
 
 ### Three workflow shapes
 
@@ -134,9 +138,9 @@ it" workflow.
 
 ### Editor integration
 
-Run language servers and debuggers inside `yoe shell` (or a devcontainer
-pointed at the toolchain image) so they see the same headers, libraries, and
-target arch as the build:
+Run language servers and debuggers inside `yoe shell` (or a devcontainer pointed
+at the toolchain image) so they see the same headers, libraries, and target arch
+as the build:
 
 - VSCode Remote / Dev Containers attaches naturally.
 - Neovim's `distant.nvim` works the same way.

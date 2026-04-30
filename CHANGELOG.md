@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Pull-based dev loop.** `yoe deploy <unit> <host>` builds and installs a unit
+  on a running yoe device with full apk dependency resolution. Pair with
+  `yoe serve` and `yoe device repo add` to keep a device pointed at your dev
+  feed for ad-hoc `apk add` from the device. See
+  [docs/feed-server.md](docs/feed-server.md).
 - **Container runtime build path documented.**
   [docs/containers.md](docs/containers.md) now walks through what it takes to
   ship Docker, containerd, and runc on a musl yoe rootfs — why prebuilt "static"

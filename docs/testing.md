@@ -4,39 +4,36 @@
 > Today, yoe ships Go unit tests under `internal/*` and a single end-to-end Go
 > test at `internal/build/e2e_test.go` that loads `testdata/e2e-project/` and
 > exercises a dry-run build. There is no `yoe test` subcommand, no on-device
-> test runner, no image smoke-test framework, and no CI workflow that runs
-> tests or builds (the only CI today is markdown formatting via
+> test runner, no image smoke-test framework, and no CI workflow that runs tests
+> or builds (the only CI today is markdown formatting via
 > `.github/workflows/doc-check.yaml`). The sections below describe what's
 > planned; each one calls out what exists today vs. what's future work.
 
 ## Goals
 
-Testing in yoe needs to cover six distinct levels, because regressions can
-hide at any of them:
+Testing in yoe needs to cover six distinct levels, because regressions can hide
+at any of them:
 
-1. **Compiler-level (Go):** yoe's own logic — DAG resolution, hash
-   computation, Starlark evaluation, repo indexing.
-2. **Build-time package QA:** every built package passes a fixed set of
-   sanity checks (ownership, stripping, RPATH, host-path leaks, missing
-   SONAMEs, etc.). Failures fail the build. Yocto's equivalent is
-   `INSANE.bbclass`.
-3. **Per-unit functional tests:** a unit's build produces the expected
-   files, services, metadata, runtime deps. Destdir assertions, run inside
-   the build sandbox.
+1. **Compiler-level (Go):** yoe's own logic — DAG resolution, hash computation,
+   Starlark evaluation, repo indexing.
+2. **Build-time package QA:** every built package passes a fixed set of sanity
+   checks (ownership, stripping, RPATH, host-path leaks, missing SONAMEs, etc.).
+   Failures fail the build. Yocto's equivalent is `INSANE.bbclass`.
+3. **Per-unit functional tests:** a unit's build produces the expected files,
+   services, metadata, runtime deps. Destdir assertions, run inside the build
+   sandbox.
 4. **On-device upstream tests:** a unit ships its own `make check` (or
-   `cargo test`, etc.) output as an installable test subpackage; the
-   booted device runs them. Catches ABI / linkage regressions that
-   destdir-level tests miss. Yocto's equivalent is `ptest`.
-5. **Image-level smoke tests:** boot the image (QEMU or real hardware),
-   run assertions over SSH — network up, services running, basic flows
-   work.
-6. **Hardware-in-loop (HIL):** image-level tests against a flashed
-   physical device, not just QEMU.
+   `cargo test`, etc.) output as an installable test subpackage; the booted
+   device runs them. Catches ABI / linkage regressions that destdir-level tests
+   miss. Yocto's equivalent is `ptest`.
+5. **Image-level smoke tests:** boot the image (QEMU or real hardware), run
+   assertions over SSH — network up, services running, basic flows work.
+6. **Hardware-in-loop (HIL):** image-level tests against a flashed physical
+   device, not just QEMU.
 
-The `yoe test` command unifies levels 3–6 behind one driver so the same
-test spec runs against a destdir, a QEMU image, or a physical device.
-Build-time QA (level 2) is always-on and runs as part of every package
-build, not opt-in.
+The `yoe test` command unifies levels 3–6 behind one driver so the same test
+spec runs against a destdir, a QEMU image, or a physical device. Build-time QA
+(level 2) is always-on and runs as part of every package build, not opt-in.
 
 ## Today
 
@@ -67,8 +64,8 @@ build of `dev-image`. It validates:
 - DAG resolution and topological sort.
 
 It does not actually build anything — it stops at the dry-run boundary. A real
-build inside CI would need a Docker daemon, the toolchain container, and
-several minutes of compute.
+build inside CI would need a Docker daemon, the toolchain container, and several
+minutes of compute.
 
 ### CI
 
@@ -77,38 +74,37 @@ is no workflow that runs `go test`, builds yoe, or builds an image.
 
 ## Build-time Package QA (planned)
 
-> **Status:** Not implemented. Today the only built-in check is
-> apk-level path-conflict detection (a file installed by two packages
-> without an explicit `replaces=` annotation fails image assembly).
-> No checks run against an individual unit's destdir before packaging.
+> **Status:** Not implemented. Today the only built-in check is apk-level
+> path-conflict detection (a file installed by two packages without an explicit
+> `replaces=` annotation fails image assembly). No checks run against an
+> individual unit's destdir before packaging.
 
 Every unit's destdir is sanity-checked before it is packaged into an apk.
-Failures fail the build. This is the cheapest tier of testing — runs on
-every build with no opt-in — and catches the most common shipping bugs:
+Failures fail the build. This is the cheapest tier of testing — runs on every
+build with no opt-in — and catches the most common shipping bugs:
 
-- **File ownership and mode:** all installed files must be owned by
-  `0:0` (root) with mode that matches the unit's policy. Setuid binaries
-  must be declared explicitly (no accidental setuid via upstream
-  `make install`).
+- **File ownership and mode:** all installed files must be owned by `0:0` (root)
+  with mode that matches the unit's policy. Setuid binaries must be declared
+  explicitly (no accidental setuid via upstream `make install`).
 - **ELF binary checks:**
   - Stripped (or has separate debug info).
   - No `RPATH` / `RUNPATH` pointing at the build-time sysroot
     (`/build/sysroot/...` baked into a target binary is the classic bug).
-  - All `NEEDED` libraries are satisfied by the unit's `runtime_deps`
-    (catches a unit linking libfoo without depending on it).
-  - Architecture matches the target arch (no x86_64 binary in an arm64
-    apk because the build slipped to host gcc).
-- **Path leaks:** no absolute paths under `/build/`, `$DESTDIR`,
-  `/tmp/build-*`, or the host build user's home directory in installed
-  files (binaries, scripts, pkg-config files, libtool `.la` files).
-- **Conffile sanity:** any path declared in `conffiles=` actually exists
-  in the destdir; conffiles outside `/etc/` are flagged.
-- **License:** `license=` is set, and a copy of the upstream license file
-  lands at a known location.
+  - All `NEEDED` libraries are satisfied by the unit's `runtime_deps` (catches a
+    unit linking libfoo without depending on it).
+  - Architecture matches the target arch (no x86_64 binary in an arm64 apk
+    because the build slipped to host gcc).
+- **Path leaks:** no absolute paths under `/build/`, `$DESTDIR`, `/tmp/build-*`,
+  or the host build user's home directory in installed files (binaries, scripts,
+  pkg-config files, libtool `.la` files).
+- **Conffile sanity:** any path declared in `conffiles=` actually exists in the
+  destdir; conffiles outside `/etc/` are flagged.
+- **License:** `license=` is set, and a copy of the upstream license file lands
+  at a known location.
 
 Every check has a known-acceptable escape hatch on the unit (e.g.,
-`qa_skip = ["rpath"]`) so a unit can opt out per-rule with a comment
-explaining why, instead of being forced to vendor in workarounds.
+`qa_skip = ["rpath"]`) so a unit can opt out per-rule with a comment explaining
+why, instead of being forced to vendor in workarounds.
 
 ## `yoe test <unit>` (planned)
 
@@ -154,11 +150,11 @@ forget.
 
 ### On-device upstream tests
 
-Most upstream projects (openssl, zlib, busybox, etc.) ship a real test
-suite — `make check`, `cargo test`, `pytest`. Running it against the
-binary you just built is the highest-confidence test you can run, because
-it exercises the actual ABI / linkage / runtime behavior of the package
-on the target arch and libc. Yocto calls this `ptest`.
+Most upstream projects (openssl, zlib, busybox, etc.) ship a real test suite —
+`make check`, `cargo test`, `pytest`. Running it against the binary you just
+built is the highest-confidence test you can run, because it exercises the
+actual ABI / linkage / runtime behavior of the package on the target arch and
+libc. Yocto calls this `ptest`.
 
 A unit can declare an upstream test suite as an installable subpackage:
 
@@ -172,8 +168,8 @@ unit(
 )
 ```
 
-`yoe build` produces a separate `openssl-tests-<version>.apk` alongside
-the main package. On the booted device:
+`yoe build` produces a separate `openssl-tests-<version>.apk` alongside the main
+package. On the booted device:
 
 ```sh
 yoe test openssl --on-device dev-pi.local
@@ -186,9 +182,8 @@ This catches regressions that destdir assertions cannot:
 - A binary that runs in QEMU user-mode but crashes on real hardware.
 - An optimization flag that breaks a corner case the upstream covers.
 
-Test packages stay out of the default image (`dev-image` does not list
-them) but ship in the project's apk repo so they can be installed
-on-demand.
+Test packages stay out of the default image (`dev-image` does not list them) but
+ship in the project's apk repo so they can be installed on-demand.
 
 ### Image-level tests
 
@@ -222,8 +217,8 @@ The driver:
 ### HIL mode
 
 `--target=<host>` skips the build/boot phase and runs tests directly against an
-already-running device. Useful for testing real hardware without a separate
-test harness.
+already-running device. Useful for testing real hardware without a separate test
+harness.
 
 ## CI Integration (planned)
 
@@ -234,66 +229,65 @@ Three CI workflows worth adding, in order of cost:
 1. **Go tests** — `go test ./...` on every PR. Cheap, catches the bulk of
    regressions.
 2. **Dry-run image build** — `yoe build dev-image --dry-run` on every PR.
-   Catches Starlark-level breakage and unit-graph regressions without
-   needing a real build.
-3. **Full image build + smoke tests** — `yoe build dev-image && yoe test
-   dev-image` on a schedule (nightly?) or on `main`. Expensive (Docker,
-   minutes) but catches actual build regressions.
+   Catches Starlark-level breakage and unit-graph regressions without needing a
+   real build.
+3. **Full image build + smoke tests** —
+   `yoe build dev-image && yoe test dev-image` on a schedule (nightly?) or on
+   `main`. Expensive (Docker, minutes) but catches actual build regressions.
 
 ## Build History / Regression Tracking (planned)
 
 > **Status:** Not implemented. Yocto's equivalent is `buildhistory`.
 
 Track per-build artifact metadata so a PR can show what changed in
-machine-readable form: package sizes, file lists, RDEPENDS, image
-contents, kernel config diff. Run as a CI job on `main` and on PRs;
-surface notable diffs as a PR comment ("dev-image grew 4.2 MB",
-"openssh.apk's RDEPENDS gained `libfido2`").
+machine-readable form: package sizes, file lists, RDEPENDS, image contents,
+kernel config diff. Run as a CI job on `main` and on PRs; surface notable diffs
+as a PR comment ("dev-image grew 4.2 MB", "openssh.apk's RDEPENDS gained
+`libfido2`").
 
-This isn't testing per se, but it occupies the same regression-detection
-slot — many regressions show up as "size of X grew unexpectedly" or "Y
-suddenly depends on Z" before they manifest as a functional failure.
+This isn't testing per se, but it occupies the same regression-detection slot —
+many regressions show up as "size of X grew unexpectedly" or "Y suddenly depends
+on Z" before they manifest as a functional failure.
 
 ## Kernel QA (planned)
 
 > **Status:** Not implemented; mentioned as a TODO in
 > [containers.md](containers.md).
 
-For container-host images, run upstream `moby/moby`'s `check-config.sh`
-against the kernel's resulting `.config` to verify the required `CONFIG_*`
-options are set. Failures should fail the build, not warn.
+For container-host images, run upstream `moby/moby`'s `check-config.sh` against
+the kernel's resulting `.config` to verify the required `CONFIG_*` options are
+set. Failures should fail the build, not warn.
 
 ## Comparison to Yocto
 
-Yocto's test infrastructure (`oeqa`) is the closest reference. The
-mapping:
+Yocto's test infrastructure (`oeqa`) is the closest reference. The mapping:
 
-| Yocto                          | yoe equivalent                                     |
-| ------------------------------ | -------------------------------------------------- |
-| `oe-selftest` / `bitbake-selftest` | `go test ./...` (Go unit tests under `internal/`) |
-| `INSANE.bbclass` / `QA_LOG`    | Build-time package QA (planned)                    |
-| `ptest` / `ptest-runner`       | `yoe test <unit> --on-device` (planned)            |
-| `oeqa.runtime` / `testimage`   | `yoe test <image>` (planned)                       |
-| `oeqa.sdk` / `testsdk`         | _(no SDK product; `yoe shell` is the dev surface)_ |
-| `testexport` (run on hardware) | `yoe test <image> --target <host>` (planned)       |
-| `runqemu`                      | `yoe run` (already shipped)                        |
-| `buildhistory`                 | Build history / regression tracking (planned)      |
-| `INHERIT += "create-spdx"`     | _(license tracking lives in unit fields today)_    |
+| Yocto                              | yoe equivalent                                     |
+| ---------------------------------- | -------------------------------------------------- |
+| `oe-selftest` / `bitbake-selftest` | `go test ./...` (Go unit tests under `internal/`)  |
+| `INSANE.bbclass` / `QA_LOG`        | Build-time package QA (planned)                    |
+| `ptest` / `ptest-runner`           | `yoe test <unit> --on-device` (planned)            |
+| `oeqa.runtime` / `testimage`       | `yoe test <image>` (planned)                       |
+| `oeqa.sdk` / `testsdk`             | _(no SDK product; `yoe shell` is the dev surface)_ |
+| `testexport` (run on hardware)     | `yoe test <image> --target <host>` (planned)       |
+| `runqemu`                          | `yoe run` (already shipped)                        |
+| `buildhistory`                     | Build history / regression tracking (planned)      |
+| `INHERIT += "create-spdx"`         | _(license tracking lives in unit fields today)_    |
 
 Where yoe diverges by design:
 
-- **No SDK product to test.** Yocto's `testsdk` validates the
-  cross-compiler tarball it produces; yoe ships no such artifact, so the
-  tier doesn't exist. The `yoe shell` container takes its place; treat
-  shell entry as the SDK validation point.
-- **One driver, several targets.** `yoe test` picks unit / image / HIL
-  mode from flags; Yocto splits into `testimage`, `testexport`,
-  `ptest-runner`, etc., each with its own configuration. Yoe collapses
-  them so the same test spec runs in all three places.
+- **No SDK product to test.** Yocto's `testsdk` validates the cross-compiler
+  tarball it produces; yoe ships no such artifact, so the tier doesn't exist.
+  The `yoe shell` container takes its place; treat shell entry as the SDK
+  validation point.
+- **One driver, several targets.** `yoe test` picks unit / image / HIL mode from
+  flags; Yocto splits into `testimage`, `testexport`, `ptest-runner`, etc., each
+  with its own configuration. Yoe collapses them so the same test spec runs in
+  all three places.
 - **QA fails the build, not warns.** Yocto's QA is configurable per-rule
-  (warning vs. error vs. skip) and many sites silence rules to keep
-  builds green. Yoe defaults all rules to error and exposes per-unit
-  `qa_skip = [...]` so the opt-out is explicit and grep-able.
+  (warning vs. error vs. skip) and many sites silence rules to keep builds
+  green. Yoe defaults all rules to error and exposes per-unit `qa_skip = [...]`
+  so the opt-out is explicit and grep-able.
 
 ## See Also
 
