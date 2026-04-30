@@ -8,6 +8,9 @@ and this project adheres to
 
 ## [Unreleased]
 
+- Rename `debug` units to `dev`.
+- Expand [roadmap](docs/roadmap.md).
+
 ## [0.8.5] - 2026-04-30
 
 - **`Yazi, Zellij, and Go units added.**
