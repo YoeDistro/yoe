@@ -79,6 +79,8 @@ func main() {
 		cmdServe(cmdArgs)
 	case "device":
 		cmdDevice(cmdArgs)
+	case "deploy":
+		cmdDeploy(cmdArgs)
 	case "config":
 		cmdConfig(cmdArgs)
 	case "repo":
@@ -123,6 +125,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  run                     Run an image in QEMU\n")
 	fmt.Fprintf(os.Stderr, "  serve                   Run an HTTP+mDNS feed for the project's repo\n")
 	fmt.Fprintf(os.Stderr, "  device repo             Manage apk repos on a target device (add, remove, list)\n")
+	fmt.Fprintf(os.Stderr, "  deploy <unit> <host>    Build and install a unit on a running yoe device\n")
 	fmt.Fprintf(os.Stderr, "  module                  Manage external modules (fetch, sync, list)\n")
 	fmt.Fprintf(os.Stderr, "  repo                    Manage the local apk package repository\n")
 	fmt.Fprintf(os.Stderr, "  cache                   Manage the build cache (local and remote)\n")
