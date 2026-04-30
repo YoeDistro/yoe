@@ -61,8 +61,7 @@ Three pieces make that work:
 
 ### Local-path sources
 
-Units can reference a working tree on disk instead of (or alongside) a git
-URL:
+Units can reference a working tree on disk instead of (or alongside) a git URL:
 
 ```python
 unit(
@@ -74,8 +73,8 @@ unit(
 ```
 
 `path()` sources are not cloned. yoe binds the working tree into the build
-sandbox so edits land in the next build immediately, without a
-commit-tag-fetch cycle.
+sandbox so edits land in the next build immediately, without a commit-tag-fetch
+cycle.
 
 ### Fast deploy
 
@@ -91,9 +90,9 @@ running device.
 
 ### Watch mode
 
-`yoe dev <unit>` watches the source tree and rebuilds (and optionally
-redeploys) on save. For app projects this is the inner loop; for upstream
-units, it's the patch-and-iterate workflow.
+`yoe dev <unit>` watches the source tree and rebuilds (and optionally redeploys)
+on save. For app projects this is the inner loop; for upstream units, it's the
+patch-and-iterate workflow.
 
 ### Three workflow shapes
 
@@ -134,9 +133,9 @@ it" workflow.
 
 ### Editor integration
 
-Run language servers and debuggers inside `yoe shell` (or a devcontainer
-pointed at the toolchain image) so they see the same headers, libraries, and
-target arch as the build:
+Run language servers and debuggers inside `yoe shell` (or a devcontainer pointed
+at the toolchain image) so they see the same headers, libraries, and target arch
+as the build:
 
 - VSCode Remote / Dev Containers attaches naturally.
 - Neovim's `distant.nvim` works the same way.

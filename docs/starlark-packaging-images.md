@@ -83,8 +83,8 @@ yoe is intentionally apk-only. The package format, repo index, signing model,
 and on-device installer are all wired through `apk` end-to-end (`/etc/apk/keys`
 in the rootfs, `apk add` at image-assembly time, the `apk-tools` unit for
 on-device OTA). Adding `deb` or `rpm` would mean a parallel pipeline for each
-without a real use case — yoe targets embedded Linux, not the desktop /
-server distros where those formats live.
+without a real use case — yoe targets embedded Linux, not the desktop / server
+distros where those formats live.
 
 Units can opt out: `unit(..., package = False)` skips auto-appended packaging.
 
