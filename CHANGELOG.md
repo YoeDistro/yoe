@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.8.6] - 2026-04-30
+
 - **Container runtime build path documented.**
   [docs/containers.md](docs/containers.md) now walks through what it takes to
   ship Docker, containerd, and runc on a musl yoe rootfs — why prebuilt "static"
