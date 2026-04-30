@@ -140,7 +140,11 @@ Useful for the dev to see device activity in real time.
 
 ## `yoe deploy`
 
-Build + temporary feed + ssh + `apk add` + cleanup, in one verb.
+Build + ephemeral feed + ssh + `apk add` in one verb. The repo file written on
+the device is left in place permanently — same file `yoe device repo add` would
+have written. So the first `yoe deploy` to a fresh device doubles as the
+device's persistent feed configuration; subsequent deploys are idempotent
+overwrites.
 
 ### CLI
 
@@ -150,9 +154,6 @@ yoe deploy <unit> <host> [flags]
   <unit>   build target (must resolve to a single non-image unit)
   <host>   ssh destination — hostname, IP, or user@host (default user: root)
 
-  --persist        leave the temp repo file on the device after completion
-                   (so subsequent `apk add` from the device works without
-                   re-running deploy)
   --user USER      ssh user (default: root)
   --ssh-port PORT  ssh port (default: 22)
   --port PORT      feed port (default: 8765, same as yoe serve)
@@ -193,38 +194,38 @@ targets are flashed, not deployed; use `yoe flash <image>`".
      standard mDNS form published by avahi / systemd-resolved on Linux dev
      workstations).
 
-4. **Configure the target.** ssh to `<host>`:
+4. **Configure the target and install.** ssh to `<host>`:
 
    ```
    mkdir -p /etc/apk/repositories.d
-   printf '%s\n' '<feedURL>' > /etc/apk/repositories.d/yoe-deploy.list
+   printf '%s\n' '<feedURL>' > /etc/apk/repositories.d/yoe-dev.list
    apk update
    apk add --upgrade <unit>
    ```
 
    Run as a single ssh invocation with a heredoc so partial failures still
-   report cleanly. Stdout/stderr stream back to the dev's terminal.
+   report cleanly. Stdout/stderr stream back to the dev's terminal. The
+   `yoe-dev.list` file is the same name `yoe device repo add` writes by
+   default — running `yoe deploy` is therefore equivalent to running
+   `yoe device repo add` plus `apk add`, and the device is left configured
+   to keep pulling from this dev host on any future `apk` invocation.
 
-5. **Cleanup (always).** In a `defer`-equivalent that runs on success and
-   failure:
-   - If `--persist` is unset: ssh again to
-     `rm -f /etc/apk/repositories.d/yoe-deploy.list`. Don't bother running
-     `apk update` after — the file's gone, the index cache will refresh on the
-     next `apk update` regardless.
-   - Stop the ephemeral feed (skipped if step 2 reused an existing serve).
+5. **Tear down the ephemeral feed** (skipped if step 2 reused an existing
+   `yoe serve`). The repo file on the device is left in place — that's the
+   point. To remove the persistent config explicitly, run
+   `yoe device repo remove <host>`.
 
 6. Exit code propagates from step 4. Step 5 errors are logged but do not
    override a non-zero exit from step 4.
 
 ### Failure modes
 
-| Failure                      | Behavior                                                                                                                                    |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Build fails                  | Report; no feed started; exit non-zero.                                                                                                     |
-| ssh dial fails               | Tear down feed; exit non-zero.                                                                                                              |
-| `apk add` fails              | Run cleanup (step 5); propagate exit code.                                                                                                  |
-| Cleanup ssh fails            | Log warning ("temp repo file may remain on device; remove with `rm /etc/apk/repositories.d/yoe-deploy.list`"); preserve original exit code. |
-| mDNS unreachable from device | Device fails to resolve URL during `apk update`. Hint in error message: re-run with `--host-ip <ip>`.                                       |
+| Failure                      | Behavior                                                                                              |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Build fails                  | Report; no feed started; exit non-zero.                                                               |
+| ssh dial fails               | Tear down feed; exit non-zero.                                                                        |
+| `apk add` fails              | Tear down feed; propagate exit code. Repo file remains on the device for inspection / retry.          |
+| mDNS unreachable from device | Device fails to resolve URL during `apk update`. Hint in error message: re-run with `--host-ip <ip>`. |
 
 ### Why pull, not push
 
