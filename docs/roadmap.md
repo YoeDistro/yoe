@@ -8,9 +8,16 @@
 
 ## Next
 
+- Better hostnames for targets.
+- mDNS on target
+- Save flash device preference in local.star for TUI
 - Fast deploy: `yoe deploy <unit> <host>` — build the apk, push it over SSH, run
   `apk add` on the device.
   - In TUI, ask for host IP/name and cache it in local.star.
+- Data partition for rPI targets
+  - Fill/format data partition
+- Error reading OS version: searching /etc/os-release, got: field VERSION not
+  found
 
 ## Bugs / Improvements
 
