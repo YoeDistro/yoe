@@ -61,7 +61,7 @@ yoe
 
 # Navigate to the base-image and press 'b' to build
 
-# When build is complete, press 'r' to run
+# When build is complete, press 'r' to run (requires `qemu-system-x86_64` installed on your host)
 
 # Log in a user: root, no password
 
