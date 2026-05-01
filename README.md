@@ -89,26 +89,6 @@ There are also CLI variants of the above commands (`build`, `run`, etc.).
 Everything is in the project directory — no global state, no hidden caches
 outside the tree.
 
-### Cross-Architecture Builds
-
-Build ARM64 images on an x86_64 host using QEMU user-mode emulation:
-
-```sh
-# One-time setup: register QEMU user-mode emulation
-yoe container binfmt
-
-# Build for ARM64
-yoe build base-image --machine qemu-arm64
-
-# Run it
-yoe run base-image --machine qemu-arm64
-```
-
-(or select a machine in the TUI setup first)
-
-No cross-compilation toolchain needed — the build runs inside a genuine ARM64
-Docker container, transparently emulated by the host kernel.
-
 ## 🔧 Why This Is Possible Now
 
 A decade ago, this combination wasn't realistic. Several things have changed:
