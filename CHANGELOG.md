@@ -21,6 +21,7 @@ and this project adheres to
   repo's `APKINDEX` instead of trusting whatever is in `/var/cache/apk/`.
   apk-tools 2.x can otherwise hold onto a stale index across a yoe-dev rebuild
   and silently miss packages you just published.
+- **Added sqlite unit**
 
 ## [0.9.0] - 2026-05-01
 
