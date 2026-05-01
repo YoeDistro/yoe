@@ -48,7 +48,12 @@ sed -i '/^# >>> yoe-dev$/,/^# <<< yoe-dev$/d' /etc/apk/repositories
     printf '%%s\n' '%s'
     printf '# <<< yoe-dev\n'
 } >> /etc/apk/repositories
-apk update
+# --no-cache forces apk to bypass /var/cache/apk and refetch the
+# APKINDEX from each repo on every run. Without it, apk-tools 2.x can
+# hold onto a stale cached index even when the server has fresh content
+# (observed when the yoe-dev feed pushes a new package between deploys),
+# silently giving "no such package" errors for the new package.
+apk --no-cache update
 apk add --upgrade %s
 `, in.FeedURL, in.Unit)
 

@@ -14,6 +14,7 @@ import (
 	"github.com/YoeDistro/yoe-ng/internal/build"
 	"github.com/YoeDistro/yoe-ng/internal/device"
 	"github.com/YoeDistro/yoe-ng/internal/feed"
+	"github.com/YoeDistro/yoe-ng/internal/resolve"
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
@@ -84,7 +85,10 @@ func (m model) startDeployCmd() tea.Cmd {
 		buildOut := lineWriter{emit: emit}
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		if err := build.BuildUnits(proj, []string{unitName}, build.Options{
+		// Build the runtime closure, not just the leaf unit, so the device's
+		// apk add can resolve every dep against the feed.
+		closure := resolve.RuntimeClosure(proj, []string{unitName})
+		if err := build.BuildUnits(proj, closure, build.Options{
 			Ctx:        ctx,
 			ProjectDir: projectDir,
 			Arch:       arch,

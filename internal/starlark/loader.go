@@ -370,6 +370,20 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	proj.Machines = eng.Machines()
 	proj.Units = eng.Units()
 
+	// Mirror the Starlark PROVIDES dict onto the Go side so callers that
+	// don't run inside a Starlark thread (the build executor, deploy path,
+	// describe command) can route virtual deps to concrete units.
+	proj.Provides = map[string]string{}
+	if prov, ok := eng.vars["PROVIDES"].(*starlark.Dict); ok {
+		for _, item := range prov.Items() {
+			k, kok := item[0].(starlark.String)
+			v, vok := item[1].(starlark.String)
+			if kok && vok {
+				proj.Provides[string(k)] = string(v)
+			}
+		}
+	}
+
 	// Validate: units with tasks must have container and container_arch.
 	for name, u := range proj.Units {
 		if len(u.Tasks) == 0 {
