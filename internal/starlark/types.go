@@ -13,6 +13,13 @@ type Project struct {
 	Machines  map[string]*Machine
 	Units     map[string]*Unit
 
+	// Provides maps a virtual package name (e.g. "linux") to the concrete
+	// unit name that provides it after override resolution. Populated by
+	// the loader after all units and the active machine's kernel have been
+	// evaluated. Use resolve.RuntimeClosure to walk runtime_deps through
+	// this map.
+	Provides map[string]string
+
 	// SigningKey is the path to an RSA private key used to sign apks and
 	// APKINDEX. If empty at build time, yoe auto-generates a key under
 	// ~/.config/yoe/keys/<project-name>.rsa and uses that. The matching

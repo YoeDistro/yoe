@@ -16,6 +16,7 @@ import (
 	"github.com/YoeDistro/yoe-ng/internal/device"
 	"github.com/YoeDistro/yoe-ng/internal/feed"
 	"github.com/YoeDistro/yoe-ng/internal/repo"
+	"github.com/YoeDistro/yoe-ng/internal/resolve"
 	yoestar "github.com/YoeDistro/yoe-ng/internal/starlark"
 )
 
@@ -77,7 +78,10 @@ func cmdDeploy(args []string) {
 }
 
 // buildUnitForDeploy invokes the same build path `yoe build <unit>` uses,
-// returning an error rather than os.Exit.
+// returning an error rather than os.Exit. The unit's full runtime closure
+// is built — apk on the target will refuse to install a package whose
+// runtime deps are missing from the feed, and the deploy path bypasses
+// image()'s Starlark-side closure walk that handles this for image builds.
 func buildUnitForDeploy(proj *yoestar.Project, unit, machineName string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -96,7 +100,8 @@ func buildUnitForDeploy(proj *yoestar.Project, unit, machineName string) error {
 		Arch:       targetArch,
 		Machine:    resolvedMachine,
 	}
-	return build.BuildUnits(proj, []string{unit}, opts, os.Stdout)
+	closure := resolve.RuntimeClosure(proj, []string{unit})
+	return build.BuildUnits(proj, closure, opts, os.Stdout)
 }
 
 // resolveOrStartFeed returns a feed URL and a teardown func. If a yoe

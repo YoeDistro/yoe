@@ -8,6 +8,18 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **`yoe deploy <unit>` now installs the package's runtime deps too.**
+  Previously it only built and published the named unit, so deploying a package
+  with `runtime_deps` outside what the device already had on disk failed with a
+  cryptic `apk add` error like `sqlite (no such package)`. Deploy now walks the
+  full runtime closure (the same expansion `image()` does at image-build time),
+  so every transitive dep ends up in the feed before `apk add` runs.
+- **Deploy refreshes the device's apk index every time.** The on-device
+  `apk update` step now uses `apk --no-cache update`, forcing a refetch of every
+  repo's `APKINDEX` instead of trusting whatever is in `/var/cache/apk/`.
+  apk-tools 2.x can otherwise hold onto a stale index across a yoe-dev rebuild
+  and silently miss packages you just published.
+
 ## [0.8.8] - 2026-05-01
 
 - **New design doc on libc and init choice.** `docs/libc-and-init.md` lays out
