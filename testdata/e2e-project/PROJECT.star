@@ -6,6 +6,9 @@ project(
     modules = [
         module("github.com/YoeDistro/yoe-ng",
               local = "../..",
+              path = "modules/units-alpine"),
+        module("github.com/YoeDistro/yoe-ng",
+              local = "../..",
               path = "modules/units-core"),
         module("github.com/YoeDistro/yoe-ng",
               local = "../..",

@@ -26,9 +26,10 @@ func TestDeployScriptInstallsUnit(t *testing.T) {
 	}
 	script := (*sshRecs)[0].script
 	for _, want := range []string{
-		"mkdir -p /etc/apk/repositories.d",
+		"touch /etc/apk/repositories",
+		"# >>> yoe-dev",
 		"http://laptop.local:8765/myproj",
-		"/etc/apk/repositories.d/yoe-dev.list",
+		"# <<< yoe-dev",
 		"apk update",
 		"apk add --upgrade myapp",
 	} {

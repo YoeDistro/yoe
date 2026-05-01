@@ -38,8 +38,16 @@ func Deploy(ctx context.Context, in DeployInput) error {
 	}
 
 	script := fmt.Sprintf(`set -e
-mkdir -p /etc/apk/repositories.d
-printf '%%s\n' '%s' > /etc/apk/repositories.d/yoe-dev.list
+mkdir -p /etc/apk
+touch /etc/apk/repositories
+# Strip any existing yoe-dev block, then append a fresh one. apk-tools 2.x
+# reads /etc/apk/repositories directly — there is no repositories.d/.
+sed -i '/^# >>> yoe-dev$/,/^# <<< yoe-dev$/d' /etc/apk/repositories
+{
+    printf '# >>> yoe-dev\n'
+    printf '%%s\n' '%s'
+    printf '# <<< yoe-dev\n'
+} >> /etc/apk/repositories
 apk update
 apk add --upgrade %s
 `, in.FeedURL, in.Unit)

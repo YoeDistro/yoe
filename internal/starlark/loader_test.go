@@ -114,3 +114,45 @@ func TestLoadProject_ProvidesOverride(t *testing.T) {
 			bfc.ModuleIndex, bf.ModuleIndex)
 	}
 }
+
+// Two modules define a unit with the same real name. The later-listed module
+// must win; the earlier one is silently dropped from the project's unit map.
+func TestLoadProject_NameShadowing(t *testing.T) {
+	dir := filepath.Join("..", "..", "testdata", "name-shadowing")
+	proj, err := LoadProject(dir)
+	if err != nil {
+		t.Fatalf("LoadProject: %v", err)
+	}
+	u, ok := proj.Units["musl"]
+	if !ok {
+		t.Fatal("expected unit 'musl'")
+	}
+	if u.Version != "2.0.0-override" {
+		t.Errorf("musl Version = %q, want %q (override module should win)",
+			u.Version, "2.0.0-override")
+	}
+	if u.Module != "override" {
+		t.Errorf("musl Module = %q, want %q", u.Module, "override")
+	}
+}
+
+// A project-root unit must shadow same-named units from every included
+// module — project priority is strictly higher than any module.
+func TestLoadProject_ProjectShadowsModules(t *testing.T) {
+	dir := filepath.Join("..", "..", "testdata", "project-shadow")
+	proj, err := LoadProject(dir)
+	if err != nil {
+		t.Fatalf("LoadProject: %v", err)
+	}
+	u, ok := proj.Units["musl"]
+	if !ok {
+		t.Fatal("expected unit 'musl'")
+	}
+	if u.Version != "3.0.0-project" {
+		t.Errorf("musl Version = %q, want %q (project root should win)",
+			u.Version, "3.0.0-project")
+	}
+	if u.Module != "" {
+		t.Errorf("musl Module = %q, want \"\" (project root)", u.Module)
+	}
+}

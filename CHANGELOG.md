@@ -8,6 +8,52 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.8.8] - 2026-05-01
+
+- **New design doc on libc and init choice.** `docs/libc-and-init.md` lays out
+  why yoe is musl + OpenRC + Alpine today, where that stack works (gateways,
+  IoT, networking gear), where it doesn't (Jetson, vendor BSPs, Adaptive
+  AUTOSAR), and the planned rootfs-base abstraction that would let a single yoe
+  codebase serve both Alpine and Ubuntu/L4T projects. Establishes the invariant
+  that yoe stays apk-native on every target — Debian-derived bases get a
+  `deb_pkg` conversion class, not dpkg/apt on the device.
+- **Pull packages straight from Alpine.** A new `units-alpine` module wraps
+  prebuilt Alpine `.apk` files as yoe units via the `alpine_pkg()` class — no
+  source build, no patches, just fetch + verify + repack. `musl` and
+  `sqlite-libs` ship today; add more by pinning a version and sha256.
+- **`musl` now comes from Alpine.** The hand-rolled musl unit that copied the
+  dynamic linker out of the build container is gone; `musl` is now an Alpine apk
+  wrapped by `alpine_pkg()`. Output is byte-identical to the Alpine package
+  other projects already ship.
+- **`.apk` URLs work as a source type.** Yoe's source workspace now recognises
+  `.apk` extensions and bare-copies them so the unit's install task can extract
+  the multi-stream gzip with GNU tar. Bare-copied sources also keep their URL
+  filename, so install steps can reference the file by name instead of by cache
+  hash.
+- **Override an upstream unit by name.** Define a unit with the same name in a
+  higher-priority module (or in the project itself) and it shadows the upstream
+  one — no `provides` boilerplate needed. The project root beats every module,
+  and later modules beat earlier ones. A notice on stderr tells you which one
+  won.
+- **Deploy from the TUI.** Press `D` on a non-image unit to deploy it to a
+  running yoe device — host prompt is pre-filled from the last-used target,
+  build + ssh + apk add output stream into the view, and the host is saved back
+  to `local.star` on success.
+- **Deploy actually updates the device's apk index.** `yoe deploy` and
+  `yoe device repo add` previously wrote to
+  `/etc/apk/repositories.d/yoe-dev.list`, which apk-tools 2.x ignores. They now
+  append a marker block to `/etc/apk/repositories` so the next `apk update`
+  actually fetches the dev feed and `apk add <unit>` finds the freshly built
+  package.
+- **TUI starts a feed automatically.** When you launch `yoe`, it brings up the
+  project's apk feed (or reuses one already running on the LAN), so devices
+  configured with `yoe device repo add` can pull packages without any extra
+  setup. Status is shown in the header.
+- **SSH target shorthand.** `yoe deploy` and `yoe device repo {add,remove,list}`
+  accept `[user@]host[:port]` — e.g. `yoe device repo add localhost:2222` for a
+  QEMU vm or `yoe deploy myapp pi@dev-pi.local:2200`. The `--ssh-port` flag is
+  gone.
+
 ## [0.8.7] - 2026-04-30
 
 - **APK live deployment tooling.** `yoe deploy <unit> <host>` builds and
