@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-05-01
+
 - **`yoe deploy <unit>` now installs the package's runtime deps too.**
   Previously it only built and published the named unit, so deploying a package
   with `runtime_deps` outside what the device already had on disk failed with a
@@ -20,7 +22,7 @@ and this project adheres to
   apk-tools 2.x can otherwise hold onto a stale index across a yoe-dev rebuild
   and silently miss packages you just published.
 
-## [0.8.8] - 2026-05-01
+## [0.9.0] - 2026-05-01
 
 - **New design doc on libc and init choice.** `docs/libc-and-init.md` lays out
   why yoe is musl + OpenRC + Alpine today, where that stack works (gateways,
@@ -65,9 +67,6 @@ and this project adheres to
   accept `[user@]host[:port]` — e.g. `yoe device repo add localhost:2222` for a
   QEMU vm or `yoe deploy myapp pi@dev-pi.local:2200`. The `--ssh-port` flag is
   gone.
-
-## [0.8.7] - 2026-04-30
-
 - **APK live deployment tooling.** `yoe deploy <unit> <host>` builds and
   installs a unit on a running yoe device with full apk dependency resolution.
   Pair with `yoe serve` and `yoe device repo add` to keep a device pointed at
