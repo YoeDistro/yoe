@@ -393,8 +393,6 @@ regardless of whether a fresh build would produce identical bytes.
   Alpine, Arch, and NixOS
 - [Roadmap](docs/roadmap.md) — existing units and what's needed for a complete
   base system
-- [Project Name](docs/project-name.md) — brainstorming notes on a possible
-  rename
 
 ## 🤝 Contributing
 
