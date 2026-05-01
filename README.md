@@ -4,23 +4,28 @@
 
 # `[yoe]` Next Generation
 
-**For teams building edge products in Go, Rust, Zig, Python, etc. who need Linux
-on ARM/RISC-V without the complexity of Yocto.**
+**A radical simplification of how we build edge systems.**
 
-We have maintained the [Yoe Distribution](https://yoedistro.org/) for many years
-which is a Yocto based Embedded Linux distribution designed for product
-development. `[yoe]` is a fresh take on building software for edge devices. Your
-application is written in modern language. Your target is embedded/edge
-hardware. You need a minimal Linux image with your app, the right kernel, and
-nothing else. You shouldn't need to learn complex build systems, manage
-cross-toolchains, or read a thousand-page manual to get there.
+**Fast tooling and builds. No cross-compiling headaches. Easy to
+customize/upgrade/debug. One tool for both system engineers and application
+developers to ship products faster.**
 
-One Go binary. Readable config files. AI that understands the system and how to
-modify/debug it. Build ARM images on your x86 laptop, on native hardware, or in
-cloud CI — same tool, same config, same results.
+This used to be a dream. `[yoe]` makes it possible, built on modern AI and fast
+native ARM and RISC-V hardware.
 
-Note: Not everything in the documentation has been implemented yet as this
-project is in the early stages.
+`[yoe]` is an embedded Linux build system for teams shipping modern edge
+products: applications in Go, Rust, Zig, or Python; ARM and RISC-V targets;
+released often and tracking upstream closely. One Go binary. Readable config. AI
+that understands the system and can guide a developer through it. Native builds
+on your x86 laptop, on real hardware, or in cloud CI — same tool, same config,
+same results.
+
+`[yoe]` is the next generation, built from the ground up, of the
+[Yoe Distribution](https://yoedistro.org/), the Yocto-based embedded Linux
+distribution we've maintained for many years.
+
+_Note: Not everything in the documentation has been implemented yet as this
+project is in the early stages._
 
 ## Is `[yoe]` Right for You?
 
@@ -37,13 +42,14 @@ heavily on Go/Rust/Python ecosystems, `[yoe]` may be a better fit.
 
 ## 🚀 Getting Started
 
-Prerequisites: Linux or macOS with Git and Docker (or Podman) installed. Windows
-users: install WSL2 and use the Linux binary (Linux x86_64/Docker is the most
-tested configuration). Claude Code is highly recommended, but not required.
+Prerequisites: Linux or macOS with Git and Docker installed. Windows users:
+install WSL2 and use the Linux binary (Linux x86_64/Docker is the most tested
+configuration). Claude Code is highly recommended, but not required.
 
 ```sh
-# Download the yoe binary
-curl -L https://github.com/YoeDistro/yoe/releases/latest/download/yoe-$(uname -s)-$(uname -m) -o yoe
+# Download the yoe binary (Linux x86_64)
+curl -L https://github.com/YoeDistro/yoe/releases/latest/download/yoe-Linux-x86_64 -o yoe
+# For other platforms, download from https://github.com/YoeDistro/yoe/releases/latest
 
 chmod +x yoe
 mkdir -p ~/bin
@@ -79,7 +85,7 @@ There are also CLI variants of the above commands (`build`, `run`, etc.).
 1. `yoe init` created a project with a `PROJECT.star` config and a default
    x86_64 QEMU machine.
 2. On first build, `yoe` automatically built a Docker container with the
-   toolchain (gcc, make, etc.) and fetched the `units-core` module from GitHub.
+   toolchain (gcc, make, etc.) and fetched the default unit modules from GitHub.
 3. It built ~10 packages from source (busybox, linux kernel, openssl, etc.)
    inside the container, each isolated in its own bubblewrap sandbox.
 4. It assembled a bootable disk image from those packages.
@@ -108,33 +114,28 @@ yoe run base-image --machine qemu-arm64
 No cross-compilation toolchain needed — the build runs inside a genuine ARM64
 Docker container, transparently emulated by the host kernel.
 
-## 🔧 Motivation
+## 🔧 Why this is possible now
 
-Existing embedded Linux build systems (Yocto, Buildroot) were designed in a
-world where ARM hardware was slow, applications were written in C, and
-developers configured everything by hand. Three things have changed:
+A decade ago, this combination wasn't realistic. Three things have changed:
 
-1. **ARM and RISC-V hardware is fast.** Modern ARM boards and cloud instances
-   (AWS Graviton, Hetzner CAX) build at speeds that make cross-compilation
-   unnecessary for most workloads. For development, QEMU user-mode emulation
-   lets you build ARM images on x86 without a cross-toolchain — slower, but
-   correct and simple.
+1. **ARM and RISC-V hardware is fast enough to build natively.** Modern ARM
+   boards and cloud instances (AWS Graviton, Hetzner CAX) build at full speed.
+   For development, QEMU user-mode emulation runs ARM containers on x86 — no
+   cross-toolchain needed.
 
-2. **Applications are moving to modern languages.** Go, Rust, Zig, and Python
-   have their own dependency management, reproducible builds, and caching. The
-   elaborate cross-compilation and sysroot machinery in traditional build
-   systems was designed for C/C++ — wrapping Go modules or Cargo in BitBake
-   recipes adds friction without proportional benefit.
+2. **Modern languages bring their own package managers.** Go, Rust, Zig, and
+   Python already handle dependency resolution, reproducible builds, and
+   caching. `[yoe]` doesn't reinvent any of that — application developers use
+   the same Cargo, Go modules, or pip they already know.
 
-3. **AI changes the interface.** The hardest part of embedded Linux is knowing
-   what to configure and how. An AI assistant that understands the build system
-   can guide developers through unit creation, debug build failures, and audit
-   security — without requiring them to memorize a build system's quirks. But
-   this only works if the build metadata is structured and queryable, not buried
-   in shell scripts and environment variables.
+3. **AI can guide developers through the system.** The hardest part of embedded
+   Linux is knowing what to configure and why. `[yoe]`'s metadata is structured
+   Starlark — queryable, not buried in shell scripts — so an AI assistant can
+   create units, diagnose build failures, and audit security without the
+   developer memorizing the build system's quirks.
 
 `[yoe]` is built for this new world: native builds, language-native package
-managers, structured Starlark metadata, and AI as a first-class interface.
+managers, structured metadata, and AI as a first-class interface.
 
 ## 🧭 Principles
 
@@ -151,10 +152,12 @@ managers, structured Starlark metadata, and AI as a first-class interface.
    intermediate artifacts when possible. Intermediate formats complicate
    debugging — when something fails, you should be looking at the code you
    wrote, not machine-generated output.
-5. **One tool for all levels.** The tool should be fast and simple enough to be
+5. **Leverage binaries when it makes sense.** Use pre-build packages from
+   Alpine/Debian/Ubuntu/GitHub where it makes sense.
+6. **One tool for all levels.** The tool should be fast and simple enough to be
    used for both system software development and application development.
    Generating SDKs is a waste of time if everyone can use the same tool.
-6. **Track upstream closely.** Modern edge systems are more like the cloud than
+7. **Track upstream closely.** Modern edge systems are more like the cloud than
    traditional embedded systems — they are connected, updated regularly, and
    expected to receive security patches throughout their lifetime. `[yoe]`
    assumes you will track upstream releases closely rather than freezing on a
@@ -293,7 +296,6 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
   compilation altogether when necessary.
 - **Starlark for units and build rules** — Python-like, deterministic, sandboxed
   (see [Build Languages](docs/build-languages.md))
-- **64-bit only** — x86, ARM, RISC-V
 - **Granular packaging** (like Yocto/Debian) — one unit can produce multiple
   sub-packages (`-dev`, `-doc`, `-dbg`, custom splits)
 - **Composable modules** — pull in units/packages using GitHub URLs; vendor BSP,
@@ -314,16 +316,38 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
   flashing
 - [Unit & Configuration Format](docs/metadata-format.md) — Starlark unit and
   configuration spec
+- [Naming and Resolution](docs/naming-and-resolution.md) — how modules, units,
+  and dependencies are named, referenced, and resolved
+- [File Templates](docs/file-templates.md) — moving inline file content out of
+  Starlark units into external templates
+- [Starlark Packaging and Image Assembly](docs/starlark-packaging-images.md) —
+  composable Starlark tasks for packaging and image assembly
 - [Build Environment](docs/build-environment.md) — bootstrap, host tools, and
   build isolation
-- [Development Environments](docs/dev-env.md) — the no-SDK model, `yoe shell`
-  for interactive dev, and `yoe bundle` for air-gapped distribution
-- [Comparisons](docs/comparisons.md) — how `[yoe]` relates to Yocto, Buildroot,
-  Alpine, Arch, and NixOS
 - [Build Languages](docs/build-languages.md) — analysis of Starlark, CUE, Nix,
   and other embeddable languages for unit definitions
+- [Development Environments](docs/dev-env.md) — the no-SDK model, `yoe shell`
+  for interactive dev, and `yoe bundle` for air-gapped distribution
+- [Testing](docs/testing.md) — testing strategy across Go logic, package QA,
+  image smoke tests, and on-device test runs
+- [apk Signing](docs/signing.md) — keypair generation, signature verification,
+  and on-device trust
+- [On-Device Package Management](docs/on-device-apk.md) — using `apk` on booted
+  yoe systems to install and upgrade packages
+- [Feed Server and `yoe deploy`](docs/feed-server.md) — dev-loop for serving the
+  project apk repo and installing units on running devices
+- [Containers on yoe Images](docs/containers.md) — design for running Docker /
+  Podman / containerd workloads on yoe-built devices
+- [libc, init, and the Rootfs Base](docs/libc-and-init.md) — the musl + busybox
+  - OpenRC default and the path to glibc/systemd for edge-AI hardware
+- [units-alpine](docs/units-alpine.md) — wrapping prebuilt Alpine packages as
+  yoe units
+- [Comparisons](docs/comparisons.md) — how `[yoe]` relates to Yocto, Buildroot,
+  Alpine, Arch, and NixOS
 - [Roadmap](docs/roadmap.md) — existing units and what's needed for a complete
   base system
+- [Project Name](docs/project-name.md) — brainstorming notes on a possible
+  rename
 
 ## 💡 Inspirations
 
