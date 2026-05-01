@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Override an upstream unit by name.** Define a unit with the same name in a
+  higher-priority module (or in the project itself) and it shadows the
+  upstream one — no `provides` boilerplate needed. The project root beats every
+  module, and later modules beat earlier ones. A notice on stderr tells you
+  which one won.
 - **Deploy from the TUI.** Press `D` on a non-image unit to deploy it to a
   running yoe device — host prompt is pre-filled from the last-used target,
   build + ssh + apk add output stream into the view, and the host is saved back

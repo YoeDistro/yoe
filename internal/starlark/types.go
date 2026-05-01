@@ -139,7 +139,7 @@ type Unit struct {
 	Provides    []string // virtual package names this unit satisfies (e.g., "linux", "ssh")
 	Replaces    []string // package names whose files this unit may overwrite at install time
 	Module      string   // module that registered this unit (empty = project root)
-	ModuleIndex int    // module priority (0 = project root, 1+ = declaration order)
+	ModuleIndex int    // priority for shadowing/provides resolution: modules use 1..N (declaration order, last wins among modules), project root uses N+1 (highest)
 	DefinedIn   string // directory containing the .star file that defined this unit
 
 	// Artifact metadata

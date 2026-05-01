@@ -2,6 +2,7 @@ package starlark
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"go.starlark.net/starlark"
@@ -670,17 +671,40 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 
 	e.mu.Lock()
 	if existing, ok := e.units[name]; ok {
-		e.mu.Unlock()
-		src := "project root"
-		if existing.Module != "" {
-			src = fmt.Sprintf("module %q", existing.Module)
+		// Same priority (same module, or both project root) → hard error.
+		// Cross-priority collisions are shadows: highest priority wins, with
+		// a stderr notice. Project priority is set strictly above any module
+		// in loader.go, so project units always win.
+		if r.ModuleIndex == existing.ModuleIndex {
+			e.mu.Unlock()
+			return nil, fmt.Errorf("unit %q already defined (first defined in %s)",
+				name, moduleSource(existing.Module))
 		}
-		return nil, fmt.Errorf("unit %q already defined (first defined in %s)", name, src)
+		if r.ModuleIndex < existing.ModuleIndex {
+			e.mu.Unlock()
+			fmt.Fprintf(os.Stderr,
+				"notice: unit %q from %s is shadowed by %s\n",
+				name, moduleSource(r.Module), moduleSource(existing.Module))
+			return existing, nil
+		}
+		// New unit has higher priority — replace, log the displacement.
+		fmt.Fprintf(os.Stderr,
+			"notice: unit %q from %s shadows the same name from %s\n",
+			name, moduleSource(r.Module), moduleSource(existing.Module))
 	}
 	e.units[name] = r
 	e.mu.Unlock()
 
 	return r, nil
+}
+
+// moduleSource formats a module name for diagnostic messages. The empty
+// module string represents the project root.
+func moduleSource(m string) string {
+	if m == "" {
+		return "project root"
+	}
+	return fmt.Sprintf("module %q", m)
 }
 
 func (e *Engine) fnUnit(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {

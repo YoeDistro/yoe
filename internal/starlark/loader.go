@@ -144,10 +144,19 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		}
 	}
 
+	// Compute project priority: strictly higher than any module so that a
+	// project-level unit shadows the same name from any included module.
+	// Modules use 1..N (declaration order, last wins among modules); the
+	// project root uses N+1 — the highest priority overall.
+	projectIdx := 1
+	if proj := eng.Project(); proj != nil {
+		projectIdx = len(proj.Modules) + 1
+	}
+
 	// Phase 1: Evaluate all machine definitions (project + modules).
 	// Machines must be loaded before units/images so that target_arch()
 	// returns the correct value during Starlark evaluation.
-	eng.SetCurrentModule("", 0)
+	eng.SetCurrentModule("", projectIdx)
 	if err := evalDir(eng, root, "machines"); err != nil {
 		return nil, err
 	}
@@ -252,7 +261,7 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 
 	// Phase 1b: Evaluate container definitions (project + modules).
 	// Containers must be loaded before units so that units can reference them.
-	eng.SetCurrentModule("", 0)
+	eng.SetCurrentModule("", projectIdx)
 	if err := evalDir(eng, root, "containers"); err != nil {
 		return nil, err
 	}
@@ -272,7 +281,7 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	}
 
 	// Phase 2a: Evaluate all unit definitions (project + modules).
-	eng.SetCurrentModule("", 0)
+	eng.SetCurrentModule("", projectIdx)
 	if err := evalDir(eng, root, "units"); err != nil {
 		return nil, err
 	}
@@ -312,8 +321,8 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 							virt, existingName, u.Name)
 					}
 					if u.ModuleIndex > existingUnit.ModuleIndex {
-						fmt.Fprintf(os.Stderr, "notice: %q from module %q overrides %q via provides %q\n",
-							u.Name, u.Module, existingName, virt)
+						fmt.Fprintf(os.Stderr, "notice: %q from %s overrides %q via provides %q\n",
+							u.Name, moduleSource(u.Module), existingName, virt)
 						_ = prov.SetKey(starlark.String(virt), starlark.String(u.Name))
 					}
 					// If u.ModuleIndex < existingUnit.ModuleIndex, skip — higher priority already won.
@@ -334,7 +343,7 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	eng.SetVar("RUNTIME_DEPS", runtimeDeps)
 
 	// Phase 2b: Evaluate image definitions (project + modules).
-	eng.SetCurrentModule("", 0)
+	eng.SetCurrentModule("", projectIdx)
 	if err := evalDir(eng, root, "images"); err != nil {
 		return nil, err
 	}

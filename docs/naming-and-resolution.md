@@ -68,19 +68,13 @@ class function like `autotools()` or `cmake()`. Each unit produces one or more
 
 ### Current naming model
 
-Unit names are **flat strings** with no module namespace:
-
-```python
-# In units-core module:
-unit(name = "zstd", ...)
-
-# In another module:
-unit(name = "zstd", ...)  # ERROR: duplicate unit name
-```
-
-If two modules define a unit with the same name, the build errors at evaluation
-time. To extend an upstream unit, use the
-[module composition](#module-composition) pattern.
+Unit names are **flat strings** with no module namespace. Within a single
+module the name must be unique — defining `unit(name = "zstd", ...)` twice in
+one module is an error. Across modules, a same-named unit is a **shadow**: the
+higher-priority unit wins and a notice is emitted on stderr. Priority follows
+the project's module list order (project root > last module > … > first
+module). See [Unit replacement via name shadowing](#unit-replacement-via-name-shadowing)
+for the full rule and use cases.
 
 ## Dependencies
 
@@ -184,60 +178,81 @@ product uses systemd or busybox init.
 
 See [Collision Detection](#collision-detection) for scoping and priority rules.
 
-### Unit replacement via provides
+### Unit replacement via name shadowing
 
-A downstream module may transparently replace an upstream unit by declaring
-`provides` equal to the upstream unit's name. Module priority follows
-declaration order in `project()` — later modules have higher priority (last
-wins):
+The simplest way to replace an upstream unit is to define one with the same
+name in a higher-priority module. The higher-priority unit **shadows** the
+upstream — only it is registered in the DAG; the lower-priority unit is
+discarded with a notice on stderr.
+
+Priority follows declaration order in `project()`. The project root has the
+highest priority overall; among modules, later in the list wins:
 
 ```python
 project(name = "product", modules = [
-    module("...", path = "modules/units-core"),    # lowest priority
-    module("...", path = "modules/soc-module"),     # overrides units-core
-    module("...", path = "modules/som-module"),     # highest priority
+    module("...", path = "modules/units-alpine"),  # lowest priority
+    module("...", path = "modules/soc-module"),    # overrides units-alpine
+    module("...", path = "modules/som-module"),    # highest priority among modules
 ])
+# Project root (units/ in the project directory) overrides all three.
 ```
 
-When a unit in a higher-priority module declares `provides = ["base-files"]`, it
-takes precedence over the real unit named `base-files` from a lower-priority
-module. A notice is emitted to stderr. The shadowed unit remains registered but
-is unreachable via the virtual name — it will not be pulled into the DAG.
-
-This pattern handles multi-level override chains. A common embedded pattern is
-base → SOC → SOM, where each module extends the previous:
+Concrete example — replacing Alpine's prebuilt `musl` with a from-source build:
 
 ```python
-# @units-core//units/base-files.star
-def base_files(name="base-files", extra_deps=[], **overrides):
-    unit(name = name, deps = ["busybox"] + extra_deps, **overrides)
+# @units-alpine//units/musl.star
+alpine_pkg(name = "musl", version = "1.2.5-r0", ...)
 
-base_files()
-
-# @soc-module//units/base-files-soc.star
-load("@units-core//units/base-files.star", "base_files")
-
-def base_files_soc(name="base-files-soc", extra_deps=[], **overrides):
-    base_files(name = name, extra_deps = ["soc-firmware"] + extra_deps, **overrides)
-
-base_files_soc()
-
-# @som-module//units/base-files-som.star
-load("@soc-module//units/base-files-soc.star", "base_files_soc")
-
-base_files_soc(name = "base-files-som", extra_deps = ["som-wifi-config"],
-               provides = ["base-files"])
+# @my-overrides//units/musl.star  (listed after units-alpine)
+unit(name = "musl", source = "https://git.musl-libc.org/git/musl",
+     tag = "v1.2.5", tasks = [...])
 ```
 
-All three units (`base-files`, `base-files-soc`, `base-files-som`) are
-registered, but only `base-files-som` is reachable via the `base-files` virtual
-name. Images reference `base-files` and automatically get the most-derived
-variant.
+Every other unit's `deps = ["musl"]` and `runtime_deps = ["musl"]` resolve to
+the winner automatically — there is nothing to change in consumers when an
+override happens. The build emits:
 
-**When possible, prefer explicit names.** Images and dependencies that reference
-the specific name (e.g., `base-files-som`) are clearer and more traceable. Use
-transparent replacement only when a core package must be overridden without
-changing image definitions.
+```
+notice: unit "musl" from module "my-overrides" shadows the same name from module "units-alpine"
+```
+
+Use shadowing for **1:1 replacement** — "my musl instead of yours." It is the
+right tool whenever a module wants to swap an upstream unit for a different
+implementation while keeping consumers unchanged.
+
+### Unit replacement via provides
+
+`provides` is for a different problem: **N:1 alternative selection**. Several
+units in the same project can each satisfy a virtual role, and the project
+(or machine) selects which one wins at evaluation time. The canonical case is
+a kernel — a single module ships `linux-rpi4` and `linux-bb`, both declaring
+`provides = ["linux"]`, and the active machine picks one.
+
+```python
+# @units-core//units/kernels.star
+unit(name = "linux-rpi4", provides = ["linux"], ...)
+unit(name = "linux-bb",   provides = ["linux"], ...)
+
+# machines/raspberrypi4.star
+machine(name = "rpi4", kernel = kernel(unit = "linux-rpi4", provides = "linux"))
+
+# machines/beaglebone.star
+machine(name = "bbb",  kernel = kernel(unit = "linux-bb",  provides = "linux"))
+
+# Images reference the virtual name; resolution picks the right kernel.
+image(name = "base", artifacts = ["busybox", "linux"])
+```
+
+Both kernel units coexist in the namespace — they have distinct real names —
+and `PROVIDES["linux"]` is set per machine. This is something shadowing can't
+express: shadowing requires identical real names, so multiple alternatives
+can't both be present.
+
+The same module-priority rule applies when two modules each contribute a
+`provides` for the same virtual name — the higher-priority module wins, with a
+stderr notice. But for the common "override an upstream unit" case, **prefer
+shadowing**: it requires no virtual-name layer, and reading the override file
+tells the whole story.
 
 ### When NOT to use provides
 
@@ -385,11 +400,18 @@ traceable — `grep` for the function call to find all extensions. See
 
 ### Unit name duplicates
 
-Unit names are flat strings. If two modules define a unit with the same name,
-the build errors at evaluation time with a message showing which module first
-defined the unit. Modules must coordinate names or use the
-[module composition](#module-composition) pattern to explicitly extend an
-upstream unit.
+Within a single module (or within the project root), defining two units with
+the same name is a hard error at evaluation time:
+
+```
+unit "zstd" already defined (first defined in module "units-core")
+```
+
+Across modules, a same-named unit is treated as a **shadow**: the
+higher-priority unit wins, the lower-priority one is dropped from the unit
+map, and a notice is emitted to stderr. Priority is project root > last module
+in the list > … > first module in the list. See
+[Unit replacement via name shadowing](#unit-replacement-via-name-shadowing).
 
 ### PROVIDES duplicates
 
