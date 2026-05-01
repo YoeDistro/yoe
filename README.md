@@ -175,6 +175,10 @@ while avoiding their respective pain points:
   the dependency graph, build introspection commands, label-based target
   references for composability. Leave behind the C++-specific build model and
   Ninja generation.
+- **Bazel** — Starlark as a build configuration language, hermetic sandboxed
+  actions, content-addressed action caching, and remote build execution. Leave
+  behind the monorepo bias, JVM runtime, and BUILD-file verbosity that make
+  Bazel heavy for small teams.
 
 See [Comparisons](docs/comparisons.md) for detailed analysis of how `[yoe]`
 relates to each of these systems, including when you should use them instead.
