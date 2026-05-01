@@ -8,6 +8,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **New design doc on libc and init choice.** `docs/libc-and-init.md` lays out
+  why yoe is musl + OpenRC + Alpine today, where that stack works (gateways,
+  IoT, networking gear), where it doesn't (Jetson, vendor BSPs, Adaptive
+  AUTOSAR), and the planned rootfs-base abstraction that would let a single yoe
+  codebase serve both Alpine and Ubuntu/L4T projects. Establishes the invariant
+  that yoe stays apk-native on every target — Debian-derived bases get a
+  `deb_pkg` conversion class, not dpkg/apt on the device.
 - **Pull packages straight from Alpine.** A new `units-alpine` module wraps
   prebuilt Alpine `.apk` files as yoe units via the `alpine_pkg()` class — no
   source build, no patches, just fetch + verify + repack. `musl` and

@@ -8,15 +8,26 @@ into `$DESTDIR`.
 
 ## When to reach for it
 
-Use `units-alpine` for **leaf packages** where Alpine's build is exactly what
-you'd produce yourself: stable libraries, language runtimes, and userland tools
-where you don't need a custom configure flag, a different optimisation level, or
-a patch.
+The policy yoe follows:
 
-Keep building from source — i.e., stay in `units-core` or your own module — for
-anything where the build matters: the toolchain itself, the kernel, the
-bootloader, busybox, init, anything you'd patch, anything whose behaviour you
-want to verify against the source tree.
+1. **Yoe builds the easy stuff.** Small leaf libraries (`zlib`, `xz`, `expat`,
+   `libffi`, `readline`, `ncurses`, …) and small userland tools (`less`, `htop`,
+   `vim`, `procps-ng`, `iproute2`, …) stay in `units-core` even though Alpine
+   ships them too. Their build is cheap, and keeping them in yoe preserves the
+   option to retarget glibc or a different init system later.
+2. **`units-alpine` ships Alpine-native and hard-to-build packages.**
+   Alpine-native means `musl`, `apk-tools`, `alpine-keys`, `alpine-baselayout` —
+   things that only make sense from Alpine. Hard-to-build means packages where
+   Alpine's expertise (configure flags, security review, codec/license
+   decisions, multi-language coupling) earns its keep: `openssl`, `openssh`,
+   `curl`, eventually `python`, `llvm`, `qt6-qtwebengine`, and similar.
+3. **Keep building from source anything where the build defines the product.**
+   Toolchain, kernel, bootloader, `busybox`, init scripts, `base-files` — these
+   are not packages, they are the distribution.
+
+For the broader strategic context — why this rubric exists, where Alpine doesn't
+fit (notably edge AI on Jetson), and how yoe expects to handle glibc/systemd
+targets in the future — see [libc-and-init.md](libc-and-init.md).
 
 ## Alpine release coupling
 
