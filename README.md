@@ -71,6 +71,8 @@ poweroff
 
 There are also CLI variants of the above commands (`build`, `run`, etc.).
 
+![screenshot](assets/yoe-screenshot.png)
+
 <img width="1743" height="1597" alt="image" src="https://github.com/user-attachments/assets/99e297f3-b424-422a-8b24-45fb82de81fb" />
 
 `dev-image` is another included image with a few more things in it.
