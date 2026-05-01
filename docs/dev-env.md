@@ -78,15 +78,20 @@ cycle.
 
 ### Fast deploy
 
-`yoe deploy <unit> <host>` builds the apk for `<unit>` and runs `apk add` on
-`<host>` over SSH. Combined with local-path sources, the loop is:
+`yoe deploy <unit> <host>` builds the apk for `<unit>`, exposes the project's
+repo over an HTTP feed (reusing a running `yoe serve` if one is up), and runs
+`apk add --upgrade <unit>` on the device over SSH. Combined with local-path
+sources, the loop is:
 
 ```
 edit code → yoe deploy myapp dev-pi → service running on the device
 ```
 
-Same plumbing yoe uses to assemble images at build time, just targeted at a
-running device.
+Pull, not push: apk on the device resolves transitive deps from the same
+`APKINDEX.tar.gz` production OTA uses, so adding a runtime dep to a unit doesn't
+require updating any deploy machinery. After the first deploy the device's
+`/etc/apk/repositories.d/yoe-dev.list` stays in place, so subsequent `apk add`
+calls from the device work too. See [feed-server.md](feed-server.md).
 
 ### Watch mode
 

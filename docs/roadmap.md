@@ -10,10 +10,9 @@
 
 - Better hostnames for targets.
 - mDNS on target
+- base-files is modified by machine
 - Save flash device preference in local.star for TUI
-- Fast deploy: `yoe deploy <unit> <host>` — build the apk, push it over SSH, run
-  `apk add` on the device.
-  - In TUI, ask for host IP/name and cache it in local.star.
+- In TUI, ask for host IP/name and cache it in local.star.
 - Data partition for rPI targets
   - Fill/format data partition
 - Error reading OS version: searching /etc/os-release, got: field VERSION not
@@ -49,8 +48,6 @@ for the design.
 - App project scaffolding: `yoe new app --lang go` style generator that creates
   a standalone project with `PROJECT.star`, a unit pinning the language, and a
   happy path.
-- Feed server — `yoe` app creates a feed server; configure apk on device to use
-  it.
 - Software update — Yoe updater or SWUpdate. Rewrite in Zig?
 
 ### On-Device App UX
@@ -166,7 +163,8 @@ update item under Developer Experience evolves toward this once a runtime ships.
 
 ## CLI Surface
 
-- `yoe deploy <unit> <host>` — build, push apk over SSH, remote `apk add`.
+- `yoe serve` / `yoe deploy <unit> <host>` / `yoe device repo {add,remove,list}`
+  — shipped. See [feed-server.md](feed-server.md).
 - `yoe svc start|stop|restart|status <unit> <host>`.
 - `yoe logs <unit> -f`.
 - `yoe dev <unit>` — watch the source tree and rebuild (optionally redeploy) on

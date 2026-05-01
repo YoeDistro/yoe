@@ -43,6 +43,12 @@ Yoe-built repos use Alpine's standard `<repo-root>/<arch>/APKINDEX.tar.gz`
 layout, so `apk` picks the right arch automatically — point the repositories
 file at the _root_, not at the per-arch subdirectory.
 
+### Pointing at a yoe-served feed
+
+For development, run `yoe serve` on your build host and configure the device
+with `yoe device repo add <host>`. See [feed-server.md](feed-server.md) for the
+full dev-loop walkthrough.
+
 ## Installing and upgrading
 
 Once a repository is wired up:

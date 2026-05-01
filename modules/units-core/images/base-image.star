@@ -2,6 +2,6 @@ load("//classes/image.star", "image")
 
 image(
     name = "base-image",
-    artifacts = ["base-files", "busybox", "linux"],
+    artifacts = ["musl", "base-files", "busybox", "linux", "apk-tools", "network-config"],
     hostname = "yoe",
 )
