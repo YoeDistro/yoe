@@ -57,9 +57,11 @@ func TestRepoAddWritesFile(t *testing.T) {
 	}
 	got := (*sshRecs)[0].script
 	want := []string{
-		"mkdir -p /etc/apk/repositories.d",
+		"touch /etc/apk/repositories",
+		"# >>> yoe-yoe-dev",
 		"http://laptop.local:8765/myproj",
-		"/etc/apk/repositories.d/yoe-dev.list",
+		"# <<< yoe-yoe-dev",
+		"sed -i '/^# >>> yoe-yoe-dev$/,/^# <<< yoe-yoe-dev$/d' /etc/apk/repositories",
 		"apk update",
 	}
 	for _, w := range want {
@@ -103,7 +105,7 @@ func TestRepoRemove(t *testing.T) {
 	if len(*sshRecs) != 1 {
 		t.Fatalf("expected 1 ssh call, got %d", len(*sshRecs))
 	}
-	if !strings.Contains((*sshRecs)[0].script, "rm -f /etc/apk/repositories.d/yoe-dev.list") {
+	if !strings.Contains((*sshRecs)[0].script, "sed -i '/^# >>> yoe-yoe-dev$/,/^# <<< yoe-yoe-dev$/d' /etc/apk/repositories") {
 		t.Errorf("script: %s", (*sshRecs)[0].script)
 	}
 }

@@ -10,16 +10,21 @@ and this project adheres to
 
 - **Deploy from the TUI.** Press `D` on a non-image unit to deploy it to a
   running yoe device — host prompt is pre-filled from the last-used target,
-  build + ssh + apk add output stream into the view, and the host is saved
-  back to `local.star` on success.
-- **TUI starts a feed automatically.** When you launch `yoe`, it brings up
-  the project's apk feed (or reuses one already running on the LAN), so
-  devices configured with `yoe device repo add` can pull packages without
-  any extra setup. Status is shown in the header.
+  build + ssh + apk add output stream into the view, and the host is saved back
+  to `local.star` on success.
+- **Deploy actually updates the device's apk index.** `yoe deploy` and
+  `yoe device repo add` previously wrote to `/etc/apk/repositories.d/yoe-dev.list`,
+  which apk-tools 2.x ignores. They now append a marker block to
+  `/etc/apk/repositories` so the next `apk update` actually fetches the dev
+  feed and `apk add <unit>` finds the freshly built package.
+- **TUI starts a feed automatically.** When you launch `yoe`, it brings up the
+  project's apk feed (or reuses one already running on the LAN), so devices
+  configured with `yoe device repo add` can pull packages without any extra
+  setup. Status is shown in the header.
 - **SSH target shorthand.** `yoe deploy` and `yoe device repo {add,remove,list}`
-  accept `[user@]host[:port]` — e.g. `yoe device repo add localhost:2222`
-  for a QEMU vm or `yoe deploy myapp pi@dev-pi.local:2200`. The `--ssh-port`
-  flag is gone.
+  accept `[user@]host[:port]` — e.g. `yoe device repo add localhost:2222` for a
+  QEMU vm or `yoe deploy myapp pi@dev-pi.local:2200`. The `--ssh-port` flag is
+  gone.
 
 ## [0.8.7] - 2026-04-30
 

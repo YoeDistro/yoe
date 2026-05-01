@@ -5,8 +5,8 @@ commands, layered:
 
 - **`yoe serve`** — long-lived HTTP feed for the project's apk repo, advertised
   via mDNS so devices and `yoe deploy` find it without configuration.
-- **`yoe device repo {add,remove,list}`** — configure `/etc/apk/repositories.d/`
-  on a target device so `apk add` from the device pulls from your dev feed.
+- **`yoe device repo {add,remove,list}`** — configure `/etc/apk/repositories` on
+  a target device so `apk add` from the device pulls from your dev feed.
 - **`yoe deploy <unit> <host>`** — build, ship, and install a unit on a running
   device in one command. Pulls the unit and all its transitive deps via apk on
   the device side, so dependency resolution mirrors production OTA.
@@ -64,9 +64,10 @@ Builds `myapp`, starts an ephemeral feed (or reuses your running `yoe serve` if
 it's advertising the same project), ssh's to the device, and runs
 `apk add --upgrade myapp`. Transitive deps are resolved on the device.
 
-The repo file `/etc/apk/repositories.d/yoe-dev.list` is left in place after
-deploy — same as `yoe device repo add` would have written. So the first deploy
-to a fresh device doubles as the persistent feed config.
+A `# >>> yoe-dev` … `# <<< yoe-dev` block in `/etc/apk/repositories` on the
+target is left in place after deploy — same block `yoe device repo add` would
+have written. So the first deploy to a fresh device doubles as the persistent
+feed config.
 
 ### Multiple devices on a LAN
 
@@ -80,8 +81,8 @@ builds.
 yoe device repo remove dev-pi.local
 ```
 
-Removes `/etc/apk/repositories.d/yoe-dev.list`. The device falls back to
-whatever else is configured (typically nothing, in dev).
+Strips the `# >>> yoe-dev` block from `/etc/apk/repositories`. The device falls
+back to whatever else is configured (typically nothing, in dev).
 
 ### Inspecting the device's repo config
 
@@ -89,8 +90,9 @@ whatever else is configured (typically nothing, in dev).
 yoe device repo list dev-pi.local
 ```
 
-Cats `/etc/apk/repositories` and every `*.list` in `/etc/apk/repositories.d/`,
-prefixed with the source filename.
+Cats `/etc/apk/repositories`, prefixed with the source filename. (Also reads
+`/etc/apk/repositories.d/*.list` if present, though apk-tools 2.x does not read
+those itself — they're informational only.)
 
 ## Command reference
 
@@ -117,7 +119,8 @@ yoe device repo add <[user@]host[:port]> [--feed URL] [--name NAME]
   `pi@dev-pi.local`, `localhost:2222` (QEMU), `pi@dev-pi.local:2200`.
 - `--feed URL` — explicit URL. If omitted, browses mDNS for `_yoe-feed._tcp` on
   the LAN; errors clearly on 0 or >1 matches.
-- `--name NAME` — basename for `/etc/apk/repositories.d/<name>.list`. Default
+- `--name NAME` — name suffix for the marker block written into
+  `/etc/apk/repositories` (`# >>> yoe-<name>` … `# <<< yoe-<name>`). Default
   `yoe-dev`.
 - `--push-key` — copy the project signing pubkey to `/etc/apk/keys/` on the
   target before configuring.

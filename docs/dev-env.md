@@ -90,8 +90,8 @@ edit code → yoe deploy myapp dev-pi → service running on the device
 Pull, not push: apk on the device resolves transitive deps from the same
 `APKINDEX.tar.gz` production OTA uses, so adding a runtime dep to a unit doesn't
 require updating any deploy machinery. After the first deploy the device's
-`/etc/apk/repositories.d/yoe-dev.list` stays in place, so subsequent `apk add`
-calls from the device work too. See [feed-server.md](feed-server.md).
+`/etc/apk/repositories` keeps the dev-feed line in place, so subsequent
+`apk add` calls from the device work too. See [feed-server.md](feed-server.md).
 
 ### Watch mode
 
