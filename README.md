@@ -9,11 +9,11 @@ customize/upgrade/debug. One tool for both system engineers and application
 developers to ship products faster.**
 
 `[yoe]` is an embedded Linux build system for teams shipping modern edge
-products: applications in Go, Rust, Zig, or Python; ARM and RISC-V targets;
-released often and tracking upstream closely. Readable config. AI that
-understands the system and can guide a developer through it. Native builds on
-your laptop, on native hardware, or in cloud CI — one integrated tool, same
-config, same results.
+products: applications in Go, Rust, Zig, Python, JS/TS, and C/C++; released
+often and tracking upstream closely. Readable config. AI that understands the
+system and can guide a developer through it. Native builds on your laptop, on
+native hardware, or in cloud CI — one integrated tool, same config, same
+results.
 
 We took what we learned from many years of maintaining and building products
 with the [Yoe Distribution](https://yoedistro.org/), started over, and built the
