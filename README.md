@@ -97,12 +97,10 @@ A decade ago, this combination wasn't realistic. Several things have changed:
    boards and cloud instances (AWS Graviton, Hetzner CAX) build at full speed.
    For development, QEMU user-mode emulation runs ARM containers on x86 — no
    cross-toolchain needed.
-
 2. **Modern languages bring their own package managers.** Go, Rust, Zig, and
    Python already handle dependency resolution, reproducible builds, and
    caching. `[yoe]` doesn't reinvent any of that — application developers use
    the same Cargo, Go modules, or pip they already know.
-
 3. **AI can guide developers through the system.** The hardest part of embedded
    Linux is knowing what to configure and why. `[yoe]`'s metadata is structured
    Starlark — queryable, not buried in shell scripts — so an AI assistant can
