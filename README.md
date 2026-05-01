@@ -15,14 +15,14 @@ native ARM and RISC-V hardware.
 
 `[yoe]` is an embedded Linux build system for teams shipping modern edge
 products: applications in Go, Rust, Zig, or Python; ARM and RISC-V targets;
-released often and tracking upstream closely. One Go binary. Readable config. AI
-that understands the system and can guide a developer through it. Native builds
-on your x86 laptop, on real hardware, or in cloud CI — same tool, same config,
-same results.
+released often and tracking upstream closely. Readable config. AI that
+understands the system and can guide a developer through it. Native builds on
+your laptop, on native hardware, or in cloud CI — one integrated tool, same
+config, same results.
 
-`[yoe]` is the next generation, built from the ground up, of the
-[Yoe Distribution](https://yoedistro.org/), the Yocto-based embedded Linux
-distribution we've maintained for many years.
+We took what we learned from many years of maintaining and building products
+with the [Yoe Distribution](https://yoedistro.org/), started over, and built the
+tool we always wanted.
 
 _Note: Not everything in the documentation has been implemented yet as this
 project is in the early stages._
@@ -137,27 +137,32 @@ A decade ago, this combination wasn't realistic. Three things have changed:
 `[yoe]` is built for this new world: native builds, language-native package
 managers, structured metadata, and AI as a first-class interface.
 
-## 🧭 Principles
+## 🧭 Values
 
-1. **Leverage existing infrastructure.** Docker containers already provide
-   working toolchains, and language-native package managers (Go modules, pip,
-   npm, Cargo) already solve dependency resolution and caching — there is no
-   need to rebuild the world or reimplement what these ecosystems provide.
-2. **Aggressive caching.** Cache at the developer, team, and global levels to
+1. **Be Pragmatic**. This is #1. Leverage what already exists where it makes
+   sense. We don't have any religion that everything needs to be built from
+   source, or that we all need to build our own toolchains.
+1. **The developer experience is 1st Priority**. And this includes application
+   developers as well as system engineers.
+1. **Use existing infrastructure.** Docker containers already provide working
+   toolchains, and language-native package managers (Go modules, pip, npm,
+   Cargo) already solve dependency resolution and caching — there is no need to
+   rebuild the world or reimplement what these ecosystems provide.
+1. **Aggressive caching.** Cache at the developer, team, and global levels to
    avoid rebuilds whenever possible.
-3. **Custom containers per unit and task.** There is no one-size-fits-all
+1. **Custom containers per unit and task.** There is no one-size-fits-all
    container for an entire build. Units can specify the host container
    environment they need.
-4. **No intermediate formats.** Avoid generating shell scripts or other
+1. **No intermediate formats.** Avoid generating shell scripts or other
    intermediate artifacts when possible. Intermediate formats complicate
    debugging — when something fails, you should be looking at the code you
    wrote, not machine-generated output.
-5. **Leverage binaries when it makes sense.** Use pre-build packages from
+1. **Leverage binaries when it makes sense.** Use pre-build packages from
    Alpine/Debian/Ubuntu/GitHub where it makes sense.
-6. **One tool for all levels.** The tool should be fast and simple enough to be
+1. **One tool for all levels.** The tool should be fast and simple enough to be
    used for both system software development and application development.
    Generating SDKs is a waste of time if everyone can use the same tool.
-7. **Track upstream closely.** Modern edge systems are more like the cloud than
+1. **Track upstream closely.** Modern edge systems are more like the cloud than
    traditional embedded systems — they are connected, updated regularly, and
    expected to receive security patches throughout their lifetime. `[yoe]`
    assumes you will track upstream releases closely rather than freezing on a
