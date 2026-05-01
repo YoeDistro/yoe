@@ -225,7 +225,36 @@ while avoiding their respective pain points:
 See [Comparisons](docs/comparisons.md) for detailed analysis of how `[yoe]`
 relates to each of these systems, including when you should use them instead.
 
-## ⚙️ Design Principles
+## ⚙️ Design
+
+### 🏗️ A Single Tool
+
+At its heart, `[yoe]` is a single tool — one Go binary that handles the entire
+build flow, from fetching sources to assembling bootable images. It exposes
+three interfaces: AI conversation, an interactive TUI, and a traditional CLI.
+All three do the same things; use whichever fits the moment.
+
+The tool handles:
+
+- **TUI** — run `yoe` with no arguments for an interactive unit list with inline
+  build status, background builds, search, and quick actions (edit, diagnose,
+  clean).
+- **Build orchestration** — invoke language-native build tools in the right
+  order, manage caching, assemble outputs. Multiple images and targets live in a
+  single build tree (like Yocto). No global lock or global resource: concurrent
+  `yoe` invocations run in parallel, which is essential for rapid AI-driven
+  development.
+- **Machine/distro configuration** — define target boards and distribution
+  profiles in Starlark — Python-like, deterministic, sandboxed.
+
+See [The `yoe` Tool](docs/yoe-tool.md) for the full CLI reference,
+[Unit & Configuration Format](docs/metadata-format.md) for the unit and config
+spec, and [Build Languages](docs/build-languages.md) for the Starlark rationale.
+
+Why Go: single static binary with no runtime dependencies, fast compilation,
+excellent cross-compilation support (useful for shipping the tool itself), and a
+strong standard library for file manipulation, process execution, and
+networking.
 
 ### 🚫 No Cross Compilation
 
@@ -278,35 +307,6 @@ still need orchestration:
 
 This is where `[yoe]` tooling (written in Go) provides value — similar to what
 `bitbake` and `wic` do in Yocto, but simpler and more opinionated.
-
-### 🏗️ Go-Based Tooling
-
-`[yoe]` exposes three interfaces — AI conversation, interactive TUI, and
-traditional CLI — that all do the same things. Use whichever fits the moment.
-
-The CLI tool handles:
-
-- **TUI** — run `yoe` with no arguments for an interactive unit list with inline
-  build status, background builds, search, and quick actions (edit, diagnose,
-  clean).
-- **Build orchestration** — invoke language-native build tools in the right
-  order, manage caching, assemble outputs. Multiple images and targets live in a
-  single build tree (like Yocto). No global lock or global resource: concurrent
-  `yoe` invocations run in parallel, which is essential for rapid AI-driven
-  development. See [The `yoe` Tool](docs/yoe-tool.md) for the full CLI
-  reference.
-- **Machine/distro configuration** — define target boards and distribution
-  profiles in Starlark — Python-like, deterministic, sandboxed. See
-  [Unit & Configuration Format](docs/metadata-format.md) and
-  [Build Languages](docs/build-languages.md).
-
-Why Go:
-
-- Single static binary — no runtime dependencies, trivial to distribute.
-- Fast compilation and execution.
-- Excellent cross-compilation support (ironic, but useful for the tool itself).
-- Strong standard library for file manipulation, process execution, and
-  networking.
 
 ### 📋 Package Management: apk
 
@@ -393,3 +393,13 @@ The caching model does not depend on output determinism. Cache keys are computed
 from _inputs_ (unit content, source hash, dependency `.apk` hashes, build
 flags), not _outputs_. If inputs haven't changed, the cached output is used
 regardless of whether a fresh build would produce identical bytes.
+
+## 🤝 Contributing
+
+Contributions are welcome — especially BSPs for new boards and units for new
+packages. AI-assisted contributions are fine; just make sure the result actually
+works, and keep PRs small and reviewable.
+
+## 📄 License
+
+`[yoe]` is licensed under the [Apache License 2.0](LICENSE).
