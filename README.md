@@ -4,14 +4,9 @@
 
 # `[yoe]`
 
-**A radical simplification of how we build edge systems.**
-
 **Fast tooling and builds. No cross-compiling headaches. Easy to
 customize/upgrade/debug. One tool for both system engineers and application
 developers to ship products faster.**
-
-This used to be a dream. `[yoe]` makes it possible, built on modern AI and fast
-native ARM and RISC-V hardware.
 
 `[yoe]` is an embedded Linux build system for teams shipping modern edge
 products: applications in Go, Rust, Zig, or Python; ARM and RISC-V targets;
@@ -34,11 +29,11 @@ requires bit-for-bit reproducible builds, long-term release freezes, or
 extensive compliance certification, use [Yocto](https://www.yoctoproject.org/) —
 it is battle-tested for those requirements.
 
-`[yoe]` is designed for edge systems that behave more like cloud systems: AI
-workloads, applications written in modern languages, systems that track upstream
-closely, and teams that prioritize fast iteration over strict reproducibility.
-If your product ships frequent updates, runs containerized services, or depends
-heavily on Go/Rust/Python ecosystems, `[yoe]` may be a better fit.
+`[yoe]` is designed for edge systems that behave more like cloud systems — AI
+workloads and modern-language applications — and for teams that track upstream
+closely and prioritize fast iteration over strict reproducibility. If your
+product ships frequent updates, runs containerized services, or depends heavily
+on Go/Rust/Python ecosystems, `[yoe]` may be a better fit.
 
 ## 🚀 Getting Started
 
@@ -61,12 +56,12 @@ export PATH="$HOME/bin:$PATH"
 yoe init yoe-test
 cd yoe-test
 
-# start the TUI (see screenshot below)
+# Start the TUI (see screenshot below)
 yoe
 
-# navigate to the base-image and press 'b' to build.
+# Navigate to the base-image and press 'b' to build
 
-# when build is complete, press 'r' to run.
+# When build is complete, press 'r' to run
 
 # Log in a user: root, no password
 
@@ -109,14 +104,14 @@ yoe build base-image --machine qemu-arm64
 yoe run base-image --machine qemu-arm64
 ```
 
-(or run the above in TUI be selecting machine in setup first)
+(or select a machine in the TUI setup first)
 
 No cross-compilation toolchain needed — the build runs inside a genuine ARM64
 Docker container, transparently emulated by the host kernel.
 
-## 🔧 Why this is possible now
+## 🔧 Why This Is Possible Now
 
-A decade ago, this combination wasn't realistic. Three things have changed:
+A decade ago, this combination wasn't realistic. Several things have changed:
 
 1. **ARM and RISC-V hardware is fast enough to build natively.** Modern ARM
    boards and cloud instances (AWS Graviton, Hetzner CAX) build at full speed.
@@ -134,115 +129,28 @@ A decade ago, this combination wasn't realistic. Three things have changed:
    create units, diagnose build failures, and audit security without the
    developer memorizing the build system's quirks.
 
-`[yoe]` is built for this new world: native builds, language-native package
-managers, structured metadata, and AI as a first-class interface.
-
 ## 🧭 Values
 
-1. **Be Pragmatic**. This is #1. Leverage what already exists where it makes
-   sense. We don't have any religion that everything needs to be built from
-   source, or that we all need to build our own toolchains.
-1. **The developer experience is 1st Priority**. And this includes application
-   developers as well as system engineers.
-1. **Use existing infrastructure.** Docker containers already provide working
-   toolchains, and language-native package managers (Go modules, pip, npm,
-   Cargo) already solve dependency resolution and caching — there is no need to
-   rebuild the world or reimplement what these ecosystems provide.
-1. **Aggressive caching.** Cache at the developer, team, and global levels to
-   avoid rebuilds whenever possible.
-1. **Custom containers per unit and task.** There is no one-size-fits-all
-   container for an entire build. Units can specify the host container
-   environment they need.
-1. **No intermediate formats.** Avoid generating shell scripts or other
-   intermediate artifacts when possible. Intermediate formats complicate
-   debugging — when something fails, you should be looking at the code you
-   wrote, not machine-generated output.
-1. **Leverage binaries when it makes sense.** Use pre-build packages from
-   Alpine/Debian/Ubuntu/GitHub where it makes sense.
-1. **One tool for all levels.** The tool should be fast and simple enough to be
-   used for both system software development and application development.
-   Generating SDKs is a waste of time if everyone can use the same tool.
+1. **Be Pragmatic**. Leverage what already exists where it makes sense. We don't
+   have any religion that everything needs to be built from source, or that we
+   all need to build our own toolchains.
+1. **The developer experience is the top priority**. This includes application
+   developers as well as system engineers. Clear and concise communication is
+   essential when things go wrong. Unintelligible stack traces are unacceptable.
+1. **Optimized for small teams**. `[yoe]` is a tool for small teams to do big
+   things. Large enterprises are welcome, but not our exclusive focus. There are
+   plenty of enterprise tools (Bazel, Buck2, Maven, etc.); we will use ideas
+   from these tools, but `[yoe]` aims to be something different.
+1. **Scope is not limited to Embedded Linux**. Although Embedded Linux is our
+   current focus, a tool like Yoe could be used for any problem where you pull a
+   lot of pieces together. At its heart, `[yoe]` is a tool for building complex
+   systems.
 1. **Track upstream closely.** Modern edge systems are more like the cloud than
    traditional embedded systems — they are connected, updated regularly, and
    expected to receive security patches throughout their lifetime. `[yoe]`
    assumes you will track upstream releases closely rather than freezing on a
    version for years. Updating a package should be easy and routine, not a
    high-risk event that requires a dedicated engineering effort.
-
-## 🐳 Build Dependencies and Caching
-
-Traditional embedded build systems maintain a sharp boundary between "building
-the OS" and "developing applications." The OS team produces an SDK — a frozen
-snapshot of the sysroot, toolchain, and headers — and hands it to application
-developers. From that point on, the two worlds drift: the SDK ages, libraries
-diverge, and "it works on my machine" becomes "it works with my SDK version."
-
-`[yoe]` eliminates this boundary by recognizing that there are distinct kinds of
-build dependencies, and they should be managed differently:
-
-- **Host tools** (compilers, build utilities, code generators) — these come from
-  Docker containers. Every unit can specify its own container, so one team's
-  toolchain requirements don't constrain another. A kernel unit can use a
-  minimal C toolchain container. A Go application can use the official
-  `golang:1.23` image. A Rust service can pin a specific Rust nightly.
-- **Library dependencies** (headers, shared libraries your code links against) —
-  these come from a shared sysroot populated by apk packages. Each unit produces
-  an apk package when it builds; that package is either built locally or pulled
-  from a cache (team-level or global). Before a unit builds, its declared
-  dependencies are installed from these packages into the sysroot — the same way
-  `apt install libssl-dev` populates `/usr/include` and `/usr/lib` on a Debian
-  system. Most developers never build OpenSSL themselves; they pull the cached
-  package and get the headers and libraries they need in seconds.
-- **Language-native dependencies** (Go modules, npm packages, Cargo crates, pip
-  packages) — these are managed by the language's own package manager, not the
-  sysroot. A Go unit runs `go build` and Go fetches its own modules. A Node unit
-  runs `npm install`. Cargo handles Rust crates. These ecosystems already solve
-  dependency resolution, caching, and reproducibility — `[yoe]` doesn't
-  reimplement any of that. The container provides the language runtime (Go
-  compiler, Node, rustc), and the language's package manager handles the rest.
-  When a language unit _also_ needs a C library (e.g., a Rust crate linking
-  against libssl via cgo or FFI), that C library comes from the sysroot as
-  usual.
-
-**Caching is symmetric at the unit level.** Every unit — regardless of language
-— produces an apk package that is cached and shared across developers, CI, and
-build machines. Most people never rebuild a unit; they pull the cached apk.
-
-The difference shows up when you _do_ rebuild: a C unit finds its dependencies
-already in the sysroot (from other units' cached apks), while a Rust unit has
-Cargo recompile its crate dependencies using its local cache. This is fine — the
-person rebuilding a Rust unit is the developer actively working on it, and their
-local Cargo cache handles repeat builds. Go builds so fast it does not matter.
-Some ecosystems go further: PyPI distributes pre-compiled wheels globally, so
-`pip install` pulls binaries for most packages without compiling anything.
-`[yoe]` doesn't need to replicate what these ecosystems already provide.
-
-**Native builds unlock existing package ecosystems.** This is especially clear
-with Python. In traditional cross-compilation systems like Yocto or Buildroot,
-PyPI wheels are useless — pip runs on the x86_64 host but the target is ARM, so
-pre-compiled `aarch64` wheels can't be installed. Instead, every Python package
-needs a custom recipe that cross-compiles C extensions against the target
-sysroot, effectively reimplementing pip. In `[yoe]`, pip runs inside a
-native-arch container (real ARM64 or QEMU-emulated), so `pip install numpy` just
-downloads the `aarch64` wheel from PyPI and unpacks it — no compilation, no
-custom recipe. The same advantage applies to any language ecosystem that
-distributes pre-built binaries by architecture.
-
-Note, there are risks with safety or mission-critical systems of using packages
-from a compromised global package system. We could force building of Python
-packages in some cases or verify the binaries via a hash mechanism. This point
-is for developers, we should be able to leverage all the conveniences modern
-language ecosystems provide.
-
-Containers provide the _tools_ to build. The sysroot provides C/C++ _libraries_
-to link against. Language-native package managers handle everything else. For
-any given unit, the developer, the system team, and CI all use the _same_
-container — that's how you stay in sync. A new developer clones the repo, runs
-`yoe build`, and gets working build environments pulled automatically.
-
-Docker containers are already the standard way teams manage development
-environments. `[yoe]` leans into this rather than inventing a parallel universe
-of SDKs.
 
 ## 🤖 Why AI-Native
 
@@ -269,50 +177,6 @@ this can:
 
 See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
 
-## 🎯 Design Priorities
-
-- **AI-native** — structured metadata (Starlark), queryable dependency graphs,
-  and AI skills as first-class interfaces. See [AI Skills](docs/ai-skills.md).
-- **Three interfaces** — AI conversation, interactive TUI, and traditional CLI.
-  All three do the same things; use whichever fits the moment.
-- **Developer-focused** — first-class support for application development, not
-  just system integration. Good tooling for kernel, applications, and BSPs
-  (similar to Yocto's scope, but simpler).
-- **Simple** — one Go binary, one language (Starlark), one package format (apk)
-- **Easy to get started** — AI guides you through project setup, unit creation,
-  and image configuration
-- **Tooling written in Go** — single static binary, no runtime dependencies, TUI
-  built with [Bubble Tea](https://github.com/charmbracelet/bubbletea), fast
-  enough, trivial to distribute
-- **Build dependencies isolated with bubblewrap** — no host dependency pollution
-- **Easy BSP support** — support for many boards, inclusive of hardware
-  ecosystem
-- **Multiple images/targets in a single build tree** (like Yocto)
-- **Rebuilding from source is first class, but not required** — fully traceable,
-  no golden images
-- **Modern languages** (Go, Rust, Zig, Python, JavaScript) — uses native
-  language package managers, caches packages where possible
-- **Cross compilation is optional** — native builds via QEMU user-mode emulation
-  or real ARM/RISC-V hardware. Build environment is per-unit, not global — each
-  unit runs in its own isolated container. For some toolchains, like Go, which
-  cross compile easily, then it makes sense to cross compile. For some C/C++
-  packages, it may make sense to still cross compile them if it is easy and
-  fast, but this is optional. For fussy/difficult packages, we can avoid cross-
-  compilation altogether when necessary.
-- **Starlark for units and build rules** — Python-like, deterministic, sandboxed
-  (see [Build Languages](docs/build-languages.md))
-- **Granular packaging** (like Yocto/Debian) — one unit can produce multiple
-  sub-packages (`-dev`, `-doc`, `-dbg`, custom splits)
-- **Composable modules** — pull in units/packages using GitHub URLs; vendor BSP,
-  product, and core modules compose through Starlark `load()` function calls
-- **Image-based device management** — full image updates, OSTree, BDiff.
-  Container workloads on the target device are on the roadmap — running
-  application containers on edge hardware is a natural fit for systems that
-  already track upstream closely.
-- **Parallel** — no global lock or global resource, support running concurrent
-  versions of `yoe` concurrently. This is essential for rapid development using
-  AI.
-
 ## 📚 Documentation
 
 - [AI Skills](docs/ai-skills.md) — AI-driven workflows for unit creation, build
@@ -327,6 +191,9 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
   Starlark units into external templates
 - [Starlark Packaging and Image Assembly](docs/starlark-packaging-images.md) —
   composable Starlark tasks for packaging and image assembly
+- [Build Dependencies and Caching](docs/build-dependencies-and-caching.md) —
+  containers for host tools, apk sysroot for libraries, language-native package
+  managers for everything else
 - [Build Environment](docs/build-environment.md) — bootstrap, host tools, and
   build isolation
 - [Build Languages](docs/build-languages.md) — analysis of Starlark, CUE, Nix,
@@ -343,8 +210,8 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
   project apk repo and installing units on running devices
 - [Containers on yoe Images](docs/containers.md) — design for running Docker /
   Podman / containerd workloads on yoe-built devices
-- [libc, init, and the Rootfs Base](docs/libc-and-init.md) — the musl + busybox
-  - OpenRC default and the path to glibc/systemd for edge-AI hardware
+- [libc, init, and the Rootfs Base](docs/libc-and-init.md) — the default base of
+  musl, busybox, and OpenRC, and the path to glibc/systemd for edge-AI hardware
 - [units-alpine](docs/units-alpine.md) — wrapping prebuilt Alpine packages as
   yoe units
 - [Comparisons](docs/comparisons.md) — how `[yoe]` relates to Yocto, Buildroot,
@@ -356,8 +223,8 @@ See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
 
 ## 💡 Inspirations
 
-`[yoe]` draws selectively from five existing systems, taking the best ideas from
-each while avoiding their respective pain points:
+`[yoe]` draws selectively from existing systems, taking the best ideas from each
+while avoiding their respective pain points:
 
 - **Yocto** — machine abstraction, image composition, module architecture, OTA
   integration. Leave behind BitBake, sstate, cross-compilation complexity.
@@ -393,6 +260,9 @@ Instead of maintaining cross-toolchains, `[yoe]` targets native builds:
   boards, RISC-V boards).
 - **Cloud CI** — use native architecture runners (e.g., ARM64 GitHub Actions
   runners, AWS Graviton, Hetzner ARM boxes) for full-speed CI builds.
+- **Per-unit build environment** — each unit runs in its own Docker container
+  with bubblewrap sandboxing. Architecture is determined per unit, not globally,
+  and build dependencies don't pollute the host or leak between units.
 
 This eliminates an entire class of build issues (sysroot management, host
 contamination, cross-pkg-config, etc.).
@@ -422,26 +292,33 @@ still need orchestration:
 - **Root filesystem assembly** — combine built artifacts into a bootable image
   (ext4, squashfs, etc.).
 - **Device tree / bootloader management** — board-specific configuration.
-- **OTA / update support** — integration with update frameworks (RAUC, SWUpdate,
-  etc.).
+- **OTA / update support** — image-based device management (full image updates,
+  OSTree, BDiff) integrated with update frameworks (RAUC, SWUpdate, etc.).
+  Container workloads on the target device are on the roadmap.
 
 This is where `[yoe]` tooling (written in Go) provides value — similar to what
 `bitbake` and `wic` do in Yocto, but simpler and more opinionated.
 
 ### 🏗️ Go-Based Tooling
 
-The `[yoe]` CLI tool handles:
+`[yoe]` exposes three interfaces — AI conversation, interactive TUI, and
+traditional CLI — that all do the same things. Use whichever fits the moment.
+
+The CLI tool handles:
 
 - **TUI** — run `yoe` with no arguments for an interactive unit list with inline
   build status, background builds, search, and quick actions (edit, diagnose,
   clean).
 - **Build orchestration** — invoke language-native build tools in the right
-  order, manage caching, assemble outputs. See
-  [The `yoe` Tool](docs/yoe-tool.md) for the full CLI reference.
+  order, manage caching, assemble outputs. Multiple images and targets live in a
+  single build tree (like Yocto). No global lock or global resource: concurrent
+  `yoe` invocations run in parallel, which is essential for rapid AI-driven
+  development. See [The `yoe` Tool](docs/yoe-tool.md) for the full CLI
+  reference.
 - **Machine/distro configuration** — define target boards and distribution
-  profiles in Starlark. See
-  [Unit & Configuration Format](docs/metadata-format.md) for the full
-  specification.
+  profiles in Starlark — Python-like, deterministic, sandboxed. See
+  [Unit & Configuration Format](docs/metadata-format.md) and
+  [Build Languages](docs/build-languages.md).
 
 Why Go:
 
@@ -465,9 +342,11 @@ between **units** and **packages** — these are separate concepts:
 
 This separation means units are a development/CI concern, while packages are a
 deployment/device concern. You can build packages once and install them on many
-devices without needing the unit tree.
+devices without needing the unit tree. Rebuilding from source is first class but
+not required — every package is fully traceable to its unit, with no golden
+images.
 
-Why apk over pacman or opkg:
+Why apk over apt and dnf:
 
 - **Speed** — apk operations are near-instantaneous. Install, remove, and
   upgrade are measured in milliseconds, not seconds.
@@ -488,9 +367,6 @@ into a root filesystem, just as Alpine does.
 
 ### 🧱 Base System
 
-_Currently running musl busybox/init for simplicity. glibc and systemd are
-potential future options but the project has not committed to them yet._
-
 The base userspace today is **busybox** on top of a C library (musl today, glibc
 targeted), with busybox's built-in init as PID 1:
 
@@ -502,11 +378,10 @@ targeted), with busybox's built-in init as PID 1:
   init in a single small binary. Keeps the base image minimal while still giving
   a functional shell environment for debugging and scripting.
 - **Init (current: busybox init)** — busybox's built-in init handles PID 1
-  duties today. **systemd may become an option in the future**: it is
+  duties today. **systemd will be an option in the future**: it is
   well-understood, has rich service management, and provides integrated journal
   logging, network management, device management (udev), and container
-  integration. The trade-off is size and complexity; the project has not yet
-  committed to shipping it as part of the base.
+  integration. The trade-off is size and complexity.
 
 This combination gives a small but fully functional base system that can run
 real-world services without surprises.
@@ -528,11 +403,11 @@ This is a deliberate trade-off:
   relevant mainly for high-assurance supply-chain contexts.
 - **Functional equivalence** gets the practical benefits — reliable caching,
   hermetic builds, provenance tracking — without the patching burden. Bubblewrap
-  isolation prevents host contamination. Content-addressed input hashing (unit
-  - source + dependency hashes) ensures cache hits are reliable. Starlark
-    evaluation is deterministic by design. The remaining non-determinism
-    (timestamps, ordering within packages) doesn't affect functionality or
-    caching.
+  isolation prevents host contamination. Content-addressed input hashing —
+  combining hashes of the unit, its source, and its dependencies — ensures cache
+  hits are reliable. Starlark evaluation is deterministic by design. The
+  remaining non-determinism (timestamps, ordering within packages) doesn't
+  affect functionality or caching.
 
 The caching model does not depend on output determinism. Cache keys are computed
 from _inputs_ (unit content, source hash, dependency `.apk` hashes, build
