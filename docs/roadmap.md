@@ -8,6 +8,7 @@
 
 ## Next
 
+- document BSP and package moat
 - Better hostnames for targets.
 - mDNS on target
 - base-files is modified by machine
