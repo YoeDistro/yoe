@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.8.8] - 2026-05-01
+
 - **New design doc on libc and init choice.** `docs/libc-and-init.md` lays out
   why yoe is musl + OpenRC + Alpine today, where that stack works (gateways,
   IoT, networking gear), where it doesn't (Jetson, vendor BSPs, Adaptive
