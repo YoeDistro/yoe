@@ -14,13 +14,21 @@ yoe_test() {
 }
 
 yoe_format() {
-  docker run --rm -v "${OE_BASE}:/work" -w /work node:20-alpine \
-    npx --yes prettier --write "**/*.md" || return 1
+  if command -v prettier >/dev/null 2>&1; then
+    (cd "${OE_BASE}" && prettier --write "**/*.md") || return 1
+  else
+    docker run --rm -v "${OE_BASE}:/work" -w /work node:20-alpine \
+      npx --yes prettier --write "**/*.md" || return 1
+  fi
 }
 
 yoe_format_check() {
-  docker run --rm -v "${OE_BASE}:/work" -w /work node:20-alpine \
-    npx --yes prettier --check "**/*.md" || return 1
+  if command -v prettier >/dev/null 2>&1; then
+    (cd "${OE_BASE}" && prettier --check "**/*.md") || return 1
+  else
+    docker run --rm -v "${OE_BASE}:/work" -w /work node:20-alpine \
+      npx --yes prettier --check "**/*.md" || return 1
+  fi
 }
 
 yoe_sloc() {
