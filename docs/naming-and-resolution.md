@@ -68,12 +68,12 @@ class function like `autotools()` or `cmake()`. Each unit produces one or more
 
 ### Current naming model
 
-Unit names are **flat strings** with no module namespace. Within a single
-module the name must be unique — defining `unit(name = "zstd", ...)` twice in
-one module is an error. Across modules, a same-named unit is a **shadow**: the
+Unit names are **flat strings** with no module namespace. Within a single module
+the name must be unique — defining `unit(name = "zstd", ...)` twice in one
+module is an error. Across modules, a same-named unit is a **shadow**: the
 higher-priority unit wins and a notice is emitted on stderr. Priority follows
-the project's module list order (project root > last module > … > first
-module). See [Unit replacement via name shadowing](#unit-replacement-via-name-shadowing)
+the project's module list order (project root > last module > … > first module).
+See [Unit replacement via name shadowing](#unit-replacement-via-name-shadowing)
 for the full rule and use cases.
 
 ## Dependencies
@@ -180,10 +180,10 @@ See [Collision Detection](#collision-detection) for scoping and priority rules.
 
 ### Unit replacement via name shadowing
 
-The simplest way to replace an upstream unit is to define one with the same
-name in a higher-priority module. The higher-priority unit **shadows** the
-upstream — only it is registered in the DAG; the lower-priority unit is
-discarded with a notice on stderr.
+The simplest way to replace an upstream unit is to define one with the same name
+in a higher-priority module. The higher-priority unit **shadows** the upstream —
+only it is registered in the DAG; the lower-priority unit is discarded with a
+notice on stderr.
 
 Priority follows declaration order in `project()`. The project root has the
 highest priority overall; among modules, later in the list wins:
@@ -223,9 +223,9 @@ implementation while keeping consumers unchanged.
 ### Unit replacement via provides
 
 `provides` is for a different problem: **N:1 alternative selection**. Several
-units in the same project can each satisfy a virtual role, and the project
-(or machine) selects which one wins at evaluation time. The canonical case is
-a kernel — a single module ships `linux-rpi4` and `linux-bb`, both declaring
+units in the same project can each satisfy a virtual role, and the project (or
+machine) selects which one wins at evaluation time. The canonical case is a
+kernel — a single module ships `linux-rpi4` and `linux-bb`, both declaring
 `provides = ["linux"]`, and the active machine picks one.
 
 ```python
@@ -243,10 +243,10 @@ machine(name = "bbb",  kernel = kernel(unit = "linux-bb",  provides = "linux"))
 image(name = "base", artifacts = ["busybox", "linux"])
 ```
 
-Both kernel units coexist in the namespace — they have distinct real names —
-and `PROVIDES["linux"]` is set per machine. This is something shadowing can't
-express: shadowing requires identical real names, so multiple alternatives
-can't both be present.
+Both kernel units coexist in the namespace — they have distinct real names — and
+`PROVIDES["linux"]` is set per machine. This is something shadowing can't
+express: shadowing requires identical real names, so multiple alternatives can't
+both be present.
 
 The same module-priority rule applies when two modules each contribute a
 `provides` for the same virtual name — the higher-priority module wins, with a
@@ -400,17 +400,17 @@ traceable — `grep` for the function call to find all extensions. See
 
 ### Unit name duplicates
 
-Within a single module (or within the project root), defining two units with
-the same name is a hard error at evaluation time:
+Within a single module (or within the project root), defining two units with the
+same name is a hard error at evaluation time:
 
 ```
 unit "zstd" already defined (first defined in module "units-core")
 ```
 
 Across modules, a same-named unit is treated as a **shadow**: the
-higher-priority unit wins, the lower-priority one is dropped from the unit
-map, and a notice is emitted to stderr. Priority is project root > last module
-in the list > … > first module in the list. See
+higher-priority unit wins, the lower-priority one is dropped from the unit map,
+and a notice is emitted to stderr. Priority is project root > last module in the
+list > … > first module in the list. See
 [Unit replacement via name shadowing](#unit-replacement-via-name-shadowing).
 
 ### PROVIDES duplicates

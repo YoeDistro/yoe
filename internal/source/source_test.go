@@ -369,7 +369,7 @@ func TestCopyBareSourceELF(t *testing.T) {
 	dest := filepath.Join(tmp, "out")
 	os.MkdirAll(dest, 0o755)
 
-	if err := copyBareSource(src, dest); err != nil {
+	if err := copyBareSource(src, dest, ""); err != nil {
 		t.Fatalf("copyBareSource: %v", err)
 	}
 

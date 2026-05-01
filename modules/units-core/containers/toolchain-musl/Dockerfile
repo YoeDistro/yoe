@@ -1,9 +1,23 @@
 # Yoe-NG build container (Tier 0)
-# Version: 14
 #
 # Tools-only container for build execution. The yoe CLI runs on the host
 # and invokes this container only for build commands that need the
 # toolchain (gcc, bwrap, mkfs, etc.). No yoe binary inside.
+#
+# ALPINE VERSION COUPLING — read before bumping the FROM line below.
+#
+# This container's Alpine release MUST match _ALPINE_RELEASE in
+# @units-alpine//classes/alpine_pkg.star. Target packages from that module
+# (musl, openssl, sqlite, …) are ABI- and signing-key-coupled to the
+# Alpine release they were built against. Bumping one without the other
+# yields a toolchain whose libc/headers don't match the target image's
+# libc — a subtle ABI mismatch that compiles fine, links fine, then
+# segfaults on first run.
+#
+# When bumping: update the FROM tag here, _ALPINE_RELEASE in
+# alpine_pkg.star, and every alpine_pkg unit's version + sha256 in the
+# same commit, then rebuild the container so its baked apk-tools keyring
+# matches.
 
 FROM alpine:3.21
 

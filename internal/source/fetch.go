@@ -186,7 +186,7 @@ func isGitURL(url string) bool {
 }
 
 func guessExt(url string) string {
-	for _, ext := range []string{".tar.gz", ".tar.bz2", ".tar.xz", ".tgz", ".zip"} {
+	for _, ext := range []string{".tar.gz", ".tar.bz2", ".tar.xz", ".tgz", ".zip", ".apk"} {
 		if strings.HasSuffix(url, ext) {
 			return ext
 		}

@@ -57,7 +57,7 @@ func Prepare(projectDir, scopeDir string, unit *yoestar.Unit, w io.Writer) (stri
 			return "", err
 		}
 	} else {
-		if err := prepareNonGitSource(cachedPath, srcDir); err != nil {
+		if err := prepareNonGitSource(cachedPath, srcDir, unit.Source); err != nil {
 			return "", err
 		}
 		// Non-git sources need git init + commit + tag so the rest of
@@ -124,7 +124,12 @@ func checkoutGit(barePath, srcDir string, unit *yoestar.Unit) error {
 // into srcDir. Picks an extractor by filename extension first, falling back
 // to magic-byte sniffing for files with no/unknown extension. Bare files
 // that aren't recognised archives are copied as-is (binary class case).
-func prepareNonGitSource(cachedPath, destDir string) error {
+//
+// sourceURL is the original upstream URL — used so that bare-copied files
+// land in srcDir under their URL-derived basename (e.g. "musl-1.2.5-r11.apk")
+// rather than the cache's URL-hash filename, since install tasks reference
+// the file by name.
+func prepareNonGitSource(cachedPath, destDir, sourceURL string) error {
 	switch {
 	case strings.HasSuffix(cachedPath, ".tar.gz"),
 		strings.HasSuffix(cachedPath, ".tgz"),
@@ -135,6 +140,13 @@ func prepareNonGitSource(cachedPath, destDir string) error {
 		return extractTarball(cachedPath, destDir)
 	case strings.HasSuffix(cachedPath, ".zip"):
 		return extractZip(cachedPath, destDir)
+	case strings.HasSuffix(cachedPath, ".apk"):
+		// .apk files are multi-stream gzipped tars (signature + control +
+		// data). Bare-copy so the install task can extract with `tar -xzpf`
+		// (GNU tar handles the multi-stream concatenation correctly);
+		// passing it through extractTarball here would only see the
+		// signature segment.
+		return copyBareSource(cachedPath, destDir, urlBasename(sourceURL))
 	}
 
 	// No recognised extension — sniff the first 4 bytes.
@@ -152,7 +164,20 @@ func prepareNonGitSource(cachedPath, destDir string) error {
 	if n == 4 && magic[0] == 0x50 && magic[1] == 0x4b && magic[2] == 0x03 && magic[3] == 0x04 {
 		return extractZip(cachedPath, destDir)
 	}
-	return copyBareSource(cachedPath, destDir)
+	return copyBareSource(cachedPath, destDir, urlBasename(sourceURL))
+}
+
+// urlBasename returns the filename portion of a URL — the segment after the
+// final '/', with any query string stripped. Used so bare-copied sources
+// land in srcDir under a stable name the unit's install task can reference.
+func urlBasename(rawURL string) string {
+	if i := strings.IndexByte(rawURL, '?'); i >= 0 {
+		rawURL = rawURL[:i]
+	}
+	if i := strings.LastIndexByte(rawURL, '/'); i >= 0 {
+		return rawURL[i+1:]
+	}
+	return rawURL
 }
 
 func extractTarball(tarPath, destDir string) error {
@@ -299,13 +324,19 @@ func extractZip(zipPath, destDir string) error {
 	return nil
 }
 
-// copyBareSource copies a non-archive source file into srcDir under its
-// original basename and marks it executable. Used for bare-binary
-// downloads (kubectl, single-file releases) where there's nothing to
-// extract.
-func copyBareSource(filePath, destDir string) error {
-	base := filepath.Base(filePath)
-	target := filepath.Join(destDir, base)
+// copyBareSource copies a non-archive source file into srcDir under
+// targetName (typically derived from the upstream URL so the install task
+// can reference the file by its expected name) and marks it executable.
+// Used for bare-binary downloads (kubectl, single-file releases) and for
+// .apk files that need GNU tar to handle their multi-stream gzip layout.
+//
+// targetName falls back to the cache file's basename when empty, but in
+// practice every bare-source caller passes the URL basename through.
+func copyBareSource(filePath, destDir, targetName string) error {
+	if targetName == "" {
+		targetName = filepath.Base(filePath)
+	}
+	target := filepath.Join(destDir, targetName)
 
 	in, err := os.Open(filePath)
 	if err != nil {
