@@ -53,9 +53,6 @@ and this project adheres to
   accept `[user@]host[:port]` — e.g. `yoe device repo add localhost:2222` for a
   QEMU vm or `yoe deploy myapp pi@dev-pi.local:2200`. The `--ssh-port` flag is
   gone.
-
-## [0.8.7] - 2026-04-30
-
 - **APK live deployment tooling.** `yoe deploy <unit> <host>` builds and
   installs a unit on a running yoe device with full apk dependency resolution.
   Pair with `yoe serve` and `yoe device repo add` to keep a device pointed at
