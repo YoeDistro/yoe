@@ -167,7 +167,7 @@ while avoiding their respective pain points:
 - **Arch** — rolling release, minimal base, PKGBUILD-style simplicity,
   documentation culture. Leave behind x86-centrism and manual administration.
 - **Alpine** — apk package manager, busybox, minimal footprint, security
-  defaults. Leave behind musl and lack of BSP support.
+  defaults. Leave behind lack of BSP support.
 - **Nix** — content-addressed caching, declarative configuration, hermetic
   builds, atomic rollback. Leave behind the Nix language and store-path
   complexity.
