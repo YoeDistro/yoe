@@ -8,13 +8,16 @@ and this project adheres to
 
 ## [Unreleased]
 
-## [0.8.6] - 2026-04-30
+## [0.8.7] - 2026-04-30
 
 - **APK live deployment tooling.** `yoe deploy <unit> <host>` builds and
   installs a unit on a running yoe device with full apk dependency resolution.
   Pair with `yoe serve` and `yoe device repo add` to keep a device pointed at
   your dev feed for ad-hoc `apk add` from the device. See
   [docs/feed-server.md](docs/feed-server.md).
+
+## [0.8.6] - 2026-04-30
+
 - **Container runtime build path documented.**
   [docs/containers.md](docs/containers.md) now walks through what it takes to
   ship Docker, containerd, and runc on a musl yoe rootfs — why prebuilt "static"
