@@ -159,6 +159,9 @@ type model struct {
 	flashTotal      int64
 	flashErr        error
 	flashProgress   progress.Model
+
+	// Feed (yoe serve) status — set at startup by startProjectFeed.
+	feedStatus string
 }
 
 // Run launches the TUI.
@@ -210,6 +213,10 @@ func Run(proj *yoestar.Project, projectDir string) error {
 		flashProgress: progress.New(progress.WithDefaultGradient()),
 	}
 	m.checkBinfmtWarning()
+
+	stopFeed, feedStatus := startProjectFeed(proj, projectDir)
+	defer stopFeed()
+	m.feedStatus = feedStatus
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	tuiProgram = p
@@ -1005,6 +1012,11 @@ func (m model) viewUnits() string {
 	if m.notification != "" {
 		notifyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("226")).Bold(true)
 		b.WriteString(fmt.Sprintf("  %s\n", notifyStyle.Render("⏳ "+m.notification)))
+	}
+	// Feed status (yoe serve)
+	if m.feedStatus != "" {
+		feedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+		b.WriteString(fmt.Sprintf("  %s\n", feedStyle.Render("feed: "+m.feedStatus)))
 	}
 	b.WriteString("\n")
 

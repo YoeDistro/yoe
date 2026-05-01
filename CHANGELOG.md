@@ -8,6 +8,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **TUI starts a feed automatically.** When you launch `yoe`, it brings up
+  the project's apk feed (or reuses one already running on the LAN), so
+  devices configured with `yoe device repo add` can pull packages without
+  any extra setup. Status is shown in the header.
+- **SSH target shorthand.** `yoe deploy` and `yoe device repo {add,remove,list}`
+  accept `[user@]host[:port]` — e.g. `yoe device repo add localhost:2222`
+  for a QEMU vm or `yoe deploy myapp pi@dev-pi.local:2200`. The `--ssh-port`
+  flag is gone.
+
 ## [0.8.7] - 2026-04-30
 
 - **APK live deployment tooling.** `yoe deploy <unit> <host>` builds and
