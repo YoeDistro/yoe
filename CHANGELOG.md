@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+- **Deploy from the TUI.** Press `D` on a non-image unit to deploy it to a
+  running yoe device — host prompt is pre-filled from the last-used target,
+  build + ssh + apk add output stream into the view, and the host is saved
+  back to `local.star` on success.
 - **TUI starts a feed automatically.** When you launch `yoe`, it brings up
   the project's apk feed (or reuses one already running on the LAN), so
   devices configured with `yoe device repo add` can pull packages without

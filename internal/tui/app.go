@@ -53,6 +53,7 @@ const (
 	viewDetail
 	viewSetup
 	viewFlash
+	viewDeploy
 )
 
 // Flash view stages
@@ -64,6 +65,16 @@ const (
 	flashWriting                   // write in progress
 	flashDone                      // success
 	flashError                     // failed
+)
+
+// Deploy view stages
+type deployStage int
+
+const (
+	deployHostInput deployStage = iota // editing the host field
+	deployRunning                      // build + ssh + apk add in progress
+	deployDone                         // success
+	deployError                        // failed
 )
 
 // Unit status
@@ -103,6 +114,15 @@ type flashProgressMsg struct {
 }
 
 type flashDoneMsg struct {
+	err error
+}
+
+// Deploy messages
+type deployOutputMsg struct {
+	line string
+}
+
+type deployDoneMsg struct {
 	err error
 }
 
@@ -160,6 +180,13 @@ type model struct {
 	flashErr        error
 	flashProgress   progress.Model
 
+	// Deploy view
+	deployUnit   string
+	deployHost   string // text input buffer
+	deployStage  deployStage
+	deployOutput []string
+	deployErr    error
+
 	// Feed (yoe serve) status — set at startup by startProjectFeed.
 	feedStatus string
 }
@@ -199,6 +226,12 @@ func Run(proj *yoestar.Project, projectDir string) error {
 
 	machines := sortedKeys(proj.Machines)
 
+	// Pre-fill the deploy host from local.star if present.
+	deployHost := ""
+	if ov, err := yoestar.LoadLocalOverrides(projectDir); err == nil {
+		deployHost = ov.DeployHost
+	}
+
 	m := model{
 		proj:          proj,
 		projectDir:    projectDir,
@@ -211,6 +244,7 @@ func Run(proj *yoestar.Project, projectDir string) error {
 		cancels:       make(map[string]context.CancelFunc),
 		machines:      machines,
 		flashProgress: progress.New(progress.WithDefaultGradient()),
+		deployHost:    deployHost,
 	}
 	m.checkBinfmtWarning()
 
@@ -319,6 +353,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case deployOutputMsg:
+		m.deployOutput = append(m.deployOutput, msg.line)
+		return m, nil
+
+	case deployDoneMsg:
+		if msg.err != nil {
+			m.deployStage = deployError
+			m.deployErr = msg.err
+		} else {
+			m.deployStage = deployDone
+			// Persist the host so next time the field is pre-filled.
+			ov, _ := yoestar.LoadLocalOverrides(m.projectDir)
+			if ov.Machine == "" {
+				ov.Machine = m.proj.Defaults.Machine
+			}
+			ov.DeployHost = strings.TrimSpace(m.deployHost)
+			_ = yoestar.WriteLocalOverrides(m.projectDir, ov)
+		}
+		return m, nil
+
 	case notifyMsg:
 		m.notification = string(msg)
 		return m, nil
@@ -345,6 +399,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateSetup(msg)
 		case viewFlash:
 			return m.updateFlash(msg)
+		case viewDeploy:
+			return m.updateDeploy(msg)
 		}
 	}
 	return m, nil
@@ -531,6 +587,22 @@ func (m model) updateUnits(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.flashWritten = 0
 			m.flashTotal = 0
 			m.view = viewFlash
+		}
+		return m, nil
+
+	case "D":
+		if m.cursor < len(m.units) {
+			name := m.units[m.cursor]
+			u, ok := m.proj.Units[name]
+			if !ok || u.Class == "image" {
+				m.message = fmt.Sprintf("%s is an image unit; use `f` to flash, not deploy", name)
+				return m, nil
+			}
+			m.deployUnit = name
+			m.deployStage = deployHostInput
+			m.deployOutput = nil
+			m.deployErr = nil
+			m.view = viewDeploy
 		}
 		return m, nil
 
@@ -863,6 +935,19 @@ func (m model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return execDoneMsg{err: err}
 		})
 
+	case "D":
+		u, ok := m.proj.Units[m.detailUnit]
+		if !ok || u.Class == "image" {
+			m.message = fmt.Sprintf("%s is an image unit; use `f` to flash, not deploy", m.detailUnit)
+			return m, nil
+		}
+		m.deployUnit = m.detailUnit
+		m.deployStage = deployHostInput
+		m.deployOutput = nil
+		m.deployErr = nil
+		m.view = viewDeploy
+		return m, nil
+
 	case "r":
 		if u, ok := m.proj.Units[m.detailUnit]; ok && u.Class == "image" {
 			c := exec.Command(os.Args[0], "run", m.detailUnit, "--machine", m.proj.Defaults.Machine)
@@ -987,6 +1072,8 @@ func (m model) View() string {
 		return m.viewSetup()
 	case viewFlash:
 		return m.viewFlash()
+	case viewDeploy:
+		return m.viewDeploy()
 	default:
 		return m.viewUnits()
 	}
@@ -1098,7 +1185,7 @@ func (m model) viewUnits() string {
 	if m.searching {
 		b.WriteString(fmt.Sprintf("  /%s▌", m.searchText))
 	} else {
-		help := "  b build  x cancel  e edit  d diagnose  l log  c clean  s setup  / search  q quit"
+		help := "  b build  D deploy  x cancel  e edit  d diagnose  l log  c clean  s setup  / search  q quit"
 		if m.cursor < len(m.units) {
 			name := m.units[m.cursor]
 			if u, ok := m.proj.Units[name]; ok && u.Class == "image" {
