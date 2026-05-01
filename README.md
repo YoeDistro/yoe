@@ -2,7 +2,7 @@
   <img src="docs/yoe-logo-amber-on-black.svg" alt="Yoe" width="360">
 </p>
 
-# `[yoe]` Next Generation
+# `[yoe]`
 
 **A radical simplification of how we build edge systems.**
 
