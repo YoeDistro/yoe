@@ -109,25 +109,26 @@ yoe serve [--port PORT] [--bind ADDR] [--no-mdns] [--service-name NAME]
 ### `yoe device repo add`
 
 ```
-yoe device repo add <target> [--feed URL] [--name NAME] [--push-key]
-                              [--user USER] [--ssh-port PORT]
+yoe device repo add <[user@]host[:port]> [--feed URL] [--name NAME]
+                                          [--push-key] [--user USER]
 ```
 
-- `<target>` — ssh destination (hostname, IP, or `user@host`).
+- `<[user@]host[:port]>` — ssh destination. Examples: `dev-pi.local`,
+  `pi@dev-pi.local`, `localhost:2222` (QEMU), `pi@dev-pi.local:2200`.
 - `--feed URL` — explicit URL. If omitted, browses mDNS for `_yoe-feed._tcp` on
   the LAN; errors clearly on 0 or >1 matches.
 - `--name NAME` — basename for `/etc/apk/repositories.d/<name>.list`. Default
   `yoe-dev`.
 - `--push-key` — copy the project signing pubkey to `/etc/apk/keys/` on the
   target before configuring.
-- `--user`, `--ssh-port` — ssh authentication overrides. ssh shells out to the
-  user's `ssh` so `~/.ssh/config`, ssh-agent, known_hosts, and jump hosts all
-  work.
+- `--user USER` — default ssh user when the target spec has no `user@` prefix.
+  Default `root`. ssh shells out to the user's `ssh` so `~/.ssh/config`,
+  ssh-agent, known_hosts, and jump hosts all work.
 
 ### `yoe device repo remove`
 
 ```
-yoe device repo remove <target> [--name NAME] [--user USER] [--ssh-port PORT]
+yoe device repo remove <[user@]host[:port]> [--name NAME] [--user USER]
 ```
 
 Idempotent — missing file is success.
@@ -135,18 +136,19 @@ Idempotent — missing file is success.
 ### `yoe device repo list`
 
 ```
-yoe device repo list <target> [--user USER] [--ssh-port PORT]
+yoe device repo list <[user@]host[:port]> [--user USER]
 ```
 
 ### `yoe deploy`
 
 ```
-yoe deploy <unit> <host> [--user U] [--ssh-port P] [--port P]
-                          [--host-ip IP] [--machine M]
+yoe deploy <unit> <[user@]host[:port]> [--user U] [--port P]
+                                        [--host-ip IP] [--machine M]
 ```
 
 - `<unit>` — must resolve to a non-image unit. Image targets error with a
   pointer to `yoe flash`.
+- `<[user@]host[:port]>` — ssh destination, same syntax as `device repo add`.
 - `--port` — feed port (default `8765`, same as `yoe serve`).
 - `--host-ip` — advertise this IP to the device instead of `<hostname>.local`.
   Use when mDNS resolution fails on the device.

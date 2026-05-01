@@ -21,14 +21,13 @@ import (
 
 func cmdDeploy(args []string) {
 	fs := flag.NewFlagSet("deploy", flag.ExitOnError)
-	user := fs.String("user", "root", "ssh user")
-	sshPort := fs.Int("ssh-port", 22, "ssh port")
+	user := fs.String("user", "root", "ssh user (overridden by user@ in host)")
 	port := fs.Int("port", 8765, "feed port")
 	hostIP := fs.String("host-ip", "", "advertise this IP instead of <hostname>.local")
 	machineName := fs.String("machine", "", "target machine")
 	fs.Parse(args)
 	if fs.NArg() < 2 {
-		fmt.Fprintf(os.Stderr, "Usage: %s deploy <unit> <host> [--user U] [--ssh-port P] [--port P] [--host-ip IP] [--machine M]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s deploy <unit> <[user@]host[:port]> [--user U] [--port P] [--host-ip IP] [--machine M]\n", os.Args[0])
 		os.Exit(1)
 	}
 	unitName := fs.Arg(0)
@@ -59,7 +58,11 @@ func cmdDeploy(args []string) {
 	}
 	defer stopFeed()
 
-	target := device.SSHTarget{Host: hostArg, User: *user, Port: *sshPort}
+	target, err := device.ParseSSHTarget(hostArg, *user)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 	err = device.Deploy(context.Background(), device.DeployInput{
 		Target:  target,
 		Unit:    unitName,

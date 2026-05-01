@@ -2,11 +2,39 @@ package device
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"net"
 	"os/exec"
 	"strconv"
 	"strings"
 )
+
+// ParseSSHTarget parses a `[user@]host[:port]` spec, falling back to
+// defaultUser when no `user@` prefix is given. IPv6 literals with ports
+// must use the standard `[::1]:2222` form. Returned Port is 0 when none
+// was specified — callers should treat that as "use ssh's default".
+func ParseSSHTarget(spec, defaultUser string) (SSHTarget, error) {
+	user := defaultUser
+	hostPort := spec
+	if u, hp, ok := strings.Cut(spec, "@"); ok {
+		user = u
+		hostPort = hp
+	}
+	host := hostPort
+	port := 0
+	// SplitHostPort handles "host:port" and "[ipv6]:port" but errors on
+	// bare hostnames — distinguish the two via the error.
+	if h, p, err := net.SplitHostPort(hostPort); err == nil {
+		host = h
+		n, err := strconv.Atoi(p)
+		if err != nil {
+			return SSHTarget{}, fmt.Errorf("ssh target %q: invalid port %q", spec, p)
+		}
+		port = n
+	}
+	return SSHTarget{Host: host, User: user, Port: port}, nil
+}
 
 // SSHTarget identifies a remote device for ssh/scp shellouts.
 type SSHTarget struct {

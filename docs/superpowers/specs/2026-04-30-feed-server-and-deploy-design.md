@@ -154,12 +154,15 @@ yoe deploy <unit> <host> [flags]
   <unit>   build target (must resolve to a single non-image unit)
   <host>   ssh destination — hostname, IP, or user@host (default user: root)
 
-  --user USER      ssh user (default: root)
-  --ssh-port PORT  ssh port (default: 22)
+  --user USER      default ssh user when target lacks a user@ prefix (default: root)
   --port PORT      feed port (default: 8765, same as yoe serve)
   --host-ip IP     advertise this IP to the device instead of <hostname>.local
                    (use when mDNS is unreachable from the device)
 ```
+
+The `<host>` argument accepts `[user@]host[:port]` — e.g. `dev-pi.local`,
+`pi@dev-pi.local`, `localhost:2222` (QEMU port forward), or
+`pi@dev-pi.local:2200`. `[ipv6]:port` works for literals.
 
 `<unit>` must resolve to a `class != "image"` unit. Image targets error: "image
 targets are flashed, not deployed; use `yoe flash <image>`".
@@ -254,11 +257,10 @@ yoe device repo add <target> [flags]
                     /etc/apk/repositories.d/<name>.list (default: "yoe-dev")
   --push-key        copy <repoDir>/keys/<keyname>.rsa.pub to
                     /etc/apk/keys/ on the target before configuring
-  --user USER       ssh user (default: root)
-  --ssh-port PORT   ssh port (default: 22)
+  --user USER       default ssh user when target lacks user@ (default: root)
 
-yoe device repo remove <target> [--name NAME] [--user USER] [--ssh-port PORT]
-yoe device repo list   <target> [--user USER] [--ssh-port PORT]
+yoe device repo remove <[user@]host[:port]> [--name NAME] [--user USER]
+yoe device repo list   <[user@]host[:port]> [--user USER]
 ```
 
 ### `add` behavior
@@ -310,7 +312,10 @@ yoe device repo add dev-pi.local --push-key
 yoe device repo add 192.168.4.30 --feed http://laptop.local:8765/myproj
 
 # Non-root ssh user
-yoe device repo add user@dev-pi.local --user pi
+yoe device repo add pi@dev-pi.local
+
+# QEMU vm started with `yoe run` (default 2222→22 forward)
+yoe device repo add localhost:2222
 
 # Tear it down
 yoe device repo remove dev-pi.local

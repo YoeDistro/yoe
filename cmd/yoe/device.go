@@ -50,14 +50,17 @@ func cmdDeviceRepoAdd(args []string) {
 	feedURL := fs.String("feed", "", "explicit feed URL")
 	name := fs.String("name", "yoe-dev", "repo file basename")
 	pushKey := fs.Bool("push-key", false, "copy project pubkey to /etc/apk/keys/")
-	user := fs.String("user", "root", "ssh user")
-	sshPort := fs.Int("ssh-port", 22, "ssh port")
+	user := fs.String("user", "root", "ssh user (overridden by user@ in target)")
 	fs.Parse(args)
 	if fs.NArg() < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s device repo add <target> [--feed URL] [--name N] [--push-key] [--user U] [--ssh-port P]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s device repo add <[user@]host[:port]> [--feed URL] [--name N] [--push-key] [--user U]\n", os.Args[0])
 		os.Exit(1)
 	}
-	target := device.SSHTarget{Host: fs.Arg(0), User: *user, Port: *sshPort}
+	target, err := device.ParseSSHTarget(fs.Arg(0), *user)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 
 	url := *feedURL
 	if url == "" {
@@ -93,14 +96,17 @@ func cmdDeviceRepoAdd(args []string) {
 func cmdDeviceRepoRemove(args []string) {
 	fs := flag.NewFlagSet("device repo remove", flag.ExitOnError)
 	name := fs.String("name", "yoe-dev", "repo file basename")
-	user := fs.String("user", "root", "ssh user")
-	sshPort := fs.Int("ssh-port", 22, "ssh port")
+	user := fs.String("user", "root", "ssh user (overridden by user@ in target)")
 	fs.Parse(args)
 	if fs.NArg() < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s device repo remove <target> [--name N]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s device repo remove <[user@]host[:port]> [--name N]\n", os.Args[0])
 		os.Exit(1)
 	}
-	target := device.SSHTarget{Host: fs.Arg(0), User: *user, Port: *sshPort}
+	target, err := device.ParseSSHTarget(fs.Arg(0), *user)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 	ops := device.RepoOps{SSH: device.DefaultSSH}
 	if err := ops.Remove(context.Background(), target, *name, os.Stdout); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -110,14 +116,17 @@ func cmdDeviceRepoRemove(args []string) {
 
 func cmdDeviceRepoList(args []string) {
 	fs := flag.NewFlagSet("device repo list", flag.ExitOnError)
-	user := fs.String("user", "root", "ssh user")
-	sshPort := fs.Int("ssh-port", 22, "ssh port")
+	user := fs.String("user", "root", "ssh user (overridden by user@ in target)")
 	fs.Parse(args)
 	if fs.NArg() < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s device repo list <target>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s device repo list <[user@]host[:port]>\n", os.Args[0])
 		os.Exit(1)
 	}
-	target := device.SSHTarget{Host: fs.Arg(0), User: *user, Port: *sshPort}
+	target, err := device.ParseSSHTarget(fs.Arg(0), *user)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 	ops := device.RepoOps{SSH: device.DefaultSSH}
 	if err := ops.List(context.Background(), target, os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

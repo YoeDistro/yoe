@@ -10,6 +10,7 @@
 
 - Better hostnames for targets.
 - mDNS on target
+- base-files is modified by machine
 - Save flash device preference in local.star for TUI
 - In TUI, ask for host IP/name and cache it in local.star.
 - Data partition for rPI targets

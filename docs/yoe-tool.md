@@ -328,10 +328,10 @@ production OTA uses.
 yoe deploy myapp dev-pi.local
 
 # Deploy to a QEMU vm started with `yoe run` (default 2222→22 forward)
-yoe deploy myapp localhost --ssh-port 2222
+yoe deploy myapp localhost:2222
 
 # Non-root ssh user
-yoe deploy myapp dev-pi.local --user pi
+yoe deploy myapp pi@dev-pi.local
 
 # Cross-subnet or mDNS-hostile network — advertise an explicit IP
 yoe deploy myapp 10.0.5.42 --host-ip 10.0.5.1
@@ -358,7 +358,7 @@ yoe device repo add dev-pi.local
 yoe device repo add dev-pi.local --push-key
 
 # Configure a QEMU vm started with `yoe run` (default 2222→22 forward)
-yoe device repo add --ssh-port 2222 localhost
+yoe device repo add localhost:2222
 
 # Explicit feed URL (colleague's serve, or non-mDNS network)
 yoe device repo add 192.168.4.30 --feed http://laptop.local:8765/myproj

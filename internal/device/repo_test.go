@@ -127,3 +127,34 @@ func TestSSHTargetDestUserOverride(t *testing.T) {
 		t.Errorf("dest = %q, want host.local", got)
 	}
 }
+
+func TestParseSSHTarget(t *testing.T) {
+	cases := []struct {
+		spec, defaultUser string
+		wantHost          string
+		wantUser          string
+		wantPort          int
+		wantErr           bool
+	}{
+		{"localhost", "root", "localhost", "root", 0, false},
+		{"localhost:2222", "root", "localhost", "root", 2222, false},
+		{"pi@dev-pi.local", "root", "dev-pi.local", "pi", 0, false},
+		{"pi@dev-pi.local:22", "root", "dev-pi.local", "pi", 22, false},
+		{"[::1]:2222", "root", "::1", "root", 2222, false},
+		{"localhost:abc", "root", "", "", 0, true},
+	}
+	for _, c := range cases {
+		got, err := ParseSSHTarget(c.spec, c.defaultUser)
+		if (err != nil) != c.wantErr {
+			t.Errorf("Parse(%q): err=%v wantErr=%v", c.spec, err, c.wantErr)
+			continue
+		}
+		if c.wantErr {
+			continue
+		}
+		if got.Host != c.wantHost || got.User != c.wantUser || got.Port != c.wantPort {
+			t.Errorf("Parse(%q) = %+v, want host=%q user=%q port=%d",
+				c.spec, got, c.wantHost, c.wantUser, c.wantPort)
+		}
+	}
+}
