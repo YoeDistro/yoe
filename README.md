@@ -181,7 +181,8 @@ while avoiding their respective pain points:
   Bazel heavy for small teams.
 
 See [Comparisons](docs/comparisons.md) for detailed analysis of how `[yoe]`
-relates to each of these systems, including when you should use them instead.
+relates to each of these (and other) systems, including when you should use them
+instead.
 
 ## ⚙️ Design
 
