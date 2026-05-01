@@ -29,6 +29,9 @@ yoe shell           Open an interactive shell in a unit's build sandbox  [planne
 yoe dev             Manage source modifications (extract, diff, status)
 yoe flash           Write an image to a device/SD card
 yoe run             Run an image in QEMU
+yoe serve           Serve the project's apk repo over HTTP+mDNS
+yoe deploy          Build and install a unit on a running yoe device
+yoe device          Manage repo configuration on a target device
 yoe module          Manage external modules (fetch, sync, list)
 yoe repo            Manage the local apk package repository
 yoe cache           Manage the build cache (local and remote)  [planned]
@@ -286,6 +289,88 @@ When `yoe run` is given a machine with a `qemu` configuration, it uses those
 settings directly. When given a hardware machine without `qemu` configuration,
 it falls back to a reasonable default QEMU configuration for the machine's
 architecture.
+
+### `yoe serve`
+
+Runs an HTTP server rooted at the project's `repo/` tree and advertises it on
+mDNS as `_yoe-feed._tcp.local.` so devices and `yoe deploy` discover it
+automatically.
+
+```sh
+# Serve at the default port (8765) with mDNS advertisement
+yoe serve
+
+# Bind to a specific interface or change the port
+yoe serve --bind 192.168.1.10 --port 9000
+
+# Skip mDNS (e.g., inside a container without host networking)
+yoe serve --no-mdns
+```
+
+The default port is pinned (`8765`) so the URL written by `yoe device repo add`
+on a target survives `yoe serve` restarts. apks and `APKINDEX.tar.gz` are
+already signed by the project key, so plain HTTP transport is fine for
+development. See [feed-server.md](feed-server.md) for the full dev-loop guide.
+
+### `yoe deploy`
+
+Builds a unit, exposes the project's repo as a feed (reusing a running
+`yoe serve` if one is up, otherwise spinning up an ephemeral feed on the same
+pinned port), then ssh's to the device and runs `apk add --upgrade <unit>`.
+Transitive dependencies resolve on the device against the same `APKINDEX.tar.gz`
+production OTA uses.
+
+```sh
+# Build myapp and install it on dev-pi over the LAN
+yoe deploy myapp dev-pi.local
+
+# Deploy to a QEMU vm started with `yoe run --port 2222:22`
+yoe deploy myapp localhost --ssh-port 2222
+
+# Non-root ssh user
+yoe deploy myapp dev-pi.local --user pi
+
+# Cross-subnet or mDNS-hostile network — advertise an explicit IP
+yoe deploy myapp 10.0.5.42 --host-ip 10.0.5.1
+```
+
+The repo file `/etc/apk/repositories.d/yoe-dev.list` is left in place after
+deploy, so the device stays configured to pull from the dev host on any future
+`apk add` from the device. Use `yoe device repo remove <host>` to tear it down.
+Image targets error with a pointer to `yoe flash`.
+
+### `yoe device`
+
+Configures `/etc/apk/repositories.d/` on a target device so `apk add` from the
+device pulls from your dev feed. Useful standalone (without an immediate
+`yoe deploy`) to set up a fresh device, configure several devices for a
+multi-device QA bench, or inspect what's currently configured.
+
+```sh
+# Auto-discover the running yoe serve on the LAN, configure dev-pi
+yoe device repo add dev-pi.local
+
+# Same, plus push the project signing pubkey to /etc/apk/keys/ on the
+# target — needed if the device was flashed before the project key existed
+yoe device repo add dev-pi.local --push-key
+
+# Configure a QEMU vm started with `yoe run --port 2222:22`
+yoe device repo add --ssh-port 2222 localhost
+
+# Explicit feed URL (colleague's serve, or non-mDNS network)
+yoe device repo add 192.168.4.30 --feed http://laptop.local:8765/myproj
+
+# Tear down
+yoe device repo remove dev-pi.local
+
+# Inspect /etc/apk/repositories and /etc/apk/repositories.d/*.list
+yoe device repo list dev-pi.local
+```
+
+After `yoe device repo add`, run `apk update && apk add htop` (or any unit your
+project builds) directly on the device. `yoe deploy` writes the same file by
+default (`yoe-dev.list`), so the first deploy doubles as the persistent feed
+config.
 
 ### `yoe module`
 
