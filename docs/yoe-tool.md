@@ -232,8 +232,9 @@ yoe run dev-image --machine qemu-x86_64
 # Run an ARM64 image on an x86_64 host (software emulation)
 yoe run base-image --machine qemu-arm64
 
-# Forward host port 2222 to guest SSH (port 22)
-yoe run --port 2222:22
+# Forward an extra host port (default qemu machines already forward 2222→22,
+# 8080→80, and 8118→8118 — `--port` adds to that list)
+yoe run --port 9000:9000
 
 # Allocate more memory
 yoe run --memory 2G
@@ -241,8 +242,8 @@ yoe run --memory 2G
 # Run with graphical output (default is serial console)
 yoe run --display
 
-# Run headless in the background, SSH only
-yoe run --daemon --port 2222:22
+# Run headless in the background
+yoe run --daemon
 ```
 
 **What happens:**
@@ -260,7 +261,9 @@ yoe run --daemon --port 2222:22
    (`-nographic`). The guest kernel must have `console=ttyS0` (x86) or
    `console=ttyAMA0` (aarch64) in its command line.
 7. **Set up networking** — use QEMU user-mode networking with port forwarding.
-   Host-to-guest SSH is available when `--port` is specified.
+   The qemu-x86_64 and qemu-arm64 machines forward `2222:22` (SSH), `8080:80`,
+   and `8118:8118` by default, so SSH to the guest works without any extra
+   flags. `--port` adds to that list.
 
 **QEMU machine definitions:**
 
@@ -324,7 +327,7 @@ production OTA uses.
 # Build myapp and install it on dev-pi over the LAN
 yoe deploy myapp dev-pi.local
 
-# Deploy to a QEMU vm started with `yoe run --port 2222:22`
+# Deploy to a QEMU vm started with `yoe run` (default 2222→22 forward)
 yoe deploy myapp localhost --ssh-port 2222
 
 # Non-root ssh user
@@ -354,7 +357,7 @@ yoe device repo add dev-pi.local
 # target — needed if the device was flashed before the project key existed
 yoe device repo add dev-pi.local --push-key
 
-# Configure a QEMU vm started with `yoe run --port 2222:22`
+# Configure a QEMU vm started with `yoe run` (default 2222→22 forward)
 yoe device repo add --ssh-port 2222 localhost
 
 # Explicit feed URL (colleague's serve, or non-mDNS network)
