@@ -247,9 +247,8 @@ Each language ecosystem manages its own dependencies:
 | JavaScript | npm / pnpm      | `package-lock.json` |
 | Zig        | Zig build       | `build.zig.zon`     |
 
-`[yoe]` provides caching infrastructure (a shared module proxy for Go, a
-registry mirror for Cargo/npm, etc.) so builds are fast and repeatable without
-re-downloading the internet.
+`[yoe]` plays nicely with existing language caching infrastructure so builds are
+fast and repeatable without re-downloading the internet.
 
 ### 🖥️ Kernel and System Image Tooling
 
