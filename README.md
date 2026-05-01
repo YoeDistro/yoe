@@ -157,50 +157,6 @@ this can:
 
 See [AI Skills](docs/ai-skills.md) for the full catalog of AI-driven workflows.
 
-## 📚 Documentation
-
-- [AI Skills](docs/ai-skills.md) — AI-driven workflows for unit creation, build
-  debugging, security auditing, and more
-- [The `yoe` Tool](docs/yoe-tool.md) — CLI reference for building, imaging, and
-  flashing
-- [Unit & Configuration Format](docs/metadata-format.md) — Starlark unit and
-  configuration spec
-- [Naming and Resolution](docs/naming-and-resolution.md) — how modules, units,
-  and dependencies are named, referenced, and resolved
-- [File Templates](docs/file-templates.md) — moving inline file content out of
-  Starlark units into external templates
-- [Starlark Packaging and Image Assembly](docs/starlark-packaging-images.md) —
-  composable Starlark tasks for packaging and image assembly
-- [Build Dependencies and Caching](docs/build-dependencies-and-caching.md) —
-  containers for host tools, apk sysroot for libraries, language-native package
-  managers for everything else
-- [Build Environment](docs/build-environment.md) — bootstrap, host tools, and
-  build isolation
-- [Build Languages](docs/build-languages.md) — analysis of Starlark, CUE, Nix,
-  and other embeddable languages for unit definitions
-- [Development Environments](docs/dev-env.md) — the no-SDK model, `yoe shell`
-  for interactive dev, and `yoe bundle` for air-gapped distribution
-- [Testing](docs/testing.md) — testing strategy across Go logic, package QA,
-  image smoke tests, and on-device test runs
-- [apk Signing](docs/signing.md) — keypair generation, signature verification,
-  and on-device trust
-- [On-Device Package Management](docs/on-device-apk.md) — using `apk` on booted
-  yoe systems to install and upgrade packages
-- [Feed Server and `yoe deploy`](docs/feed-server.md) — dev-loop for serving the
-  project apk repo and installing units on running devices
-- [Containers on yoe Images](docs/containers.md) — design for running Docker /
-  Podman / containerd workloads on yoe-built devices
-- [libc, init, and the Rootfs Base](docs/libc-and-init.md) — the default base of
-  musl, busybox, and OpenRC, and the path to glibc/systemd for edge-AI hardware
-- [units-alpine](docs/units-alpine.md) — wrapping prebuilt Alpine packages as
-  yoe units
-- [Comparisons](docs/comparisons.md) — how `[yoe]` relates to Yocto, Buildroot,
-  Alpine, Arch, and NixOS
-- [Roadmap](docs/roadmap.md) — existing units and what's needed for a complete
-  base system
-- [Project Name](docs/project-name.md) — brainstorming notes on a possible
-  rename
-
 ## 💡 Inspirations
 
 `[yoe]` draws selectively from existing systems, taking the best ideas from each
@@ -393,6 +349,50 @@ The caching model does not depend on output determinism. Cache keys are computed
 from _inputs_ (unit content, source hash, dependency `.apk` hashes, build
 flags), not _outputs_. If inputs haven't changed, the cached output is used
 regardless of whether a fresh build would produce identical bytes.
+
+## 📚 Documentation
+
+- [AI Skills](docs/ai-skills.md) — AI-driven workflows for unit creation, build
+  debugging, security auditing, and more
+- [The `yoe` Tool](docs/yoe-tool.md) — CLI reference for building, imaging, and
+  flashing
+- [Unit & Configuration Format](docs/metadata-format.md) — Starlark unit and
+  configuration spec
+- [Naming and Resolution](docs/naming-and-resolution.md) — how modules, units,
+  and dependencies are named, referenced, and resolved
+- [File Templates](docs/file-templates.md) — moving inline file content out of
+  Starlark units into external templates
+- [Starlark Packaging and Image Assembly](docs/starlark-packaging-images.md) —
+  composable Starlark tasks for packaging and image assembly
+- [Build Dependencies and Caching](docs/build-dependencies-and-caching.md) —
+  containers for host tools, apk sysroot for libraries, language-native package
+  managers for everything else
+- [Build Environment](docs/build-environment.md) — bootstrap, host tools, and
+  build isolation
+- [Build Languages](docs/build-languages.md) — analysis of Starlark, CUE, Nix,
+  and other embeddable languages for unit definitions
+- [Development Environments](docs/dev-env.md) — the no-SDK model, `yoe shell`
+  for interactive dev, and `yoe bundle` for air-gapped distribution
+- [Testing](docs/testing.md) — testing strategy across Go logic, package QA,
+  image smoke tests, and on-device test runs
+- [apk Signing](docs/signing.md) — keypair generation, signature verification,
+  and on-device trust
+- [On-Device Package Management](docs/on-device-apk.md) — using `apk` on booted
+  yoe systems to install and upgrade packages
+- [Feed Server and `yoe deploy`](docs/feed-server.md) — dev-loop for serving the
+  project apk repo and installing units on running devices
+- [Containers on yoe Images](docs/containers.md) — design for running Docker /
+  Podman / containerd workloads on yoe-built devices
+- [libc, init, and the Rootfs Base](docs/libc-and-init.md) — the default base of
+  musl, busybox, and OpenRC, and the path to glibc/systemd for edge-AI hardware
+- [units-alpine](docs/units-alpine.md) — wrapping prebuilt Alpine packages as
+  yoe units
+- [Comparisons](docs/comparisons.md) — how `[yoe]` relates to Yocto, Buildroot,
+  Alpine, Arch, and NixOS
+- [Roadmap](docs/roadmap.md) — existing units and what's needed for a complete
+  base system
+- [Project Name](docs/project-name.md) — brainstorming notes on a possible
+  rename
 
 ## 🤝 Contributing
 
