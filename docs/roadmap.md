@@ -13,6 +13,7 @@
 - base-files is modified by machine
   - machine package feed?
   - this needs to be solve before start building multiple machines in one tree.
+- e2e testing
 - Save flash device preference in local.star for TUI
 - Data partition for rPI targets
   - Fill/format data partition
