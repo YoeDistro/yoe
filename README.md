@@ -263,7 +263,7 @@ still need orchestration:
   OSTree, BDiff) integrated with update frameworks (RAUC, SWUpdate, etc.).
   Container workloads on the target device are on the roadmap.
 
-This is where `[yoe]` tooling (written in Go) provides value — similar to what
+This is where `[yoe]` tooling (written in Go and Starlark) provides value — similar to what
 `bitbake` and `wic` do in Yocto, but simpler and more opinionated.
 
 ### 📋 Package Management: apk
