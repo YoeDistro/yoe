@@ -1,5 +1,7 @@
 <p align="center">
-  <img src="docs/yoe-logo-amber-on-black.svg" alt="Yoe" width="360">
+  <a href="https://yoebuild.org/">
+    <img src="docs/yoe-logo-amber-on-black.svg" alt="Yoe" width="360">
+  </a>
 </p>
 
 # `[yoe]` Build
