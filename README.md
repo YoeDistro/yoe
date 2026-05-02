@@ -405,6 +405,14 @@ Contributions are welcome — especially BSPs for new boards and units for new
 packages. AI-assisted contributions are fine; just make sure the result actually
 works, and keep PRs small and reviewable.
 
+## 💚 Sponsors
+
+`[yoe]` is supported by:
+
+<a href="https://bec-systems.com/">
+  <img src="assets/bec-logo.svg" alt="BEC Systems" width="220">
+</a>
+
 ## 📄 License
 
 `[yoe]` is licensed under the [Apache License 2.0](LICENSE).
