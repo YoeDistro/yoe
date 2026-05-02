@@ -11,7 +11,7 @@ developers to ship products faster.**
 `[yoe]` is a build system (focused on Embedded Linux for now) for teams shipping
 modern edge products. Components in Go, Rust, Zig, Python, JS/TS, and C/C++ are
 supported. `[yoe]` releases often and tracks upstream closely. The configuration
-languages is easly processed by humans and AI. Builds on your laptop, on native
+language is easily processed by humans and AI. Build on your laptop, on native
 hardware, or in cloud CI — one integrated tool, same config, same results.
 
 We took what we learned from many years of maintaining and building products
