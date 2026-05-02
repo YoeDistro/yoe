@@ -2,18 +2,17 @@
   <img src="docs/yoe-logo-amber-on-black.svg" alt="Yoe" width="360">
 </p>
 
-# `[yoe]`
+# `[yoe]` Build
 
 **Fast tooling and builds. No cross-compiling headaches. Easy to
 customize/upgrade/debug. One tool for both system engineers and application
 developers to ship products faster.**
 
-`[yoe]` is an embedded Linux build system for teams shipping modern edge
-products: applications in Go, Rust, Zig, Python, JS/TS, and C/C++; released
-often and tracking upstream closely. Readable config. AI that understands the
-system and can guide a developer through it. Native builds on your laptop, on
-native hardware, or in cloud CI — one integrated tool, same config, same
-results.
+`[yoe]` is a build system (focused on Embedded Linux for now) for teams shipping
+modern edge products. Components in Go, Rust, Zig, Python, JS/TS, and C/C++ are
+supported. `[yoe]` releases often and tracks upstream closely. The configuration
+languages is easly processed by humans and AI. Builds on your laptop, on native
+hardware, or in cloud CI — one integrated tool, same config, same results.
 
 We took what we learned from many years of maintaining and building products
 with the [Yoe Distribution](https://yoedistro.org/), started over, and built the
@@ -112,23 +111,28 @@ A decade ago, this combination wasn't realistic. Several things have changed:
 1. **Be Pragmatic**. Leverage what already exists where it makes sense. We don't
    have any religion that everything needs to be built from source, or that we
    all need to build our own toolchains.
-1. **The developer experience is the top priority**. This includes application
-   developers as well as system engineers. Clear and concise communication is
-   essential when things go wrong. Unintelligible stack traces are unacceptable.
+1. **The product developer experience is the top priority**. Other solutions are
+   often not optimized for developers building products. This includes
+   application developers as well as system engineers. Clear and concise
+   communication is essential when things go wrong. Unintelligible stack traces
+   are unacceptable.
 1. **Optimized for small teams**. `[yoe]` is a tool for small teams to do big
    things. Large enterprises are welcome, but not our exclusive focus. There are
    plenty of enterprise tools (Bazel, Buck2, Maven, etc.); we will use ideas
    from these tools, but `[yoe]` aims to be something different.
 1. **Scope is not limited to Embedded Linux**. Although Embedded Linux is our
-   current focus, a tool like Yoe could be used for any problem where you pull a
-   lot of pieces together. At its heart, `[yoe]` is a tool for building complex
-   systems.
+   current focus, a tool like `[yoe]` could be used for any problem where you
+   pull a lot of pieces together. At its heart, `[yoe]` is a tool for building
+   complex systems.
 1. **Track upstream closely.** Modern edge systems are more like the cloud than
    traditional embedded systems — they are connected, updated regularly, and
    expected to receive security patches throughout their lifetime. `[yoe]`
    assumes you will track upstream releases closely rather than freezing on a
    version for years. Updating a package should be easy and routine, not a
    high-risk event that requires a dedicated engineering effort.
+1. **Vendor Neutral.** `[yoe]` is a vendor neutral project and welcomes BSPs and
+   other units from any vendor. The goal is to build an integrated ecosystem
+   like Zephyr.
 
 ## 🤖 Why AI-Native
 
@@ -263,8 +267,9 @@ still need orchestration:
   OSTree, BDiff) integrated with update frameworks (RAUC, SWUpdate, etc.).
   Container workloads on the target device are on the roadmap.
 
-This is where `[yoe]` tooling (written in Go and Starlark) provides value — similar to what
-`bitbake` and `wic` do in Yocto, but simpler and more opinionated.
+This is where `[yoe]` tooling (written in Go and Starlark) provides value —
+similar to what `bitbake` and `wic` do in Yocto, but simpler and more
+opinionated.
 
 ### 📋 Package Management: apk
 
